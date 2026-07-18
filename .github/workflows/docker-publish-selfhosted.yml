@@ -123,7 +123,8 @@ jobs:
 
       - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
-          context: .
+          # The Dockerfile COPYs redis-rest-proxy.mjs relative to docker/, not repo root.
+          context: ./docker
           file: docker/Dockerfile.redis-rest
           push: true
           platforms: linux/amd64,linux/arm64
