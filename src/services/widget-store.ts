@@ -185,6 +185,11 @@ export function isProWidgetEnabled(): boolean {
 
 export function isProUser(): boolean {
   return (
+    // Self-hosted builds (VITE_SELF_HOSTED=true baked in at image build time)
+    // have no billing backend — every feature the instance can serve is
+    // unlocked. Clerk-bound panels (WEB_CLERK_PRO_ONLY_PANELS) stay gated by
+    // their own server-side check.
+    import.meta.env.VITE_SELF_HOSTED === 'true' ||
     isWidgetFeatureEnabled() ||
     isProWidgetEnabled() ||
     getAuthState().user?.role === 'pro' ||
