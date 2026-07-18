@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write  # to dispatch the image rebuild after a sync
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -33,9 +34,11 @@ jobs:
 
       - name: Merge upstream changes
         id: merge
+        # A merge conflict fails the job loudly rather than silently skipping the sync.
         run: |
-          git merge upstream/main --no-edit || true
-          if git diff HEAD@{1} HEAD --quiet; then
+          before=$(git rev-parse HEAD)
+          git merge upstream/main --no-edit
+          if [ "$(git rev-parse HEAD)" = "$before" ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
@@ -44,3 +47,11 @@ jobs:
       - name: Push changes
         if: steps.merge.outputs.has_changes == 'true'
         run: git push origin main
+
+      # Pushes made with GITHUB_TOKEN don't trigger `on: push` workflows,
+      # so dispatch the image build explicitly or images go stale.
+      - name: Trigger image rebuild
+        if: steps.merge.outputs.has_changes == 'true'
+        run: gh workflow run docker-publish-selfhosted.yml --ref main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
