@@ -1,0 +1,46 @@
+# Daily sync from upstream koala73/worldmonitor.
+# Pulls changes from upstream main into this fork's main branch.
+
+name: Sync from upstream
+
+on:
+  schedule:
+    - cron: "0 6 * * *"  # 06:00 UTC daily
+  workflow_dispatch:     # manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: true
+          ref: main
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/koala73/worldmonitor.git || git remote set-url upstream https://github.com/koala73/worldmonitor.git
+
+      - name: Fetch upstream
+        run: git fetch upstream main
+
+      - name: Merge upstream changes
+        id: merge
+        run: |
+          git merge upstream/main --no-edit || true
+          if git diff HEAD@{1} HEAD --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push changes
+        if: steps.merge.outputs.has_changes == 'true'
+        run: git push origin main
