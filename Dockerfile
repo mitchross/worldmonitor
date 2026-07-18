@@ -38,6 +38,10 @@ RUN npm run build:pro
 
 # Build the crawlable static corpus and Vite frontend (outputs to dist/)
 # Skip blog build — blog-site has its own deps not installed here
+# Self-hosted builds set VITE_SELF_HOSTED=true (docker-publish-selfhosted.yml)
+# to unlock Pro-gated panels — there is no billing backend to entitle against.
+ARG VITE_SELF_HOSTED=false
+ENV VITE_SELF_HOSTED=$VITE_SELF_HOSTED
 RUN npm run build:crawlable-corpus && npm run build:sitemap && npx tsc && npx vite build
 # Assert the /pro pages survived the public/ -> dist/ copy (#6898). build:pro
 # succeeding proves public/pro/ exists; it does NOT prove Vite copied it, and
