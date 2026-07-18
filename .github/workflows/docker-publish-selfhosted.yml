@@ -13,6 +13,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Overlapping runs race on the :main tag (last to finish wins, which may be
+# the older commit). Daily upstream syncs re-trigger this, so cancel stale runs.
+concurrency:
+  group: docker-publish-selfhosted
+  cancel-in-progress: true
+
 jobs:
   # ── Main app (nginx + Node.js API) ──────────────────────────────────────
   app:
