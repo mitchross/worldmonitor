@@ -28,7 +28,9 @@ jobs:
       - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         id: meta
         with:
-          images: ghcr.io/koala73/worldmonitor
+          # Fork: publish under our own namespace, renamed so this frontend-only
+          # image can't clobber the self-hosted full-stack `worldmonitor` image.
+          images: ghcr.io/${{ github.repository_owner }}/worldmonitor-frontend
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
