@@ -8,6 +8,8 @@ import type {
 } from '../../../../src/generated/server/worldmonitor/aviation/v1/service_server';
 import { MONITORED_AIRPORTS } from '../../../../src/config/airports';
 import { getCachedJson } from '../../../_shared/redis';
+// @ts-expect-error — JS module, no declaration file
+import { captureSilentError } from '../../../../api/_sentry-edge.js';
 import {
     determineSeverity,
     severityFromCancelRate,
@@ -34,6 +36,9 @@ export async function getAirportOpsSummary(
         const summaries: AirportOpsSummary[] = [];
 
         // Read delay alerts from relay seed cache (no direct AviationStack call)
+        // PERF: seed read and NOTAM loader are independent — start the NOTAM
+        // fetch now so it overlaps the cache round-trip below.
+        const notamRead = loadNotamClosures();
         let alerts: AirportDelayAlert[] = [];
         let healthy = false;
         try {
@@ -42,20 +47,29 @@ export async function getAirportOpsSummary(
                 alerts = seedData.alerts;
                 healthy = true;
             }
-        } catch { /* graceful degradation */ }
+        } catch (err) {
+            // Degrade to "no delay telemetry" (healthy stays false) but surface
+            // the cause — otherwise a broken cache read is indistinguishable
+            // from an empty seed.
+            console.warn(`[Aviation] Ops summary seed read failed: ${err instanceof Error ? err.message : 'unknown'}`);
+            void captureSilentError(err, { tags: { route: 'aviation/get-airport-ops-summary', step: 'seed-read' } });
+        }
 
         // Fetch NOTAM closures via shared loader
         let notamClosedIcaos = new Set<string>();
         let notamRestrictedIcaos = new Set<string>();
         let notamReasons: Record<string, string> = {};
         try {
-            const notamResult = await loadNotamClosures();
+            const notamResult = await notamRead;
             if (notamResult) {
                 notamClosedIcaos = new Set(notamResult.closedIcaos);
                 notamRestrictedIcaos = new Set(notamResult.restrictedIcaos ?? []);
                 notamReasons = notamResult.reasons;
             }
-        } catch { /* graceful degradation */ }
+        } catch (err) {
+            console.warn(`[Aviation] Ops summary NOTAM load failed: ${err instanceof Error ? err.message : 'unknown'}`);
+            void captureSilentError(err, { tags: { route: 'aviation/get-airport-ops-summary', step: 'notam-load' } });
+        }
 
         for (const airport of airports) {
             const alert = alerts.find(a => a.iata === airport.iata);

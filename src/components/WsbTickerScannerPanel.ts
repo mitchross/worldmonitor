@@ -1,7 +1,6 @@
 import { Panel } from './Panel';
 import { t } from '@/services/i18n';
-import { getHydratedData } from '@/services/bootstrap';
-import { toApiUrl } from '@/services/runtime';
+import { ensureHydrated, getHydratedData } from '@/services/bootstrap';
 import { escapeHtml, unsafeRawHtml } from '@/utils/sanitize';
 
 export interface WsbTicker {
@@ -61,23 +60,14 @@ export class WsbTickerScannerPanel extends Panel {
   }
 
   public async fetchData(): Promise<boolean> {
-    const hydrated = getHydratedData('wsbTickers') as { tickers?: WsbTicker[] } | undefined;
+    const leftover = getHydratedData('wsbTickers') as { tickers?: WsbTicker[] } | undefined;
+    const hydrated = leftover?.tickers?.length
+      ? leftover
+      : await ensureHydrated('wsbTickers') as { tickers?: WsbTicker[] } | undefined;
     if (hydrated?.tickers?.length) {
       this.updateData(hydrated.tickers);
       return true;
     }
-    try {
-      const resp = await fetch(toApiUrl('/api/bootstrap?keys=wsbTickers'), {
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (resp.ok) {
-        const { data } = (await resp.json()) as { data: { wsbTickers?: { tickers?: WsbTicker[] } } };
-        if (data.wsbTickers?.tickers?.length) {
-          this.updateData(data.wsbTickers.tickers);
-          return true;
-        }
-      }
-    } catch { /* fallback failed */ }
     this.showError('No ticker data available yet', () => { void this.fetchData(); }, 60);
     return false;
   }
@@ -108,14 +98,14 @@ export class WsbTickerScannerPanel extends Panel {
     const sorted = this._sorted();
     const maxVelocity = Math.max(1, ...sorted.map(t => t.velocityScore));
 
-    const headerStyle = 'font-size:9px;font-weight:700;color:var(--text-dim);text-transform:uppercase;padding:4px 6px;cursor:pointer;user-select:none;white-space:nowrap';
-    const cellStyle = 'font-size:11px;padding:5px 6px;vertical-align:middle';
+    const headerStyle = 'font-size:calc(9px * var(--wm-panel-effective-scale, 1));font-weight:700;color:var(--text-dim);text-transform:uppercase;padding:4px 6px;cursor:pointer;user-select:none;white-space:nowrap';
+    const cellStyle = 'font-size:calc(11px * var(--wm-panel-effective-scale, 1));padding:5px 6px;vertical-align:middle';
 
     const rows = sorted.slice(0, 50).map((tk, i) => {
       const vColor = velocityColor(tk.velocityScore);
       const barPct = Math.max(4, Math.round((tk.velocityScore / maxVelocity) * 100));
       const subs = tk.subreddits.map(s =>
-        `<span style="font-size:8px;padding:1px 4px;border-radius:2px;background:rgba(255,255,255,0.06);color:var(--text-dim);margin-right:2px">r/${escapeHtml(s)}</span>`
+        `<span style="font-size:calc(8px * var(--wm-panel-effective-scale, 1));padding:1px 4px;border-radius:2px;background:rgba(255,255,255,0.06);color:var(--text-dim);margin-right:2px">r/${escapeHtml(s)}</span>`
       ).join('');
 
       return `<tr style="border-bottom:1px solid var(--border)">
@@ -125,7 +115,7 @@ export class WsbTickerScannerPanel extends Panel {
         <td style="${cellStyle};text-align:right;color:var(--text)">${formatCompact(tk.totalScore)}</td>
         <td style="${cellStyle};min-width:80px">
           <div style="display:flex;align-items:center;gap:4px">
-            <span style="font-size:10px;font-weight:600;color:${vColor};min-width:24px;text-align:right">${Math.round(tk.velocityScore)}</span>
+            <span style="font-size:calc(10px * var(--wm-panel-effective-scale, 1));font-weight:600;color:${vColor};min-width:24px;text-align:right">${Math.round(tk.velocityScore)}</span>
             <div style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,0.08)">
               <div style="height:100%;width:${barPct}%;border-radius:2px;background:${vColor}"></div>
             </div>
@@ -140,18 +130,18 @@ export class WsbTickerScannerPanel extends Panel {
         <table style="width:100%;border-collapse:collapse;border-spacing:0">
           <thead>
             <tr style="border-bottom:1px solid var(--border)">
-              <th style="${headerStyle};text-align:right">#</th>
-              <th style="${headerStyle};text-align:left">Ticker</th>
-              <th style="${headerStyle};text-align:right" data-sort="mentionCount">Mentions${this._sortIndicator('mentionCount')}</th>
-              <th style="${headerStyle};text-align:right" data-sort="totalScore">Score${this._sortIndicator('totalScore')}</th>
-              <th style="${headerStyle};text-align:left" data-sort="velocityScore">Velocity${this._sortIndicator('velocityScore')}</th>
-              <th style="${headerStyle};text-align:left">Source</th>
+              <th scope="col" style="${headerStyle};text-align:right">#</th>
+              <th scope="col" style="${headerStyle};text-align:left">Ticker</th>
+              <th scope="col" style="${headerStyle};text-align:right" data-sort="mentionCount">Mentions${this._sortIndicator('mentionCount')}</th>
+              <th scope="col" style="${headerStyle};text-align:right" data-sort="totalScore">Score${this._sortIndicator('totalScore')}</th>
+              <th scope="col" style="${headerStyle};text-align:left" data-sort="velocityScore">Velocity${this._sortIndicator('velocityScore')}</th>
+              <th scope="col" style="${headerStyle};text-align:left">Source</th>
             </tr>
           </thead>
-          <tbody>${rows || '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--text-dim);font-size:12px">No ticker data</td></tr>'}</tbody>
+          <tbody>${rows || '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--text-dim);font-size:calc(12px * var(--wm-panel-effective-scale, 1))">No ticker data</td></tr>'}</tbody>
         </table>
       </div>
-      <div style="margin-top:6px;font-size:9px;color:var(--text-dim)">Reddit \u00B7 r/wallstreetbets, r/stocks, r/investing \u00B7 sorted by ${this._sortField.replace(/([A-Z])/g, ' $1').toLowerCase()}</div>
+      <div style="margin-top:6px;font-size:calc(9px * var(--wm-panel-effective-scale, 1));color:var(--text-dim)">Reddit \u00B7 r/wallstreetbets, r/stocks, r/investing \u00B7 sorted by ${this._sortField.replace(/([A-Z])/g, ' $1').toLowerCase()}</div>
     `, 'legacy Panel.setContent() migration'));
   }
 }

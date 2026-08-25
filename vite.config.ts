@@ -17,6 +17,8 @@ import {
 // (api/rss-proxy.js) so dev and prod agree on allow/deny. Previously a
 // hand-maintained Set here had drifted ~138 domains from prod.
 import { isAllowedDomain } from './api/_rss-allowed-domain-match.js';
+import { rssFetchHeadersForHost } from './api/_rss-fetch-headers.js';
+import { validateGeneratedRequest } from './server/request-validator';
 
 // Env-dependent constants moved inside defineConfig function
 
@@ -98,9 +100,11 @@ const PANEL_CLUSTER: Record<string, PanelChunkName> = {
   AAIISentiment: 'panels-markets', CotPositioning: 'panels-markets',
   ETFFlows: 'panels-markets', EarningsCalendar: 'panels-markets',
   EconomicCalendar: 'panels-markets', FearGreed: 'panels-markets',
+  Fx: 'panels-markets',
   GoldIntelligence: 'panels-markets', LiquidityShifts: 'panels-markets',
   MacroSignals: 'panels-markets', Market: 'panels-markets',
   MarketBreadth: 'panels-markets', MarketImplications: 'panels-markets',
+  NewsMarketCorrelation: 'panels-markets',
   Positioning: 'panels-markets', Stablecoin: 'panels-markets',
   StockAnalysis: 'panels-markets', StockBacktest: 'panels-markets',
   WsbTickerScanner: 'panels-markets', YieldCurve: 'panels-markets',
@@ -121,7 +125,7 @@ const PANEL_CLUSTER: Record<string, PanelChunkName> = {
   DailyMarketBrief: 'panels-news', GdeltIntel: 'panels-news',
   GoodThingsDigest: 'panels-news', LatestBrief: 'panels-news',
   LiveNews: 'panels-news', News: 'panels-news',
-  PositiveNewsFeed: 'panels-news', TelegramIntel: 'panels-news',
+  PositiveNewsFeed: 'panels-news', TelegramIntel: 'panels-news', XIntel: 'panels-news',
   // Macro / prices / trade
   BigMac: 'panels-economy', ConsumerPrices: 'panels-economy',
   Economic: 'panels-economy', GlobalProcurement: 'panels-economy',
@@ -129,7 +133,9 @@ const PANEL_CLUSTER: Record<string, PanelChunkName> = {
   GroceryBasket: 'panels-economy', GulfEconomies: 'panels-economy',
   Investments: 'panels-economy', MacroTiles: 'panels-economy',
   NationalDebt: 'panels-economy', SanctionsPressure: 'panels-economy',
-  SupplyChain: 'panels-economy', TradePolicy: 'panels-economy',
+  ChinaActivityNowcast: 'panels-economy', ChinaCorridor: 'panels-economy',
+  SupplyChain: 'panels-economy',
+  TradePolicy: 'panels-economy',
   // Country briefs / signals / monitors / agent surfaces.
   // CorrelationPanel base lives here, so all *Correlation consumers MUST stay
   // in this cluster — splitting them across clusters caused TDZ on init.
@@ -161,7 +167,7 @@ const PANEL_CLUSTER: Record<string, PanelChunkName> = {
   SocialVelocity: 'panels-risk', SpeciesComeback: 'panels-risk',
   TechEvents: 'panels-risk',
   ThreatTimeline: 'panels-risk',
-  TechHubs: 'panels-risk', TechReadiness: 'panels-risk',
+  TechHubs: 'panels-risk', TechReadiness: 'panels-risk', TorontoSafety: 'panels-risk',
   WorldClock: 'panels-risk',
 };
 
@@ -522,7 +528,10 @@ function sebufApiPlugin(): Plugin {
         import('./server/worldmonitor/shipping/v2/handler'),
       ]);
 
-    const serverOptions = { onError: errorMod.mapErrorToResponse };
+    const serverOptions = {
+      onError: errorMod.mapErrorToResponse,
+      validateRequest: validateGeneratedRequest,
+    };
     const allRoutes = [
       ...seismologyServerMod.createSeismologyServiceRoutes(seismologyHandlerMod.seismologyHandler, serverOptions),
       ...wildfireServerMod.createWildfireServiceRoutes(wildfireHandlerMod.wildfireHandler, serverOptions),
@@ -730,10 +739,7 @@ function rssProxyPlugin(): Plugin {
 
           const response = await fetch(feedUrl, {
             signal: controller.signal,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-            },
+            headers: rssFetchHeadersForHost(parsed.hostname),
             redirect: 'follow',
           });
           clearTimeout(timer);
@@ -846,6 +852,27 @@ function gpsjamDevPlugin(): Plugin {
   };
 }
 
+// Mirror the WebMCP security gates during local development. Chrome's
+// #enable-webmcp-testing flag bypasses origin-trial enrollment, but it does not
+// bypass origin isolation or Permissions Policy. Keeping these headers in the
+// dev server makes the documented local smoke meaningful while preserving the
+// production boundary: no Origin-Trial token is ever served locally.
+function webMcpDevSecurityHeadersPlugin(): Plugin {
+  return {
+    name: 'wm-webmcp-dev-security-headers',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+        const isEmbedDocument = pathname === '/embed' || pathname === '/embed.html';
+        res.setHeader('Origin-Agent-Cluster', '?1');
+        res.setHeader('Permissions-Policy', isEmbedDocument ? 'tools=()' : 'tools=(self)');
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   // Inject environment variables from .env files into process.env.
@@ -905,6 +932,7 @@ export default defineConfig(({ mode }) => {
       // which is always the 'full' build (variant selection is runtime by
       // hostname). Desktop and dedicated VITE_VARIANT builds skip it.
       !isDesktopBuild && activeVariant === 'full' && variantDashboardHtmlPlugin(),
+      webMcpDevSecurityHeadersPlugin(),
       polymarketPlugin(),
       rssProxyPlugin(),
       youtubeLivePlugin(),
@@ -916,6 +944,7 @@ export default defineConfig(({ mode }) => {
         injectRegister: false,
 
         includeAssets: [
+          'offline.html',
           'favico/favicon.ico',
           'favico/apple-touch-icon.png',
           'favico/favicon-32x32.png',
@@ -975,18 +1004,14 @@ export default defineConfig(({ mode }) => {
           // Web Push handler (Phase 6). importScripts runs in the SW
           // context; /push-handler.js is a static file copied from
           // public/ and attaches 'push' + 'notificationclick' listeners.
-          importScripts: ['/push-handler.js'],
+          importScripts: ['/push-handler.js', '/sw-navigation.js'],
 
+          // Navigations are handled by public/sw-navigation.js (network-first
+          // with an offline.html fallback), NOT by a runtime cache: a cached
+          // index.html survives cleanupOutdatedCaches while its hashed chunks
+          // are purged with the old precache, so an offline reload after any
+          // deploy used to 404 the bundle and blank the dashboard.
           runtimeCaching: [
-            {
-              urlPattern: ({ request }: { request: Request }) => request.mode === 'navigate',
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'html-navigation',
-                networkTimeoutSeconds: 5,
-                cacheableResponse: { statuses: [200] },
-              },
-            },
             {
               urlPattern: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) =>
                 sameOrigin && /^\/api\//.test(url.pathname),
@@ -1192,7 +1217,8 @@ export default defineConfig(({ mode }) => {
             // lazy-load it via dynamic import. Kept off the eager @/config
             // barrel. Co-chunk both files so the merged list and its raw data
             // ship together off the entry chunk. (#4478)
-            if (id.endsWith('/src/config/military-bases.ts') || id.endsWith('/src/config/bases-expanded.ts')) {
+            if (id.endsWith('/src/config/military-bases.ts') || id.endsWith('/src/config/bases-expanded.ts')
+                || id.endsWith('/shared/military-bases-data.ts')) {
               return 'military-bases-data';
             }
             // Correlation engine (engine + 4 adapters) is dynamic-imported at its
@@ -1633,12 +1659,15 @@ export default defineConfig(({ mode }) => {
             });
           },
         },
-        // OpenSky Network - Aircraft tracking (military flight detection)
+        // OpenSky Network - Aircraft tracking (military flight detection).
+        // Prod routes /api/opensky through the relay (api/opensky.js), which calls
+        // OpenSky's states/all endpoint. Dev has no relay, so proxy straight to
+        // states/all — stripping the prefix to '' would hit the invalid /api root (404).
         '/api/opensky': {
           target: 'https://opensky-network.org/api',
           changeOrigin: true,
           secure: true,
-          rewrite: (path) => path.replace(/^\/api\/opensky/, ''),
+          rewrite: (path) => path.replace(/^\/api\/opensky/, '/states/all'),
           configure: (proxy) => {
             proxy.on('error', (err) => {
               console.log('OpenSky proxy error:', err.message);

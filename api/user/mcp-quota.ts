@@ -8,7 +8,13 @@
  * `server/_shared/pro-mcp-token.ts` so a writer/reader drift cannot occur.
  *
  * Response shape:
- *   200 { used: number, limit: 50, resetsAt: <ISO at next UTC midnight> }
+ *   200 { used: number, limit: number | null, resetsAt: <ISO at next UTC midnight> }
+ *
+ * `limit` is the caller's PLAN allowance (plan 2026-07-25-001 U3b), resolved
+ * from `features.planLimits.mcpCallsPerDay` through the SAME `resolveDailyLimit`
+ * that `api/mcp/quota.ts` enforces with — `null` means unlimited. Before U3b
+ * this reported a hardcoded 50, so a Pro Business user at 120 of 250 read
+ * "50 / 50" in Settings while enforcement served them fine.
  *
  * Edge cases:
  *   - First call of the UTC day: Redis key missing → `used: 0`.
@@ -17,6 +23,9 @@
  *     better surfaced as "0 today" than as a 500).
  *   - Redis transient: log + return `used: 0`. The settings UI is best-effort
  *     informational; we never want a broken Redis to block the settings tab.
+ *   - Entitlement lookup unavailable (null, or throwing): fall back to the
+ *     pre-U3b behaviour (50). Same cost-protection direction as enforcement,
+ *     and a lookup blip must never 500 a previously-working endpoint.
  *
  * Status codes:
  *   - 200 OK on success
@@ -34,8 +43,18 @@ import { getCorsHeaders } from '../_cors.js';
 import { captureSilentError } from '../_sentry-edge.js';
 import { resolveClerkSession } from '../../server/_shared/auth-session';
 import {
+  getEntitlements,
+  isEntitlementBackendConfigured,
+  type CachedEntitlements,
+} from '../../server/_shared/entitlement-check';
+import { checkProMcpAccess } from '../../server/_shared/pro-mcp-gate';
+import { resolveDailyLimit, resolvePlanDrivenMcpAllowance } from '../mcp/quota';
+import {
+  FREE_ACCOUNT_CALLS_PER_DAY,
+  freeAccountCallsKey,
+} from '../mcp/free-account-allowance';
+import {
   dailyCounterKey,
-  PRO_DAILY_QUOTA_LIMIT,
   secondsUntilUtcMidnight,
 } from '../../server/_shared/pro-mcp-token';
 
@@ -49,6 +68,12 @@ export interface QuotaDeps {
    * exist. Throws on transport failure — the caller fail-softs to "0 used".
    */
   redisGet: (key: string) => Promise<string | null>;
+  /**
+   * Cached entitlement read for both the plan allowance and the shared Pro MCP
+   * decision. Keep this as the complete cached shape so the compiler checks
+   * every field consumed by `checkProMcpAccess`.
+   */
+  getEntitlements: (userId: string) => Promise<CachedEntitlements | null>;
   /** Injectable for deterministic tests. */
   now: () => Date;
 }
@@ -95,7 +120,46 @@ export async function quotaHandler(req: Request, deps: QuotaDeps): Promise<Respo
   }
 
   const now = deps.now();
-  const key = dailyCounterKey(userId, now);
+
+  // Plan allowance first — `used` is clamped to THIS number, not to the
+  // historical 50. An unreadable entitlement leaves `planDailyLimit`
+  // undefined, which resolveDailyLimit turns into the plan default. The
+  // plan-family gate mirrors enforcement (`checkMcpEntitlementGate`): an
+  // API-tier plan's catalog allowance is NOT what the meter applies, so it
+  // must not be what this endpoint displays.
+  let planDailyLimit: number | null | undefined;
+  // #6716 F7: which METER applies decides which counter to read. A caller the
+  // Pro gate classifies as `free_account` is metered by
+  // `reserveFreeAccountAllowance` against `mcp:free-acct:calls:*`, NOT by
+  // `reserveQuota` against `dailyCounterKey`. Reading the Pro key for such a
+  // caller reports a permanent `used: 0` — the display/enforcement drift this
+  // endpoint exists to prevent. Resolve the meter from the same verdict the
+  // enforcement site uses, then read that meter's key.
+  let onFreeAllowance = false;
+  try {
+    const ent = await deps.getEntitlements(userId);
+    planDailyLimit = resolvePlanDrivenMcpAllowance(ent?.planKey, ent?.features?.planLimits?.mcpCallsPerDay);
+    onFreeAllowance = checkProMcpAccess(ent, now.getTime(), {
+      backendConfigured: isEntitlementBackendConfigured(),
+    })?.kind === 'free_account';
+  } catch (err) {
+    console.warn(
+      '[mcp-quota] entitlement lookup failed:',
+      err instanceof Error ? err.message : String(err),
+    );
+    captureSilentError(err, {
+      tags: { route: 'api/user/mcp-quota', step: 'entitlements' },
+    });
+  }
+  // The free ceiling is NOT a plan allowance — it comes from the constant the
+  // reservation enforces, so the catalog's free `mcpCallsPerDay: 0` cannot make
+  // this endpoint under-report.
+  const limit = onFreeAllowance
+    ? FREE_ACCOUNT_CALLS_PER_DAY
+    : resolveDailyLimit(planDailyLimit);
+  const key = onFreeAllowance
+    ? freeAccountCallsKey(userId, now.getTime())
+    : dailyCounterKey(userId, now);
 
   let raw: string | null = null;
   try {
@@ -116,9 +180,11 @@ export async function quotaHandler(req: Request, deps: QuotaDeps): Promise<Respo
   if (raw !== null) {
     const n = Number(raw);
     if (Number.isFinite(n) && n >= 0) {
-      // Cap displayed value at the hard limit so a stale-rollover or test
-      // injection cannot show "73 / 50".
-      used = Math.min(Math.floor(n), PRO_DAILY_QUOTA_LIMIT);
+      // Cap displayed value at the resolved limit so a stale-rollover or test
+      // injection cannot show "73 / 50". Unlimited plans have nothing to clamp
+      // to — the raw counter IS the display value there.
+      const floored = Math.floor(n);
+      used = limit === null ? floored : Math.min(floored, limit);
     }
   }
 
@@ -130,7 +196,7 @@ export async function quotaHandler(req: Request, deps: QuotaDeps): Promise<Respo
   const resetsAt = new Date(resetsAtMs).toISOString();
 
   return new Response(
-    JSON.stringify({ used, limit: PRO_DAILY_QUOTA_LIMIT, resetsAt }),
+    JSON.stringify({ used, limit, resetsAt }),
     { status: 200, headers: jsonHeaders },
   );
 }
@@ -139,6 +205,7 @@ export default async function handler(req: Request): Promise<Response> {
   return quotaHandler(req, {
     resolveUserId: async (r) => (await resolveClerkSession(r))?.userId ?? null,
     redisGet: rawRedisGetString,
+    getEntitlements,
     now: () => new Date(),
   });
 }

@@ -32,14 +32,31 @@ paths:
                             example:
                                 "fetchedAt": "2026-01-15T12:00:00Z"
                                 "indices":
-                                    - "changePct": 1.5
-                                      "currentValue": 1.5
+                                    - "changePct": 1.69
+                                      "currentValue": 1072.16
                                       "history":
                                           - "date": "2026-01-15"
-                                            "value": 1.5
-                                      "indexId": "example-id"
-                                      "name": "WorldMonitor Analyst"
-                                "upstreamUnavailable": true
+                                            "value": 1072.16
+                                      "indexId": "CCFI"
+                                      "name": "CCFI - China Container Freight"
+                                      "periodChangeBasis": "publisher_reported"
+                                      "periodChangePct": 1.69
+                                      "previousValue": 1054.38
+                                      "priorPeriodDate": "2026-01-08"
+                                      "priorPeriodValue": 1054.38
+                                      "spikeAlert": false
+                                      "unit": "index"
+                                    - "changePct": 0
+                                      "currentValue": 1972
+                                      "history":
+                                          - "date": "2026-01-15"
+                                            "value": 1972
+                                      "indexId": "BDI"
+                                      "name": "BDI - Baltic Dry Index"
+                                      "previousValue": 1972
+                                      "spikeAlert": false
+                                      "unit": "index"
+                                "upstreamUnavailable": false
                             schema:
                                 $ref: '#/components/schemas/GetShippingRatesResponse'
                 "400":
@@ -58,6 +75,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -87,6 +109,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -128,7 +175,7 @@ paths:
                                       "congestionLevel": "example"
                                       "description": "Example WorldMonitor observation."
                                 "fetchedAt": "2026-01-15T12:00:00Z"
-                                "upstreamUnavailable": true
+                                "upstreamUnavailable": false
                             schema:
                                 $ref: '#/components/schemas/GetChokepointStatusResponse'
                 "400":
@@ -147,6 +194,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -176,6 +228,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -242,6 +319,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -271,6 +353,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -312,7 +419,7 @@ paths:
                                             "countryCode": "US"
                                             "productionTonnes": 1.5
                                             "sharePct": 1.5
-                                "upstreamUnavailable": true
+                                "upstreamUnavailable": false
                             schema:
                                 $ref: '#/components/schemas/GetCriticalMineralsResponse'
                 "400":
@@ -331,6 +438,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -360,6 +472,201 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
+                default:
+                    description: Gateway or handler error response.
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/Error'
+                                    - $ref: '#/components/schemas/GatewayError'
+    /api/supply-chain/v1/get-mineral-production:
+        get:
+            tags:
+                - SupplyChainService
+            summary: GetMineralProduction
+            description: |-
+                GetMineralProduction returns per-commodity mine and refinery country shares
+                 and HHI from the annual USGS MCS / BGS seed.
+            operationId: GetMineralProduction
+            parameters:
+                - name: commodity
+                  in: query
+                  description: USGS commodity id or label (e.g. "cobalt"). Empty returns every commodity.
+                  required: false
+                  example: "example"
+                  schema:
+                    type: string
+                - name: iso2
+                  in: query
+                  description: |-
+                    ISO 3166-1 alpha-2. When set, countries[] is scoped to this producer and
+                     the countries portfolio is populated.
+                  required: false
+                  example: "US"
+                  schema:
+                    type: string
+                - name: stage
+                  in: query
+                  description: '"mine" or "refinery". Empty returns both stages when present.'
+                  required: false
+                  example: "example"
+                  schema:
+                    type: string
+                - name: jmespath
+                  in: query
+                  description: |-
+                    Optional JMESPath expression applied server-side to project or reduce the JSON response before it is returned (mirrors the MCP jmespath argument). Invalid expressions, expressions larger than 1024 UTF-8 bytes, or projections that exceed the 256 KB output cap return HTTP 400 with a {_jmespath_error, original_keys} envelope. Grammar and worked examples: https://www.worldmonitor.app/docs/mcp-jmespath.
+                  required: false
+                  example: "keys(@)"
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: Successful response
+                    content:
+                        application/json:
+                            example:
+                                "commodities":
+                                    - "commodity": "example"
+                                      "commodityId": "example-id"
+                                      "mine":
+                                          "countries":
+                                              - "country": "US"
+                                                "estimated": true
+                                                "iso2": "US"
+                                                "output": 1.5
+                                                "residual": true
+                                          "hhi": 1.5
+                                          "unit": "example"
+                                          "withheldCount": 1
+                                          "worldTotal": 1
+                                      "refinery":
+                                          "countries":
+                                              - "country": "US"
+                                                "estimated": true
+                                                "iso2": "US"
+                                                "output": 1.5
+                                                "residual": true
+                                          "hhi": 1.5
+                                          "unit": "example"
+                                          "withheldCount": 1
+                                          "worldTotal": 1
+                                      "sources":
+                                          - "example"
+                                "countries":
+                                    - "holdings":
+                                        - "commodity": "example"
+                                          "commodityId": "example-id"
+                                          "output": 1.5
+                                          "share": 1.5
+                                          "stage": "example"
+                                      "iso2": "US"
+                                "dataYear": 1
+                                "fetchedAt": "2026-01-15T12:00:00Z"
+                                "upstreamUnavailable": false
+                            schema:
+                                $ref: '#/components/schemas/GetMineralProductionResponse'
+                "400":
+                    description: Validation error
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/ValidationError'
+                                    - $ref: '#/components/schemas/JmespathProjectionError'
+                "401":
+                    description: Missing or invalid API key.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UnauthorizedError'
+                "403":
+                    description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ForbiddenError'
+                "429":
+                    description: Rate limit exceeded.
+                    headers:
+                        X-RateLimit-Limit:
+                            description: Maximum requests allowed in the active rate-limit window.
+                            schema:
+                                type: string
+                        X-RateLimit-Remaining:
+                            description: Requests remaining in the active rate-limit window.
+                            schema:
+                                type: string
+                        X-RateLimit-Reset:
+                            description: Unix epoch milliseconds when the active rate-limit window resets.
+                            schema:
+                                type: string
+                        Retry-After:
+                            description: Seconds to wait before retrying the request.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/Error'
+                                    - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -400,7 +707,7 @@ paths:
                                 "fetchedAt": 1717200000000
                                 "stressLevel": "example"
                                 "stressScore": 42.5
-                                "upstreamUnavailable": true
+                                "upstreamUnavailable": false
                             schema:
                                 $ref: '#/components/schemas/GetShippingStressResponse'
                 "400":
@@ -419,6 +726,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -448,6 +760,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -525,6 +862,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: PRO entitlement access denied.
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -554,6 +896,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -638,6 +1005,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: PRO entitlement access denied.
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -667,6 +1039,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -746,6 +1143,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: PRO entitlement access denied.
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -775,6 +1177,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -847,6 +1274,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: PRO entitlement access denied.
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -876,6 +1308,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -963,6 +1420,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: PRO entitlement access denied.
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -992,6 +1454,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -1065,6 +1552,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: PRO entitlement access denied.
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -1094,6 +1586,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -1198,6 +1715,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: PRO entitlement access denied.
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -1227,6 +1749,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -1308,6 +1855,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: PRO entitlement access denied.
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -1337,6 +1889,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -1396,7 +1973,7 @@ paths:
                                               "date": "2026-01-15"
                                               "text": "example"
                                               "url": "https://example.com/worldmonitor"
-                                "upstreamUnavailable": true
+                                "upstreamUnavailable": false
                             schema:
                                 $ref: '#/components/schemas/ListPipelinesResponse'
                 "400":
@@ -1415,6 +1992,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -1444,6 +2026,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -1506,7 +2113,7 @@ paths:
                                       "fieldChanged": "example"
                                       "newValue": "example"
                                       "previousValue": "example"
-                                "unavailable": true
+                                "unavailable": false
                             schema:
                                 $ref: '#/components/schemas/GetPipelineDetailResponse'
                 "400":
@@ -1525,6 +2132,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -1554,6 +2166,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -1612,7 +2249,7 @@ paths:
                                           "fillDisclosed": true
                                           "fillSource": "example"
                                 "fetchedAt": "2026-01-15T12:00:00Z"
-                                "upstreamUnavailable": true
+                                "upstreamUnavailable": false
                             schema:
                                 $ref: '#/components/schemas/ListStorageFacilitiesResponse'
                 "400":
@@ -1631,6 +2268,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -1660,6 +2302,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -1717,7 +2384,7 @@ paths:
                                       "fieldChanged": "example"
                                       "newValue": "example"
                                       "previousValue": "example"
-                                "unavailable": true
+                                "unavailable": false
                             schema:
                                 $ref: '#/components/schemas/GetStorageFacilityDetailResponse'
                 "400":
@@ -1736,6 +2403,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -1765,6 +2437,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -1840,7 +2537,7 @@ paths:
                                           "lastEvidenceUpdate": "2026-01-15"
                                       "firstSeen": "example"
                                       "id": "example-id"
-                                "upstreamUnavailable": true
+                                "upstreamUnavailable": false
                             schema:
                                 $ref: '#/components/schemas/ListFuelShortagesResponse'
                 "400":
@@ -1859,6 +2556,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -1888,6 +2590,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -1945,7 +2672,7 @@ paths:
                                         "lastEvidenceUpdate": "2026-01-15"
                                     "firstSeen": "example"
                                     "id": "example-id"
-                                "unavailable": true
+                                "unavailable": false
                             schema:
                                 $ref: '#/components/schemas/GetFuelShortageDetailResponse'
                 "400":
@@ -1964,6 +2691,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -1993,6 +2725,31 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -2059,7 +2816,7 @@ paths:
                                       "causeChain":
                                           - "example"
                                 "fetchedAt": "2026-01-15T12:00:00Z"
-                                "upstreamUnavailable": true
+                                "upstreamUnavailable": false
                             schema:
                                 $ref: '#/components/schemas/ListEnergyDisruptionsResponse'
                 "400":
@@ -2078,6 +2835,11 @@ paths:
                                 $ref: '#/components/schemas/UnauthorizedError'
                 "403":
                     description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
                     content:
                         application/json:
                             schema:
@@ -2107,6 +2869,144 @@ paths:
                                 oneOf:
                                     - $ref: '#/components/schemas/Error'
                                     - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
+                default:
+                    description: Gateway or handler error response.
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/Error'
+                                    - $ref: '#/components/schemas/GatewayError'
+    /api/supply-chain/v1/get-china-corridor-control-towers:
+        get:
+            tags:
+                - SupplyChainService
+            summary: GetChinaCorridorControlTowers
+            description: |-
+                GetChinaCorridorControlTowers composes reviewed China logistics corridors
+                 from existing source caches. Conditions retain canonical provenance and
+                 explicit unavailable states; the response never emits a single risk score.
+            operationId: GetChinaCorridorControlTowers
+            parameters:
+                - name: jmespath
+                  in: query
+                  description: |-
+                    Optional JMESPath expression applied server-side to project or reduce the JSON response before it is returned (mirrors the MCP jmespath argument). Invalid expressions, expressions larger than 1024 UTF-8 bytes, or projections that exceed the 256 KB output cap return HTTP 400 with a {_jmespath_error, original_keys} envelope. Grammar and worked examples: https://www.worldmonitor.app/docs/mcp-jmespath.
+                  required: false
+                  example: "keys(@)"
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: Successful response
+                    content:
+                        application/json:
+                            example:
+                                "generatedAt": "2026-07-25T12:00:00.000Z"
+                                "payloadJson": "{\"generatedAt\":\"2026-07-25T12:00:00.000Z\",\"corridors\":[{\"id\":\"china-yangtze-river-delta\",\"name\":\"Yangtze River Delta\",\"description\":\"Reviewed coastal logistics corridor joining Shanghai, Jiangsu, and Zhejiang gateways.\",\"boundary\":[{\"lat\":28.4,\"lon\":118.2},{\"lat\":28.4,\"lon\":123.2},{\"lat\":33.4,\"lon\":123.2},{\"lat\":33.4,\"lon\":118.2},{\"lat\":28.4,\"lon\":118.2}],\"nodes\":[{\"id\":\"china-node:yrd-port-shanghai\",\"name\":\"Shanghai\",\"type\":\"port\",\"lat\":31.1918,\"lon\":121.6442,\"sourceOwner\":\"IMF PortWatch\",\"sourceSelector\":{\"family\":\"port\",\"id\":\"port1188\"}}],\"availability\":\"partial\",\"conditions\":[{\"family\":\"port\",\"providerId\":\"portwatch\",\"availability\":\"available\",\"reason\":null,\"sourceSignals\":[{\"id\":\"signal:portwatch:port1188:2026-07-25T11:00:00.000Z\",\"family\":\"port\",\"selectorId\":\"port1188\",\"availability\":\"available\",\"publisher\":{\"id\":\"publisher:imf-portwatch\",\"name\":\"IMF PortWatch\",\"type\":\"official\"},\"sourceUrl\":\"https://portwatch.imf.org/\",\"sourceScope\":\"node\",\"observationTime\":\"2026-07-25T11:00:00.000Z\",\"observationTimePrecision\":\"instant\",\"releaseTime\":null,\"releaseTimePrecision\":\"unknown\",\"retrievalTime\":\"2026-07-25T11:05:00.000Z\",\"retrievalTimePrecision\":\"instant\",\"revision\":null,\"transportFreshness\":\"fresh\",\"contentFreshness\":\"current\",\"summary\":\"PortWatch activity observation available for Shanghai.\",\"metrics\":{\"tankerCalls30d\":14}}],\"provenance\":{\"contractVersion\":\"decision-signal-provenance/v1\",\"signalId\":\"signal:corridor-condition:china-yangtze-river-delta:port:2026-07-25T11:00:00.000Z\",\"familyId\":\"composed_corridor_condition\",\"claims\":{\"publisher\":{\"status\":\"known\",\"value\":{\"id\":\"publisher:worldmonitor-derived\",\"name\":\"WorldMonitor derived output\",\"type\":\"derived_output\",\"registryReference\":null}},\"observation_time\":{\"status\":\"known\",\"value\":{\"role\":\"observation\",\"value\":\"2026-07-25T11:00:00.000Z\",\"precision\":\"instant\"}},\"source_url\":{\"status\":\"not_applicable\",\"reason\":\"The corridor condition links source URLs through its input signals.\"},\"original_reference\":{\"status\":\"not_applicable\",\"reason\":\"The corridor condition is composed from multiple source records.\"},\"original_language\":{\"status\":\"not_applicable\",\"reason\":\"The deterministic composition has no original-language text.\"},\"translation\":{\"status\":\"not_applicable\",\"reason\":\"The deterministic composition has no translated source text.\"},\"effective_time\":{\"status\":\"known\",\"value\":{\"role\":\"effective\",\"value\":\"2026-07-25T11:00:00.000Z\",\"precision\":\"instant\"}},\"publication_time\":{\"status\":\"not_applicable\",\"reason\":\"The computed condition is not a publisher release.\"},\"retrieval_time\":{\"status\":\"known\",\"value\":{\"role\":\"retrieval\",\"value\":\"2026-07-25T11:05:00.000Z\",\"precision\":\"instant\"}},\"revision\":{\"status\":\"known\",\"value\":{\"vintageId\":\"china-yangtze-river-delta:port:2026-07-25T11:00:00.000Z\",\"sequence\":1,\"state\":\"original\"}},\"supersession\":{\"status\":\"known\",\"value\":{\"state\":\"current\"}},\"extraction_confidence\":{\"status\":\"not_applicable\",\"reason\":\"Each input signal owns its extraction confidence.\"},\"classification_confidence\":{\"status\":\"known\",\"value\":{\"score\":1,\"method\":\"exact-reviewed-selector/v1\"}},\"corroboration\":{\"status\":\"known\",\"value\":{\"state\":\"single_source\",\"sourceSignalIds\":[\"signal:portwatch:port1188:2026-07-25T11:00:00.000Z\"]}},\"transport_freshness\":{\"status\":\"known\",\"value\":{\"state\":\"fresh\",\"assessedAt\":\"2026-07-25T12:00:00.000Z\",\"lastSuccessAt\":\"2026-07-25T11:05:00.000Z\"}},\"content_freshness\":{\"status\":\"known\",\"value\":{\"state\":\"current\",\"assessedAt\":\"2026-07-25T12:00:00.000Z\",\"contentAsOf\":\"2026-07-25T11:00:00.000Z\"}},\"derivation\":{\"status\":\"known\",\"value\":{\"methodId\":\"worldmonitor:china-corridor-condition\",\"methodVersion\":\"1\",\"computedAt\":\"2026-07-25T12:00:00.000Z\",\"inputSignalIds\":[\"signal:portwatch:port1188:2026-07-25T11:00:00.000Z\"]}}}}},{\"family\":\"aviation\",\"providerId\":\"provider:aviation\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"hazard\",\"providerId\":\"provider:hazard\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"power_energy\",\"providerId\":\"provider:power_energy\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"strategic_industry\",\"providerId\":\"provider:strategic_industry\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"trade\",\"providerId\":\"provider:trade\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null}]},{\"id\":\"china-greater-bay-area\",\"name\":\"Greater Bay Area\",\"description\":\"Reviewed Pearl River Delta corridor connecting Guangdong, Hong Kong, and Macao-facing port, airport, and industrial gateways.\",\"boundary\":[{\"lat\":20.5,\"lon\":111.5},{\"lat\":20.5,\"lon\":115.8},{\"lat\":24.8,\"lon\":115.8},{\"lat\":24.8,\"lon\":111.5},{\"lat\":20.5,\"lon\":111.5}],\"nodes\":[{\"id\":\"china-node:gba-port-shekou\",\"name\":\"Shekou Shenzhen\",\"type\":\"port\",\"lat\":22.47,\"lon\":113.9,\"sourceOwner\":\"IMF PortWatch\",\"sourceSelector\":{\"family\":\"port\",\"id\":\"port1189\"}}],\"availability\":\"partial\",\"conditions\":[{\"family\":\"port\",\"providerId\":\"portwatch\",\"availability\":\"available\",\"reason\":null,\"sourceSignals\":[{\"id\":\"signal:portwatch:port1189:2026-07-25T11:00:00.000Z\",\"family\":\"port\",\"selectorId\":\"port1189\",\"availability\":\"available\",\"publisher\":{\"id\":\"publisher:imf-portwatch\",\"name\":\"IMF PortWatch\",\"type\":\"official\"},\"sourceUrl\":\"https://portwatch.imf.org/\",\"sourceScope\":\"node\",\"observationTime\":\"2026-07-25T11:00:00.000Z\",\"observationTimePrecision\":\"instant\",\"releaseTime\":null,\"releaseTimePrecision\":\"unknown\",\"retrievalTime\":\"2026-07-25T11:05:00.000Z\",\"retrievalTimePrecision\":\"instant\",\"revision\":null,\"transportFreshness\":\"fresh\",\"contentFreshness\":\"current\",\"summary\":\"PortWatch activity observation available for Shekou Shenzhen.\",\"metrics\":{\"tankerCalls30d\":14}}],\"provenance\":{\"contractVersion\":\"decision-signal-provenance/v1\",\"signalId\":\"signal:corridor-condition:china-greater-bay-area:port:2026-07-25T11:00:00.000Z\",\"familyId\":\"composed_corridor_condition\",\"claims\":{\"publisher\":{\"status\":\"known\",\"value\":{\"id\":\"publisher:worldmonitor-derived\",\"name\":\"WorldMonitor derived output\",\"type\":\"derived_output\",\"registryReference\":null}},\"observation_time\":{\"status\":\"known\",\"value\":{\"role\":\"observation\",\"value\":\"2026-07-25T11:00:00.000Z\",\"precision\":\"instant\"}},\"source_url\":{\"status\":\"not_applicable\",\"reason\":\"The corridor condition links source URLs through its input signals.\"},\"original_reference\":{\"status\":\"not_applicable\",\"reason\":\"The corridor condition is composed from multiple source records.\"},\"original_language\":{\"status\":\"not_applicable\",\"reason\":\"The deterministic composition has no original-language text.\"},\"translation\":{\"status\":\"not_applicable\",\"reason\":\"The deterministic composition has no translated source text.\"},\"effective_time\":{\"status\":\"known\",\"value\":{\"role\":\"effective\",\"value\":\"2026-07-25T11:00:00.000Z\",\"precision\":\"instant\"}},\"publication_time\":{\"status\":\"not_applicable\",\"reason\":\"The computed condition is not a publisher release.\"},\"retrieval_time\":{\"status\":\"known\",\"value\":{\"role\":\"retrieval\",\"value\":\"2026-07-25T11:05:00.000Z\",\"precision\":\"instant\"}},\"revision\":{\"status\":\"known\",\"value\":{\"vintageId\":\"china-greater-bay-area:port:2026-07-25T11:00:00.000Z\",\"sequence\":1,\"state\":\"original\"}},\"supersession\":{\"status\":\"known\",\"value\":{\"state\":\"current\"}},\"extraction_confidence\":{\"status\":\"not_applicable\",\"reason\":\"Each input signal owns its extraction confidence.\"},\"classification_confidence\":{\"status\":\"known\",\"value\":{\"score\":1,\"method\":\"exact-reviewed-selector/v1\"}},\"corroboration\":{\"status\":\"known\",\"value\":{\"state\":\"single_source\",\"sourceSignalIds\":[\"signal:portwatch:port1189:2026-07-25T11:00:00.000Z\"]}},\"transport_freshness\":{\"status\":\"known\",\"value\":{\"state\":\"fresh\",\"assessedAt\":\"2026-07-25T12:00:00.000Z\",\"lastSuccessAt\":\"2026-07-25T11:05:00.000Z\"}},\"content_freshness\":{\"status\":\"known\",\"value\":{\"state\":\"current\",\"assessedAt\":\"2026-07-25T12:00:00.000Z\",\"contentAsOf\":\"2026-07-25T11:00:00.000Z\"}},\"derivation\":{\"status\":\"known\",\"value\":{\"methodId\":\"worldmonitor:china-corridor-condition\",\"methodVersion\":\"1\",\"computedAt\":\"2026-07-25T12:00:00.000Z\",\"inputSignalIds\":[\"signal:portwatch:port1189:2026-07-25T11:00:00.000Z\"]}}}}},{\"family\":\"aviation\",\"providerId\":\"provider:aviation\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"hazard\",\"providerId\":\"provider:hazard\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"power_energy\",\"providerId\":\"provider:power_energy\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"strategic_industry\",\"providerId\":\"provider:strategic_industry\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"trade\",\"providerId\":\"provider:trade\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null}]},{\"id\":\"china-bohai-rim\",\"name\":\"Bohai Rim\",\"description\":\"Reviewed northern maritime-industrial corridor spanning Beijing-Tianjin, Hebei, Shandong, Liaoning, and their major gateways.\",\"boundary\":[{\"lat\":35.5,\"lon\":116},{\"lat\":35.5,\"lon\":123.5},{\"lat\":42.2,\"lon\":123.5},{\"lat\":42.2,\"lon\":116},{\"lat\":35.5,\"lon\":116}],\"nodes\":[{\"id\":\"china-node:bohai-port-qingdao\",\"name\":\"Qingdao\",\"type\":\"port\",\"lat\":36.07,\"lon\":120.32,\"sourceOwner\":\"IMF PortWatch\",\"sourceSelector\":{\"family\":\"port\",\"id\":\"port1069\"}}],\"availability\":\"partial\",\"conditions\":[{\"family\":\"port\",\"providerId\":\"portwatch\",\"availability\":\"available\",\"reason\":null,\"sourceSignals\":[{\"id\":\"signal:portwatch:port1069:2026-07-25T11:00:00.000Z\",\"family\":\"port\",\"selectorId\":\"port1069\",\"availability\":\"available\",\"publisher\":{\"id\":\"publisher:imf-portwatch\",\"name\":\"IMF PortWatch\",\"type\":\"official\"},\"sourceUrl\":\"https://portwatch.imf.org/\",\"sourceScope\":\"node\",\"observationTime\":\"2026-07-25T11:00:00.000Z\",\"observationTimePrecision\":\"instant\",\"releaseTime\":null,\"releaseTimePrecision\":\"unknown\",\"retrievalTime\":\"2026-07-25T11:05:00.000Z\",\"retrievalTimePrecision\":\"instant\",\"revision\":null,\"transportFreshness\":\"fresh\",\"contentFreshness\":\"current\",\"summary\":\"PortWatch activity observation available for Qingdao.\",\"metrics\":{\"tankerCalls30d\":14}}],\"provenance\":{\"contractVersion\":\"decision-signal-provenance/v1\",\"signalId\":\"signal:corridor-condition:china-bohai-rim:port:2026-07-25T11:00:00.000Z\",\"familyId\":\"composed_corridor_condition\",\"claims\":{\"publisher\":{\"status\":\"known\",\"value\":{\"id\":\"publisher:worldmonitor-derived\",\"name\":\"WorldMonitor derived output\",\"type\":\"derived_output\",\"registryReference\":null}},\"observation_time\":{\"status\":\"known\",\"value\":{\"role\":\"observation\",\"value\":\"2026-07-25T11:00:00.000Z\",\"precision\":\"instant\"}},\"source_url\":{\"status\":\"not_applicable\",\"reason\":\"The corridor condition links source URLs through its input signals.\"},\"original_reference\":{\"status\":\"not_applicable\",\"reason\":\"The corridor condition is composed from multiple source records.\"},\"original_language\":{\"status\":\"not_applicable\",\"reason\":\"The deterministic composition has no original-language text.\"},\"translation\":{\"status\":\"not_applicable\",\"reason\":\"The deterministic composition has no translated source text.\"},\"effective_time\":{\"status\":\"known\",\"value\":{\"role\":\"effective\",\"value\":\"2026-07-25T11:00:00.000Z\",\"precision\":\"instant\"}},\"publication_time\":{\"status\":\"not_applicable\",\"reason\":\"The computed condition is not a publisher release.\"},\"retrieval_time\":{\"status\":\"known\",\"value\":{\"role\":\"retrieval\",\"value\":\"2026-07-25T11:05:00.000Z\",\"precision\":\"instant\"}},\"revision\":{\"status\":\"known\",\"value\":{\"vintageId\":\"china-bohai-rim:port:2026-07-25T11:00:00.000Z\",\"sequence\":1,\"state\":\"original\"}},\"supersession\":{\"status\":\"known\",\"value\":{\"state\":\"current\"}},\"extraction_confidence\":{\"status\":\"not_applicable\",\"reason\":\"Each input signal owns its extraction confidence.\"},\"classification_confidence\":{\"status\":\"known\",\"value\":{\"score\":1,\"method\":\"exact-reviewed-selector/v1\"}},\"corroboration\":{\"status\":\"known\",\"value\":{\"state\":\"single_source\",\"sourceSignalIds\":[\"signal:portwatch:port1069:2026-07-25T11:00:00.000Z\"]}},\"transport_freshness\":{\"status\":\"known\",\"value\":{\"state\":\"fresh\",\"assessedAt\":\"2026-07-25T12:00:00.000Z\",\"lastSuccessAt\":\"2026-07-25T11:05:00.000Z\"}},\"content_freshness\":{\"status\":\"known\",\"value\":{\"state\":\"current\",\"assessedAt\":\"2026-07-25T12:00:00.000Z\",\"contentAsOf\":\"2026-07-25T11:00:00.000Z\"}},\"derivation\":{\"status\":\"known\",\"value\":{\"methodId\":\"worldmonitor:china-corridor-condition\",\"methodVersion\":\"1\",\"computedAt\":\"2026-07-25T12:00:00.000Z\",\"inputSignalIds\":[\"signal:portwatch:port1069:2026-07-25T11:00:00.000Z\"]}}}}},{\"family\":\"aviation\",\"providerId\":\"provider:aviation\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"hazard\",\"providerId\":\"provider:hazard\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"power_energy\",\"providerId\":\"provider:power_energy\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"strategic_industry\",\"providerId\":\"provider:strategic_industry\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"trade\",\"providerId\":\"provider:trade\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null}]},{\"id\":\"china-western-land-sea-corridor\",\"name\":\"Western Land-Sea Corridor\",\"description\":\"Reviewed western corridor linking inland manufacturing hubs, Xinjiang land crossings, and Guangxi gateways to regional and maritime routes.\",\"boundary\":[{\"lat\":20.4,\"lon\":106.2},{\"lat\":20.4,\"lon\":110.4},{\"lat\":32.5,\"lon\":110.4},{\"lat\":47,\"lon\":91},{\"lat\":47,\"lon\":78.5},{\"lat\":41,\"lon\":78.5},{\"lat\":27,\"lon\":99.7},{\"lat\":22,\"lon\":105.8},{\"lat\":20.4,\"lon\":106.2}],\"nodes\":[{\"id\":\"china-node:western-port-qinzhou\",\"name\":\"Qinzhou\",\"type\":\"port\",\"lat\":21.6788,\"lon\":108.6383,\"sourceOwner\":\"IMF PortWatch\",\"sourceSelector\":{\"family\":\"port\",\"id\":\"port1071\"}}],\"availability\":\"partial\",\"conditions\":[{\"family\":\"port\",\"providerId\":\"portwatch\",\"availability\":\"available\",\"reason\":null,\"sourceSignals\":[{\"id\":\"signal:portwatch:port1071:2026-07-25T11:00:00.000Z\",\"family\":\"port\",\"selectorId\":\"port1071\",\"availability\":\"available\",\"publisher\":{\"id\":\"publisher:imf-portwatch\",\"name\":\"IMF PortWatch\",\"type\":\"official\"},\"sourceUrl\":\"https://portwatch.imf.org/\",\"sourceScope\":\"node\",\"observationTime\":\"2026-07-25T11:00:00.000Z\",\"observationTimePrecision\":\"instant\",\"releaseTime\":null,\"releaseTimePrecision\":\"unknown\",\"retrievalTime\":\"2026-07-25T11:05:00.000Z\",\"retrievalTimePrecision\":\"instant\",\"revision\":null,\"transportFreshness\":\"fresh\",\"contentFreshness\":\"current\",\"summary\":\"PortWatch activity observation available for Qinzhou.\",\"metrics\":{\"tankerCalls30d\":14}}],\"provenance\":{\"contractVersion\":\"decision-signal-provenance/v1\",\"signalId\":\"signal:corridor-condition:china-western-land-sea-corridor:port:2026-07-25T11:00:00.000Z\",\"familyId\":\"composed_corridor_condition\",\"claims\":{\"publisher\":{\"status\":\"known\",\"value\":{\"id\":\"publisher:worldmonitor-derived\",\"name\":\"WorldMonitor derived output\",\"type\":\"derived_output\",\"registryReference\":null}},\"observation_time\":{\"status\":\"known\",\"value\":{\"role\":\"observation\",\"value\":\"2026-07-25T11:00:00.000Z\",\"precision\":\"instant\"}},\"source_url\":{\"status\":\"not_applicable\",\"reason\":\"The corridor condition links source URLs through its input signals.\"},\"original_reference\":{\"status\":\"not_applicable\",\"reason\":\"The corridor condition is composed from multiple source records.\"},\"original_language\":{\"status\":\"not_applicable\",\"reason\":\"The deterministic composition has no original-language text.\"},\"translation\":{\"status\":\"not_applicable\",\"reason\":\"The deterministic composition has no translated source text.\"},\"effective_time\":{\"status\":\"known\",\"value\":{\"role\":\"effective\",\"value\":\"2026-07-25T11:00:00.000Z\",\"precision\":\"instant\"}},\"publication_time\":{\"status\":\"not_applicable\",\"reason\":\"The computed condition is not a publisher release.\"},\"retrieval_time\":{\"status\":\"known\",\"value\":{\"role\":\"retrieval\",\"value\":\"2026-07-25T11:05:00.000Z\",\"precision\":\"instant\"}},\"revision\":{\"status\":\"known\",\"value\":{\"vintageId\":\"china-western-land-sea-corridor:port:2026-07-25T11:00:00.000Z\",\"sequence\":1,\"state\":\"original\"}},\"supersession\":{\"status\":\"known\",\"value\":{\"state\":\"current\"}},\"extraction_confidence\":{\"status\":\"not_applicable\",\"reason\":\"Each input signal owns its extraction confidence.\"},\"classification_confidence\":{\"status\":\"known\",\"value\":{\"score\":1,\"method\":\"exact-reviewed-selector/v1\"}},\"corroboration\":{\"status\":\"known\",\"value\":{\"state\":\"single_source\",\"sourceSignalIds\":[\"signal:portwatch:port1071:2026-07-25T11:00:00.000Z\"]}},\"transport_freshness\":{\"status\":\"known\",\"value\":{\"state\":\"fresh\",\"assessedAt\":\"2026-07-25T12:00:00.000Z\",\"lastSuccessAt\":\"2026-07-25T11:05:00.000Z\"}},\"content_freshness\":{\"status\":\"known\",\"value\":{\"state\":\"current\",\"assessedAt\":\"2026-07-25T12:00:00.000Z\",\"contentAsOf\":\"2026-07-25T11:00:00.000Z\"}},\"derivation\":{\"status\":\"known\",\"value\":{\"methodId\":\"worldmonitor:china-corridor-condition\",\"methodVersion\":\"1\",\"computedAt\":\"2026-07-25T12:00:00.000Z\",\"inputSignalIds\":[\"signal:portwatch:port1071:2026-07-25T11:00:00.000Z\"]}}}}},{\"family\":\"aviation\",\"providerId\":\"provider:aviation\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"hazard\",\"providerId\":\"provider:hazard\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"power_energy\",\"providerId\":\"provider:power_energy\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"strategic_industry\",\"providerId\":\"provider:strategic_industry\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null},{\"family\":\"trade\",\"providerId\":\"provider:trade\",\"availability\":\"unavailable\",\"reason\":\"No reviewed source observation is available in this example.\",\"sourceSignals\":[],\"provenance\":null}]}]}"
+                                "upstreamUnavailable": false
+                            schema:
+                                $ref: '#/components/schemas/GetChinaCorridorControlTowersResponse'
+                "400":
+                    description: Validation error
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/ValidationError'
+                                    - $ref: '#/components/schemas/JmespathProjectionError'
+                "401":
+                    description: Missing or invalid API key.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UnauthorizedError'
+                "403":
+                    description: API access requires an active subscription (the API key's subscription is inactive or expired).
+                    headers:
+                        X-Billing-Verification:
+                            description: Present when the 403 is a billing-provider-confirmed subscription lapse (value subscription_lapsed, matching the body `code`).
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ForbiddenError'
+                "429":
+                    description: Rate limit exceeded.
+                    headers:
+                        X-RateLimit-Limit:
+                            description: Maximum requests allowed in the active rate-limit window.
+                            schema:
+                                type: string
+                        X-RateLimit-Remaining:
+                            description: Requests remaining in the active rate-limit window.
+                            schema:
+                                type: string
+                        X-RateLimit-Reset:
+                            description: Unix epoch milliseconds when the active rate-limit window resets.
+                            schema:
+                                type: string
+                        Retry-After:
+                            description: Seconds to wait before retrying the request.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/Error'
+                                    - $ref: '#/components/schemas/RateLimitError'
+                "503":
+                    description: Service unavailable. Billing-verification responses include code and X-Billing-Verification; other gateway infrastructure failures use the generic GatewayError shape.
+                    headers:
+                        Retry-After:
+                            description: Seconds to wait before retrying (1-60).
+                            schema:
+                                type: string
+                        X-Billing-Verification:
+                            description: Billing-verification state that produced this response (matches the body `code`).
+                            schema:
+                                type: string
+                        X-Validation-Mode:
+                            description: Present with value degraded when user API-key validation is temporarily unavailable.
+                            schema:
+                                type: string
+                        X-RateLimit-Mode:
+                            description: Present with value degraded when a fail-closed rate-limit dependency is unavailable.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                oneOf:
+                                    - $ref: '#/components/schemas/BillingVerificationError'
+                                    - $ref: '#/components/schemas/GatewayError'
                 default:
                     description: Gateway or handler error response.
                     content:
@@ -2132,6 +3032,1300 @@ components:
             scheme: bearer
             description: 'Bearer token: a Clerk-issued JWT for browser session flows, passed as Authorization: Bearer <token>.'
     schemas:
+        ChinaCorridorControlTowerResponse:
+            type: "object"
+            description: "Canonical transparent China logistics corridor composition decoded from payloadJson."
+            required:
+                - "generatedAt"
+                - "corridors"
+            properties:
+                generatedAt:
+                    type: "string"
+                    format: "date-time"
+                corridors:
+                    type: "array"
+                    items:
+                        "$ref": "#/components/schemas/ChinaCorridorControlTower"
+        ChinaCorridorControlTower:
+            type: "object"
+            required:
+                - "id"
+                - "name"
+                - "description"
+                - "boundary"
+                - "nodes"
+                - "availability"
+                - "conditions"
+            properties:
+                id:
+                    type: "string"
+                    enum:
+                        - "china-yangtze-river-delta"
+                        - "china-greater-bay-area"
+                        - "china-bohai-rim"
+                        - "china-western-land-sea-corridor"
+                name:
+                    type: "string"
+                description:
+                    type: "string"
+                boundary:
+                    type: "array"
+                    items:
+                        type: "object"
+                        required:
+                            - "lat"
+                            - "lon"
+                        properties:
+                            lat:
+                                type: "number"
+                                format: "double"
+                            lon:
+                                type: "number"
+                                format: "double"
+                nodes:
+                    type: "array"
+                    items:
+                        type: "object"
+                        required:
+                            - "id"
+                            - "name"
+                            - "type"
+                            - "lat"
+                            - "lon"
+                            - "sourceOwner"
+                        properties:
+                            id:
+                                type: "string"
+                            name:
+                                type: "string"
+                            type:
+                                type: "string"
+                                enum:
+                                    - "port"
+                                    - "airport"
+                                    - "crossing"
+                                    - "industrial"
+                            lat:
+                                type: "number"
+                                format: "double"
+                            lon:
+                                type: "number"
+                                format: "double"
+                            sourceOwner:
+                                type: "string"
+                            sourceSelector:
+                                type: "object"
+                                required:
+                                    - "family"
+                                    - "id"
+                                properties:
+                                    family:
+                                        type: "string"
+                                        enum:
+                                            - "port"
+                                            - "aviation"
+                                            - "hazard"
+                                            - "power_energy"
+                                            - "strategic_industry"
+                                            - "trade"
+                                    id:
+                                        type: "string"
+                availability:
+                    type: "string"
+                    enum:
+                        - "available"
+                        - "partial"
+                        - "stale"
+                        - "unavailable"
+                conditions:
+                    type: "array"
+                    items:
+                        "$ref": "#/components/schemas/ChinaCorridorCondition"
+        ChinaCorridorCondition:
+            type: "object"
+            required:
+                - "family"
+                - "providerId"
+                - "availability"
+                - "reason"
+                - "sourceSignals"
+                - "provenance"
+            properties:
+                family:
+                    type: "string"
+                    enum:
+                        - "port"
+                        - "aviation"
+                        - "hazard"
+                        - "power_energy"
+                        - "strategic_industry"
+                        - "trade"
+                providerId:
+                    type: "string"
+                availability:
+                    type: "string"
+                    enum:
+                        - "available"
+                        - "partial"
+                        - "stale"
+                        - "unavailable"
+                reason:
+                    type:
+                        - "string"
+                        - "null"
+                sourceSignals:
+                    type: "array"
+                    items:
+                        type: "object"
+                        required:
+                            - "id"
+                            - "family"
+                            - "selectorId"
+                            - "availability"
+                            - "publisher"
+                            - "sourceUrl"
+                            - "sourceScope"
+                            - "observationTime"
+                            - "observationTimePrecision"
+                            - "releaseTime"
+                            - "releaseTimePrecision"
+                            - "retrievalTime"
+                            - "retrievalTimePrecision"
+                            - "revision"
+                            - "transportFreshness"
+                            - "contentFreshness"
+                            - "summary"
+                            - "metrics"
+                        properties:
+                            id:
+                                type: "string"
+                            family:
+                                type: "string"
+                                enum:
+                                    - "port"
+                                    - "aviation"
+                                    - "hazard"
+                                    - "power_energy"
+                                    - "strategic_industry"
+                                    - "trade"
+                            selectorId:
+                                type: "string"
+                            corridorIds:
+                                type: "array"
+                                items:
+                                    type: "string"
+                                    enum:
+                                        - "china-yangtze-river-delta"
+                                        - "china-greater-bay-area"
+                                        - "china-bohai-rim"
+                                        - "china-western-land-sea-corridor"
+                            availability:
+                                type: "string"
+                                enum:
+                                    - "available"
+                                    - "stale"
+                                    - "unavailable"
+                            publisher:
+                                type: "object"
+                                required:
+                                    - "id"
+                                    - "name"
+                                    - "type"
+                                properties:
+                                    id:
+                                        type: "string"
+                                    name:
+                                        type: "string"
+                                    type:
+                                        type: "string"
+                                        enum:
+                                            - "official"
+                                            - "market"
+                                            - "independent"
+                                            - "derived"
+                                            - "unknown"
+                            sourceUrl:
+                                type:
+                                    - "string"
+                                    - "null"
+                                format: "uri"
+                            sourceScope:
+                                type: "string"
+                                enum:
+                                    - "node"
+                                    - "regional"
+                                    - "national"
+                            observationTime:
+                                type:
+                                    - "string"
+                                    - "null"
+                            observationTimePrecision:
+                                type: "string"
+                                enum:
+                                    - "instant"
+                                    - "day"
+                                    - "month"
+                                    - "year"
+                                    - "unknown"
+                            releaseTime:
+                                type:
+                                    - "string"
+                                    - "null"
+                            releaseTimePrecision:
+                                type: "string"
+                                enum:
+                                    - "instant"
+                                    - "day"
+                                    - "month"
+                                    - "year"
+                                    - "unknown"
+                            retrievalTime:
+                                type:
+                                    - "string"
+                                    - "null"
+                            retrievalTimePrecision:
+                                type: "string"
+                                enum:
+                                    - "instant"
+                                    - "day"
+                                    - "month"
+                                    - "year"
+                                    - "unknown"
+                            revision:
+                                oneOf:
+                                    -
+                                        type: "object"
+                                        required:
+                                            - "vintageId"
+                                            - "sequence"
+                                            - "state"
+                                        properties:
+                                            vintageId:
+                                                type: "string"
+                                            sequence:
+                                                type: "number"
+                                            state:
+                                                type: "string"
+                                                enum:
+                                                    - "original"
+                                                    - "revised"
+                                                    - "corrected"
+                                    -
+                                        type: "null"
+                            transportFreshness:
+                                type: "string"
+                                enum:
+                                    - "fresh"
+                                    - "stale"
+                                    - "missing"
+                                    - "error"
+                            contentFreshness:
+                                type: "string"
+                                enum:
+                                    - "current"
+                                    - "stale"
+                                    - "unavailable"
+                                    - "partial"
+                                    - "timestamp_unknown"
+                            summary:
+                                type: "string"
+                            metrics:
+                                type: "object"
+                                additionalProperties:
+                                    type:
+                                        - "string"
+                                        - "number"
+                                        - "boolean"
+                                        - "null"
+                provenance:
+                    oneOf:
+                        -
+                            "$ref": "#/components/schemas/ChinaCorridorProvenance"
+                        -
+                            type: "null"
+        ChinaCorridorProvenance:
+            type: "object"
+            description: "The #5581 decision-signal provenance envelope retained for the composed condition."
+            required:
+                - "contractVersion"
+                - "signalId"
+                - "familyId"
+                - "claims"
+            properties:
+                contractVersion:
+                    type: "string"
+                    const: "decision-signal-provenance/v1"
+                signalId:
+                    type: "string"
+                familyId:
+                    type: "string"
+                    const: "composed_corridor_condition"
+                claims:
+                    type: "object"
+                    required:
+                        - "publisher"
+                        - "source_url"
+                        - "original_reference"
+                        - "original_language"
+                        - "translation"
+                        - "observation_time"
+                        - "effective_time"
+                        - "publication_time"
+                        - "retrieval_time"
+                        - "revision"
+                        - "supersession"
+                        - "extraction_confidence"
+                        - "classification_confidence"
+                        - "corroboration"
+                        - "transport_freshness"
+                        - "content_freshness"
+                        - "derivation"
+                    properties:
+                        publisher:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "id"
+                                                - "name"
+                                                - "type"
+                                                - "registryReference"
+                                            properties:
+                                                id:
+                                                    type: "string"
+                                                    minLength: 1
+                                                    pattern: "\\S"
+                                                name:
+                                                    type: "string"
+                                                    minLength: 1
+                                                    pattern: "\\S"
+                                                type:
+                                                    type: "string"
+                                                    enum:
+                                                        - "official_government"
+                                                        - "state_controlled_media"
+                                                        - "official_exchange"
+                                                        - "independent_observation"
+                                                        - "independent_media"
+                                                        - "wire_service"
+                                                        - "market_publisher"
+                                                        - "derived_output"
+                                                        - "unknown"
+                                                registryReference:
+                                                    oneOf:
+                                                        -
+                                                            type: "object"
+                                                            additionalProperties: false
+                                                            required:
+                                                                - "sourceName"
+                                                                - "sourceType"
+                                                                - "propagandaRisk"
+                                                            properties:
+                                                                sourceName:
+                                                                    type: "string"
+                                                                    minLength: 1
+                                                                    pattern: "\\S"
+                                                                sourceType:
+                                                                    type: "string"
+                                                                    minLength: 1
+                                                                    pattern: "\\S"
+                                                                propagandaRisk:
+                                                                    type: "string"
+                                                                    minLength: 1
+                                                                    pattern: "\\S"
+                                                        -
+                                                            type: "null"
+                                            oneOf:
+                                                -
+                                                    properties:
+                                                        type:
+                                                            const: "derived_output"
+                                                        registryReference:
+                                                            type: "null"
+                                                -
+                                                    properties:
+                                                        type:
+                                                            enum:
+                                                                - "official_government"
+                                                                - "state_controlled_media"
+                                                                - "official_exchange"
+                                                                - "independent_observation"
+                                                                - "independent_media"
+                                                                - "wire_service"
+                                                                - "market_publisher"
+                                                                - "unknown"
+                                                        registryReference:
+                                                            type: "object"
+                                                            additionalProperties: false
+                                                            required:
+                                                                - "sourceName"
+                                                                - "sourceType"
+                                                                - "propagandaRisk"
+                                                            properties:
+                                                                sourceName:
+                                                                    type: "string"
+                                                                    minLength: 1
+                                                                    pattern: "\\S"
+                                                                sourceType:
+                                                                    type: "string"
+                                                                    minLength: 1
+                                                                    pattern: "\\S"
+                                                                propagandaRisk:
+                                                                    type: "string"
+                                                                    minLength: 1
+                                                                    pattern: "\\S"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        source_url:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "string"
+                                            format: "uri"
+                                            pattern: "^https://(?![^/?#]*@)[^/?#\\s]+(?:[/?#]\\S*)?$"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        original_reference:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "kind"
+                                                - "id"
+                                            properties:
+                                                kind:
+                                                    type: "string"
+                                                    enum:
+                                                        - "document"
+                                                        - "text"
+                                                        - "observation"
+                                                        - "event"
+                                                        - "dataset"
+                                                id:
+                                                    type: "string"
+                                                    minLength: 1
+                                                    pattern: "\\S"
+                                                contentHash:
+                                                    type: "string"
+                                                    pattern: "^sha256:[a-f0-9]{64}$"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        original_language:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "string"
+                                            minLength: 1
+                                            pattern: "\\S"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        translation:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "state"
+                                            properties:
+                                                state:
+                                                    type: "string"
+                                                    enum:
+                                                        - "unavailable"
+                                                        - "not_translated"
+                                                        - "machine_assisted"
+                                                        - "human_reviewed"
+                                                targetLanguage:
+                                                    type: "string"
+                                                    minLength: 1
+                                                    pattern: "\\S"
+                                            oneOf:
+                                                -
+                                                    properties:
+                                                        state:
+                                                            enum:
+                                                                - "machine_assisted"
+                                                                - "human_reviewed"
+                                                    required:
+                                                        - "targetLanguage"
+                                                -
+                                                    properties:
+                                                        state:
+                                                            enum:
+                                                                - "unavailable"
+                                                                - "not_translated"
+                                                    not:
+                                                        required:
+                                                            - "targetLanguage"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        observation_time:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "role"
+                                                - "value"
+                                                - "precision"
+                                            properties:
+                                                role:
+                                                    type: "string"
+                                                    const: "observation"
+                                                value:
+                                                    oneOf:
+                                                        -
+                                                            type: "string"
+                                                            format: "date-time"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                                        -
+                                                            type: "string"
+                                                            format: "date"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))$"
+                                                        -
+                                                            type: "string"
+                                                            pattern: "^\\d{4}-(?:0[1-9]|1[0-2])$"
+                                                        -
+                                                            type: "string"
+                                                            pattern: "^\\d{4}$"
+                                                precision:
+                                                    type: "string"
+                                                    enum:
+                                                        - "instant"
+                                                        - "day"
+                                                        - "month"
+                                                        - "year"
+                                            oneOf:
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "instant"
+                                                        value:
+                                                            type: "string"
+                                                            format: "date-time"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "day"
+                                                        value:
+                                                            type: "string"
+                                                            format: "date"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))$"
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "month"
+                                                        value:
+                                                            type: "string"
+                                                            pattern: "^\\d{4}-(?:0[1-9]|1[0-2])$"
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "year"
+                                                        value:
+                                                            type: "string"
+                                                            pattern: "^\\d{4}$"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        effective_time:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "role"
+                                                - "value"
+                                                - "precision"
+                                            properties:
+                                                role:
+                                                    type: "string"
+                                                    const: "effective"
+                                                value:
+                                                    oneOf:
+                                                        -
+                                                            type: "string"
+                                                            format: "date-time"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                                        -
+                                                            type: "string"
+                                                            format: "date"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))$"
+                                                        -
+                                                            type: "string"
+                                                            pattern: "^\\d{4}-(?:0[1-9]|1[0-2])$"
+                                                        -
+                                                            type: "string"
+                                                            pattern: "^\\d{4}$"
+                                                precision:
+                                                    type: "string"
+                                                    enum:
+                                                        - "instant"
+                                                        - "day"
+                                                        - "month"
+                                                        - "year"
+                                            oneOf:
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "instant"
+                                                        value:
+                                                            type: "string"
+                                                            format: "date-time"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "day"
+                                                        value:
+                                                            type: "string"
+                                                            format: "date"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))$"
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "month"
+                                                        value:
+                                                            type: "string"
+                                                            pattern: "^\\d{4}-(?:0[1-9]|1[0-2])$"
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "year"
+                                                        value:
+                                                            type: "string"
+                                                            pattern: "^\\d{4}$"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        publication_time:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "role"
+                                                - "value"
+                                                - "precision"
+                                            properties:
+                                                role:
+                                                    type: "string"
+                                                    const: "publication"
+                                                value:
+                                                    oneOf:
+                                                        -
+                                                            type: "string"
+                                                            format: "date-time"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                                        -
+                                                            type: "string"
+                                                            format: "date"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))$"
+                                                        -
+                                                            type: "string"
+                                                            pattern: "^\\d{4}-(?:0[1-9]|1[0-2])$"
+                                                        -
+                                                            type: "string"
+                                                            pattern: "^\\d{4}$"
+                                                precision:
+                                                    type: "string"
+                                                    enum:
+                                                        - "instant"
+                                                        - "day"
+                                                        - "month"
+                                                        - "year"
+                                            oneOf:
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "instant"
+                                                        value:
+                                                            type: "string"
+                                                            format: "date-time"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "day"
+                                                        value:
+                                                            type: "string"
+                                                            format: "date"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))$"
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "month"
+                                                        value:
+                                                            type: "string"
+                                                            pattern: "^\\d{4}-(?:0[1-9]|1[0-2])$"
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "year"
+                                                        value:
+                                                            type: "string"
+                                                            pattern: "^\\d{4}$"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        retrieval_time:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "role"
+                                                - "value"
+                                                - "precision"
+                                            properties:
+                                                role:
+                                                    type: "string"
+                                                    const: "retrieval"
+                                                value:
+                                                    oneOf:
+                                                        -
+                                                            type: "string"
+                                                            format: "date-time"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                                        -
+                                                            type: "string"
+                                                            format: "date"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))$"
+                                                        -
+                                                            type: "string"
+                                                            pattern: "^\\d{4}-(?:0[1-9]|1[0-2])$"
+                                                        -
+                                                            type: "string"
+                                                            pattern: "^\\d{4}$"
+                                                precision:
+                                                    type: "string"
+                                                    enum:
+                                                        - "instant"
+                                                        - "day"
+                                                        - "month"
+                                                        - "year"
+                                            oneOf:
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "instant"
+                                                        value:
+                                                            type: "string"
+                                                            format: "date-time"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "day"
+                                                        value:
+                                                            type: "string"
+                                                            format: "date"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))$"
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "month"
+                                                        value:
+                                                            type: "string"
+                                                            pattern: "^\\d{4}-(?:0[1-9]|1[0-2])$"
+                                                -
+                                                    properties:
+                                                        precision:
+                                                            const: "year"
+                                                        value:
+                                                            type: "string"
+                                                            pattern: "^\\d{4}$"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        revision:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "vintageId"
+                                                - "sequence"
+                                                - "state"
+                                            properties:
+                                                vintageId:
+                                                    type: "string"
+                                                    minLength: 1
+                                                    pattern: "\\S"
+                                                sequence:
+                                                    type: "integer"
+                                                    minimum: 1
+                                                state:
+                                                    type: "string"
+                                                    enum:
+                                                        - "preliminary"
+                                                        - "original"
+                                                        - "revised"
+                                                        - "corrected"
+                                            oneOf:
+                                                -
+                                                    properties:
+                                                        state:
+                                                            enum:
+                                                                - "preliminary"
+                                                                - "original"
+                                                        sequence:
+                                                            const: 1
+                                                -
+                                                    properties:
+                                                        state:
+                                                            enum:
+                                                                - "revised"
+                                                                - "corrected"
+                                                        sequence:
+                                                            type: "integer"
+                                                            minimum: 2
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        supersession:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "state"
+                                            properties:
+                                                state:
+                                                    type: "string"
+                                                    enum:
+                                                        - "current"
+                                                        - "corrected"
+                                                        - "cancelled"
+                                                        - "superseded"
+                                                relatedSignalId:
+                                                    type: "string"
+                                                    minLength: 1
+                                                    pattern: "\\S"
+                                                reason:
+                                                    type: "string"
+                                                    minLength: 1
+                                                    pattern: "\\S"
+                                            oneOf:
+                                                -
+                                                    properties:
+                                                        state:
+                                                            const: "current"
+                                                    not:
+                                                        anyOf:
+                                                            -
+                                                                required:
+                                                                    - "relatedSignalId"
+                                                            -
+                                                                required:
+                                                                    - "reason"
+                                                -
+                                                    properties:
+                                                        state:
+                                                            enum:
+                                                                - "corrected"
+                                                                - "superseded"
+                                                    required:
+                                                        - "relatedSignalId"
+                                                -
+                                                    properties:
+                                                        state:
+                                                            const: "cancelled"
+                                                    required:
+                                                        - "reason"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        extraction_confidence:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "score"
+                                                - "method"
+                                            properties:
+                                                score:
+                                                    type: "number"
+                                                    minimum: 0
+                                                    maximum: 1
+                                                method:
+                                                    type: "string"
+                                                    minLength: 1
+                                                    pattern: "\\S"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        classification_confidence:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "score"
+                                                - "method"
+                                            properties:
+                                                score:
+                                                    type: "number"
+                                                    minimum: 0
+                                                    maximum: 1
+                                                method:
+                                                    type: "string"
+                                                    minLength: 1
+                                                    pattern: "\\S"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        corroboration:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "state"
+                                                - "sourceSignalIds"
+                                            properties:
+                                                state:
+                                                    type: "string"
+                                                    enum:
+                                                        - "single_source"
+                                                        - "multi_source"
+                                                        - "independently_corroborated"
+                                                        - "contradicted"
+                                                sourceSignalIds:
+                                                    type: "array"
+                                                    uniqueItems: true
+                                                    items:
+                                                        type: "string"
+                                                        minLength: 1
+                                                        pattern: "\\S"
+                                            oneOf:
+                                                -
+                                                    properties:
+                                                        state:
+                                                            const: "single_source"
+                                                        sourceSignalIds:
+                                                            type: "array"
+                                                            uniqueItems: true
+                                                            items:
+                                                                type: "string"
+                                                                minLength: 1
+                                                                pattern: "\\S"
+                                                            minItems: 1
+                                                            maxItems: 1
+                                                -
+                                                    properties:
+                                                        state:
+                                                            enum:
+                                                                - "multi_source"
+                                                                - "independently_corroborated"
+                                                                - "contradicted"
+                                                        sourceSignalIds:
+                                                            type: "array"
+                                                            minItems: 2
+                                                            uniqueItems: true
+                                                            items:
+                                                                type: "string"
+                                                                minLength: 1
+                                                                pattern: "\\S"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        transport_freshness:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "state"
+                                                - "assessedAt"
+                                            properties:
+                                                state:
+                                                    type: "string"
+                                                    enum:
+                                                        - "fresh"
+                                                        - "stale"
+                                                        - "missing"
+                                                        - "error"
+                                                assessedAt:
+                                                    type: "string"
+                                                    format: "date-time"
+                                                    pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                                lastSuccessAt:
+                                                    type: "string"
+                                                    format: "date-time"
+                                                    pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        content_freshness:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "state"
+                                                - "assessedAt"
+                                            properties:
+                                                state:
+                                                    type: "string"
+                                                    enum:
+                                                        - "current"
+                                                        - "stale"
+                                                        - "unavailable"
+                                                        - "partial"
+                                                        - "timestamp_unknown"
+                                                assessedAt:
+                                                    type: "string"
+                                                    format: "date-time"
+                                                    pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                                contentAsOf:
+                                                    oneOf:
+                                                        -
+                                                            type: "string"
+                                                            format: "date-time"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                                        -
+                                                            type: "string"
+                                                            format: "date"
+                                                            pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))$"
+                                                        -
+                                                            type: "string"
+                                                            pattern: "^\\d{4}-(?:0[1-9]|1[0-2])$"
+                                                        -
+                                                            type: "string"
+                                                            pattern: "^\\d{4}$"
+                                            oneOf:
+                                                -
+                                                    properties:
+                                                        state:
+                                                            enum:
+                                                                - "current"
+                                                                - "stale"
+                                                    required:
+                                                        - "contentAsOf"
+                                                -
+                                                    properties:
+                                                        state:
+                                                            const: "timestamp_unknown"
+                                                    not:
+                                                        required:
+                                                            - "contentAsOf"
+                                                -
+                                                    properties:
+                                                        state:
+                                                            enum:
+                                                                - "unavailable"
+                                                                - "partial"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+                        derivation:
+                            oneOf:
+                                -
+                                    type: "object"
+                                    additionalProperties: false
+                                    required:
+                                        - "status"
+                                        - "value"
+                                    properties:
+                                        status:
+                                            type: "string"
+                                            const: "known"
+                                        value:
+                                            type: "object"
+                                            additionalProperties: false
+                                            required:
+                                                - "methodId"
+                                                - "methodVersion"
+                                                - "computedAt"
+                                                - "inputSignalIds"
+                                            properties:
+                                                methodId:
+                                                    type: "string"
+                                                    minLength: 1
+                                                    pattern: "\\S"
+                                                methodVersion:
+                                                    type: "string"
+                                                    minLength: 1
+                                                    pattern: "\\S"
+                                                computedAt:
+                                                    type: "string"
+                                                    format: "date-time"
+                                                    pattern: "^(?:(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8])))|(?:(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:00|0[48]|[2468][048]|[13579][26])00)-02-29))T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?Z$"
+                                                inputSignalIds:
+                                                    type: "array"
+                                                    minItems: 1
+                                                    uniqueItems: true
+                                                    items:
+                                                        type: "string"
+                                                        minLength: 1
+                                                        pattern: "\\S"
+                                -
+                                    "$ref": "#/components/schemas/ChinaCorridorProvenanceClaim"
+        ChinaCorridorProvenanceClaim:
+            type: "object"
+            additionalProperties: false
+            required:
+                - "status"
+                - "reason"
+            properties:
+                status:
+                    type: "string"
+                    enum:
+                        - "unknown"
+                        - "not_applicable"
+                reason:
+                    type: "string"
         JmespathProjectionError:
             description: Returned when a REST jmespath projection is invalid or exceeds the expression/output byte limits.
             properties:
@@ -2163,6 +4357,27 @@ components:
                     type: string
                     description: Error message (e.g., 'user not found', 'database connection failed')
             description: Error is returned when a handler encounters an error. It contains a simple error message that the developer can customize.
+        BillingVerificationError:
+            type: object
+            description: "Returned with HTTP 503 when paid access cannot be confirmed right now: the billing provider is re-verifying a recently expired subscription, or the entitlement backend is unreachable. Retryable — honor Retry-After."
+            properties:
+                error:
+                    type: string
+                    description: Human-readable billing-verification failure reason.
+                code:
+                    type: string
+                    enum:
+                        - renewal_verification_pending
+                        - renewal_verification_failed
+                        - entitlement_verification_unavailable
+                    description: Machine-readable billing-verification state, mirrored in the X-Billing-Verification response header.
+                requiredTier:
+                    type: integer
+                    format: int32
+                    description: Minimum entitlement tier required for this endpoint, when the denial came from a tier gate.
+            required:
+                - error
+                - code
         InvalidRequestBodyError:
             type: object
             description: Returned when a JSON POST request body is empty or malformed.
@@ -2199,6 +4414,11 @@ components:
                 error:
                     type: string
                     description: Human-readable entitlement failure reason.
+                code:
+                    type: string
+                    enum:
+                        - subscription_lapsed
+                    description: Machine-readable denial code, present when the 403 is a billing-provider-confirmed subscription lapse (mirrored in the X-Billing-Verification response header).
                 requiredTier:
                     type: integer
                     format: int32
@@ -2263,9 +4483,17 @@ components:
                 previousValue:
                     type: number
                     format: double
+                    description: |-
+                        Legacy display field. For the Shanghai Shipping Exchange indices (SCFI,
+                         CCFI) this DELIBERATELY falls back to the current level when the exchange
+                         published no comparable prior, so it cannot distinguish "unchanged week"
+                         from "no prior at all". Use prior_period_value for decision work.
                 changePct:
                     type: number
                     format: double
+                    description: |-
+                        Legacy display field with the same fail-OPEN fallback as previous_value
+                         (a flat 0 when no prior exists). Use period_change_pct for decision work.
                 unit:
                     type: string
                 history:
@@ -2274,6 +4502,41 @@ components:
                         $ref: '#/components/schemas/ShippingRatePoint'
                 spikeAlert:
                     type: boolean
+                periodChangePct:
+                    type: number
+                    format: double
+                    description: |-
+                        Decision-grade period-over-period move in percent (#6066). Optional so a
+                         missing reading is ABSENT from the response rather than collapsing to 0,
+                         which would render identically to a real unchanged period. Fails CLOSED:
+                         present only when the publisher reported its own percentage or a
+                         comparable prior-period level. A single index level never becomes a
+                         change. The endpoint normalizes a missing reading to ABSENT (canonical
+                         ProtoJSON: serializers omit, parsers treat null as unset) — a plain JSON
+                         client can still tell absent from null, so read absence, not null.
+                periodChangeBasis:
+                    type: string
+                    enum:
+                        - PERIOD_CHANGE_BASIS_UNSPECIFIED
+                        - publisher_reported
+                        - derived_from_prior_period_level
+                    description: |-
+                        Basis for the decision-grade period-over-period change. The custom JSON
+                         values preserve the lowercase strings already present in Redis and consumed
+                         by downstream matchers while exposing a closed taxonomy to generated clients
+                         and OpenAPI.
+                priorPeriodValue:
+                    type: number
+                    format: double
+                    description: |-
+                        The publisher's own prior-period index level that period_change_pct was
+                         measured against. Absent when the publisher shipped no comparable prior.
+                priorPeriodDate:
+                    type: string
+                    description: |-
+                        Observation date (YYYY-MM-DD) of prior_period_value, as published. Absent
+                         whenever prior_period_value is absent, or when the publisher dated the
+                         level only implicitly.
         ShippingRatePoint:
             type: object
             properties:
@@ -2341,6 +4604,7 @@ components:
                     items:
                         type: string
                 directionalDwt:
+                    deprecated: true
                     type: array
                     items:
                         $ref: '#/components/schemas/DirectionalDwt'
@@ -2487,14 +4751,33 @@ components:
                          rolling baseline window. Separate from the green/yellow/red status badge.
                 source:
                     type: string
+                    enum:
+                        - FLOW_SOURCE_UNSPECIFIED
+                        - portwatch-dwt
+                        - portwatch-counts
                     description: |-
-                        Flow source: "portwatch-dwt" when DWT-majority coverage is used,
-                         otherwise "portwatch-counts" for vessel-count coverage.
+                        Coverage basis behind a PortWatch-derived flow estimate: "portwatch-dwt"
+                         when the rolling baseline window has DWT-majority coverage, otherwise
+                         "portwatch-counts" for vessel-count coverage. FLOW_SOURCE_UNSPECIFIED means
+                         the cached estimate carried a basis this taxonomy does not list, which the
+                         endpoint reports rather than passing through undeclared.
+
+                         Carries the per-value semantics because an enum-typed field takes its
+                         generated OpenAPI description from the enum, not from the field. The custom
+                         JSON values preserve the strings seed-chokepoint-flows.mjs already writes to
+                         energy:chokepoint-flows:v1, so promoting this taxonomy out of prose changes
+                         no wire value.
                 hazardAlertLevel:
                     type: string
                     description: |-
                         Nearest active GDACS hazard alert level within the configured radius:
                          "RED", "ORANGE", or empty string when no nearby alert applies.
+
+                         Deliberately an open string rather than a closed enum like source: the
+                         empty string is a real published value here, and the pinned sebuf codegen
+                         drops an empty (sebuf.http.enum_value), so "" cannot be expressed as an
+                         enum's JSON name. Verified at both the zero and a non-zero value; see
+                         #6106 before retrying.
                 hazardAlertName:
                     type: string
                     description: |-
@@ -2569,6 +4852,124 @@ components:
                 sharePct:
                     type: number
                     format: double
+        GetMineralProductionRequest:
+            type: object
+            properties:
+                commodity:
+                    type: string
+                    description: USGS commodity id or label (e.g. "cobalt"). Empty returns every commodity.
+                iso2:
+                    type: string
+                    description: |-
+                        ISO 3166-1 alpha-2. When set, countries[] is scoped to this producer and
+                         the countries portfolio is populated.
+                stage:
+                    type: string
+                    description: '"mine" or "refinery". Empty returns both stages when present.'
+        GetMineralProductionResponse:
+            type: object
+            properties:
+                commodities:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/MineralProductionRecord'
+                countries:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/MineralCountryPortfolio'
+                fetchedAt:
+                    type: string
+                upstreamUnavailable:
+                    type: boolean
+                dataYear:
+                    type: integer
+                    format: int32
+        MineralProductionRecord:
+            type: object
+            properties:
+                commodityId:
+                    type: string
+                commodity:
+                    type: string
+                year:
+                    type: integer
+                    format: int32
+                unit:
+                    type: string
+                mine:
+                    $ref: '#/components/schemas/MineralStageSnapshot'
+                refinery:
+                    $ref: '#/components/schemas/MineralStageSnapshot'
+                sources:
+                    type: array
+                    items:
+                        type: string
+        MineralStageSnapshot:
+            type: object
+            properties:
+                year:
+                    type: integer
+                    format: int32
+                unit:
+                    type: string
+                countries:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/MineralCountryShare'
+                hhi:
+                    type: number
+                    format: double
+                worldTotal:
+                    type: number
+                    format: double
+                withheldCount:
+                    type: integer
+                    format: int32
+        MineralCountryShare:
+            type: object
+            properties:
+                iso2:
+                    type: string
+                country:
+                    type: string
+                output:
+                    type: number
+                    format: double
+                share:
+                    type: number
+                    format: double
+                withheld:
+                    type: boolean
+                estimated:
+                    type: boolean
+                residual:
+                    type: boolean
+        MineralCountryPortfolio:
+            type: object
+            properties:
+                iso2:
+                    type: string
+                holdings:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/MineralCountryHolding'
+        MineralCountryHolding:
+            type: object
+            properties:
+                commodityId:
+                    type: string
+                commodity:
+                    type: string
+                stage:
+                    type: string
+                output:
+                    type: number
+                    format: double
+                share:
+                    type: number
+                    format: double
+                withheld:
+                    type: boolean
         GetShippingStressRequest:
             type: object
         GetShippingStressResponse:
@@ -3838,3 +6239,21 @@ components:
                     type: string
                 sourceType:
                     type: string
+        GetChinaCorridorControlTowersRequest:
+            type: object
+        GetChinaCorridorControlTowersResponse:
+            type: object
+            properties:
+                payloadJson:
+                    contentMediaType: "application/json"
+                    contentSchema:
+                        $ref: "#/components/schemas/ChinaCorridorControlTowerResponse"
+                    type: string
+                    description: |-
+                        Canonical JSON keeps the shared #5581 provenance envelope byte-for-byte
+                         equivalent across cache, API, UI, and later MCP adapters.
+                generatedAt:
+                    type: string
+                upstreamUnavailable:
+                    description: "True only when every reviewed corridor is unavailable. Agents and API callers must treat true as upstream degradation, not as evidence that corridor conditions are normal or zero."
+                    type: boolean

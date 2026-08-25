@@ -20,8 +20,13 @@ import {
 // @ts-expect-error — JS module, no declaration file
 import { redisPipeline } from './_upstash-json.js';
 import { unwrapEnvelope } from './_seed-envelope.js';
-import { bootstrapTierKeyNames, resolveBootstrapRegistry } from './_bootstrap-tier-keys.js';
+import {
+  PUBLIC_WEATHER_BOOTSTRAP_KEY,
+  bootstrapTierKeyNames,
+  resolveBootstrapRegistry,
+} from './_bootstrap-tier-keys.js';
 import { compactWildfireDashboardPayload } from './_wildfire-dashboard.js';
+import { CANADA_ALERTS_CUTOVER_FALLBACK_KEYS } from './_canada-alerts-cutover.js';
 import {
   BOOTSTRAP_R2_PROBE_CEILING_MS,
   readBootstrapTierObject,
@@ -41,6 +46,43 @@ const SLOW_KEYS = new Set(bootstrapTierKeyNames('slow', { iranEventsEnabled: IRA
 const FAST_KEYS = new Set(bootstrapTierKeyNames('fast', { iranEventsEnabled: IRAN_EVENTS_ENABLED }));
 const ON_DEMAND_KEYS = new Set(bootstrapTierKeyNames('on-demand', { iranEventsEnabled: IRAN_EVENTS_ENABLED }));
 
+// Temporary #6659 cutover fallback. Keep the new multi-province aggregate
+// authoritative, but let bootstrap clients use the Alberta sibling first and
+// the abandoned legacy key second until alerts:canada:v1 has been published
+// in every environment.
+// R4 (#6654) fields that must never appear in a bootstrap-tier payload.
+// `text` is the X post body: the first-party panel may render it (via
+// /api/x-feed), but alerts, MCP, and embed/OEM partners get derived facts plus
+// a permalink only. `pollState` is seed-internal cursor state.
+// Kept in sync with stripXFeedRestrictedFields in scripts/publish-bootstrap-tiers.mjs.
+export function stripXFeedRestrictedFields(value) {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return value;
+  const { pollState: _pollState, ...rest } = value;
+  if (!Array.isArray(rest.items)) return rest;
+  return {
+    ...rest,
+    items: rest.items.map((item) => {
+      if (item == null || typeof item !== 'object' || Array.isArray(item)) return item;
+      const { text: _text, ...itemRest } = item;
+      return itemRest;
+    }),
+  };
+}
+
+function bootstrapRedisReadKeys(keys) {
+  if (!keys.includes(BOOTSTRAP_CACHE_KEYS.canadaAlerts)) return keys;
+  const extra = CANADA_ALERTS_CUTOVER_FALLBACK_KEYS.filter((key) => !keys.includes(key));
+  return extra.length > 0 ? [...keys, ...extra] : keys;
+}
+
+function canadaAlertsCutoverFallbackValue(cached) {
+  for (const key of CANADA_ALERTS_CUTOVER_FALLBACK_KEYS) {
+    const fallback = cached.get(key);
+    if (fallback !== undefined) return fallback;
+  }
+  return undefined;
+}
+
 // No public/s-maxage: CF (in front of api.worldmonitor.app) ignores Vary: Origin and would
 // pin ACAO: worldmonitor.app on cached responses, breaking CORS for preview deployments.
 // Vercel CDN caching is handled by TIER_CDN_CACHE via CDN-Cache-Control below.
@@ -52,8 +94,130 @@ const TIER_CDN_CACHE = {
   slow: 'public, s-maxage=7200, stale-while-revalidate=1800, stale-if-error=7200',
   fast: 'public, s-maxage=600, stale-while-revalidate=120, stale-if-error=900',
 };
+// An on-demand key with no entry here inherits the SLOW shield (s-maxage=7200,
+// 2h). Any key published more often than that MUST declare a profile: the CDN
+// would otherwise hand browsers a payload api/health.js already calls
+// STALE_SEED, and the client stamps it fresh on arrival — a green freshness
+// panel over data nobody re-fetched, with nothing to page on because health
+// reads Redis and never sees the cached copy.
+//
+// Size `cdn` to the publisher's own interval, not to the freshness budget: the
+// budget is 2-3x the interval to absorb a missed tick, so caching out to the
+// budget guarantees the shield outlives a complete seed cycle.
+// tests/bootstrap-on-demand-cache-budget.test.mts enforces the ceiling.
+const ON_DEMAND_CACHE_PROFILES = {
+  // Correlation cards publish every 5 minutes and have a 30-minute health
+  // budget. The conservative complete CDN window is 11m.
+  correlationCards: {
+    browser: 'max-age=60, stale-while-revalidate=60, stale-if-error=300',
+    cdn: 'public, s-maxage=300, stale-while-revalidate=60, stale-if-error=300',
+  },
+  // Hourly publisher, 90-minute health budget. The conservative full CDN
+  // serving window is 80m, so one failed refresh cannot be hidden past health.
+  forecasts: {
+    browser: 'max-age=300, stale-while-revalidate=300, stale-if-error=1800',
+    cdn: 'public, s-maxage=3600, stale-while-revalidate=300, stale-if-error=900',
+  },
+  // Seeded every 15 minutes. Keep the caller-invariant public URL from
+  // outliving a complete seed interval; per-group stale/unavailable states
+  // remain part of the payload contract.
+  chinaDecisionSignals: {
+    browser: 'max-age=60, stale-while-revalidate=120, stale-if-error=900',
+    cdn: 'public, s-maxage=900, stale-while-revalidate=120, stale-if-error=900',
+  },
+  // Both published by seed-provincial-511 on one 15min member interval against
+  // a 45min health budget. They only need a profile because #6763 moved them
+  // off the fast tier, where they inherited the fast shield: without this the
+  // move would have traded 508 KB of universal page weight for a 2h stale
+  // window on live road closures.
+  canadaRoads: {
+    browser: 'max-age=60, stale-while-revalidate=120, stale-if-error=900',
+    cdn: 'public, s-maxage=900, stale-while-revalidate=120, stale-if-error=900',
+  },
+  albertaRoads: {
+    browser: 'max-age=60, stale-while-revalidate=120, stale-if-error=900',
+    cdn: 'public, s-maxage=900, stale-while-revalidate=120, stale-if-error=900',
+  },
+  manitobaRoads: {
+    browser: 'max-age=60, stale-while-revalidate=120, stale-if-error=900',
+    cdn: 'public, s-maxage=900, stale-while-revalidate=120, stale-if-error=900',
+  },
+  // seed-bundle-canada member interval 30min, 90min health budget. The default
+  // 2h shield outlived the budget by half an hour (#6667).
+  bcOpen511: {
+    browser: 'max-age=60, stale-while-revalidate=120, stale-if-error=1800',
+    cdn: 'public, s-maxage=1800, stale-while-revalidate=300, stale-if-error=1800',
+  },
+  // seed-bundle-market-backup member interval 15min, 45min health budget. Same
+  // defect as bcOpen511: the default 2h shield was 2.6x the budget.
+  marketCorrelationSeries: {
+    browser: 'max-age=60, stale-while-revalidate=120, stale-if-error=900',
+    cdn: 'public, s-maxage=900, stale-while-revalidate=120, stale-if-error=900',
+  },
+  // seed-aviation aggregate, 90min health budget. Default 2h on-demand
+  // shield would outlive the budget after #7046 moved this key off FAST.
+  flightDelays: {
+    browser: 'max-age=60, stale-while-revalidate=120, stale-if-error=1800',
+    cdn: 'public, s-maxage=1800, stale-while-revalidate=300, stale-if-error=1800',
+  },
+};
 
+// The URL SHAPE shared by every marked single-key public read:
+// `GET /api/bootstrap?keys=<one>&public=1`, no other params, each appearing once.
+// Returns the requested key name, or null when the request is not that shape.
+//
+// GET only: a HEAD has no body to serve and must not mint a cacheable entry.
+//
+// The MEMBERSHIP test deliberately stays with each caller below. Which keys may
+// be served without credentials is the whole semantic difference between them,
+// and folding both allowlists into one here would silently widen each to the
+// other's keys — the shape is shared, the authorization is not.
+function publicSingleKeyBootstrapRequestKey(req) {
+  if (req.method !== 'GET') return null;
+
+  const url = new URL(req.url);
+  const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, '') : url.pathname;
+  if (pathname !== '/api/bootstrap') return null;
+
+  const params = Array.from(url.searchParams.keys());
+  if (params.some((key) => key !== 'keys' && key !== 'public')) return null;
+
+  const keyParams = url.searchParams.getAll('keys');
+  const publicParams = url.searchParams.getAll('public');
+  if (keyParams.length !== 1 || publicParams.length !== 1 || publicParams[0] !== '1') return null;
+
+  return keyParams[0];
+}
+
+// The explicitly-marked public weather URL: `?keys=weatherAlerts&public=1`.
+//
+// Same contract as its `?tier=fast|slow&public=1` and `?keys=<onDemand>&public=1`
+// siblings below: the payload is the shared production seed value, identical for
+// every caller, so the marker gives it its own CDN entry and the response is
+// public REGARDLESS of attached credentials — a CDN hit precedes handler auth,
+// so a credential-dependent answer at this URL could never be honored.
 export function isPublicWeatherBootstrapRequest(req) {
+  return publicSingleKeyBootstrapRequestKey(req) === PUBLIC_WEATHER_BOOTSTRAP_KEY;
+}
+
+// The legacy unmarked weather URL: `?keys=weatherAlerts` with no credentials.
+// Still anonymous and still serves the public payload — it is a documented
+// public path (docs/api-platform.mdx) and the only bootstrap read the map embed
+// could make before the marked URL existed — but it is NEVER shared-cacheable.
+//
+// That is the whole of #5386: this is the SAME URL a credentialed caller uses,
+// and a CDN hit precedes handler auth, so while a warm public entry sat here it
+// answered an invalid-key request with the cached anonymous 200 instead of the
+// origin's 401. The origin and the edge disagreed about one URL. Keeping every
+// response on this URL no-store means the edge never holds an entry that can
+// answer for the origin, so an invalid key always reaches validateApiKey.
+//
+// Deliberately NOT built on publicSingleKeyBootstrapRequestKey above: this
+// predicate is the pre-#5386 one, kept verbatim. It accepts HEAD and tolerates
+// `?keys=weatherAlerts,` / whitespace forms that the marked shape rejects.
+// Reusing the stricter helper here would narrow which requests still reach the
+// documented anonymous path — a behavior change this fix does not intend.
+export function isAnonymousWeatherBootstrapRequest(req) {
   if (req.method !== 'GET' && req.method !== 'HEAD') return false;
 
   const url = new URL(req.url);
@@ -67,7 +231,7 @@ export function isPublicWeatherBootstrapRequest(req) {
   if (keyParams.length !== 1) return false;
 
   const requested = keyParams[0].split(',').map((key) => key.trim()).filter(Boolean);
-  return requested.length === 1 && requested[0] === 'weatherAlerts';
+  return requested.length === 1 && requested[0] === PUBLIC_WEATHER_BOOTSTRAP_KEY;
 }
 
 let nextBootstrapR2ShadowProbeIsCold = true;
@@ -172,20 +336,8 @@ export { isPublicTierBootstrapRequest } from './_bootstrap-public-tier.js';
 // The legacy multi-key `?keys=a,b` URL keeps working and stays credentialed +
 // no-store, so nothing that relies on it changes.
 export function isPublicOnDemandBootstrapRequest(req) {
-  if (req.method !== 'GET') return false;
-
-  const url = new URL(req.url);
-  const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, '') : url.pathname;
-  if (pathname !== '/api/bootstrap') return false;
-
-  const params = Array.from(url.searchParams.keys());
-  if (params.some((key) => key !== 'keys' && key !== 'public')) return false;
-
-  const keyParams = url.searchParams.getAll('keys');
-  const publicParams = url.searchParams.getAll('public');
-  if (keyParams.length !== 1 || publicParams.length !== 1 || publicParams[0] !== '1') return false;
-
-  return ON_DEMAND_KEYS.has(keyParams[0]);
+  const key = publicSingleKeyBootstrapRequestKey(req);
+  return key !== null && ON_DEMAND_KEYS.has(key);
 }
 
 const BOOTSTRAP_CREDENTIAL_COOKIES = new Set(['wm-session', 'wm-pro-key', 'wm-widget-key']);
@@ -268,9 +420,12 @@ async function validateBootstrapAuth(req, cors) {
   if (isPublicOnDemandBootstrapRequest(req)) {
     return { ok: true, kind: 'public-on-demand' };
   }
+  if (isPublicWeatherBootstrapRequest(req)) {
+    return { ok: true, kind: 'public-weather' };
+  }
   if (!headerKey && !hasBootstrapCredentialCookie(req)) {
-    if (isPublicWeatherBootstrapRequest(req)) {
-      return { ok: true, kind: 'public-weather' };
+    if (isAnonymousWeatherBootstrapRequest(req)) {
+      return { ok: true, kind: 'anonymous-weather' };
     }
   }
 
@@ -350,11 +505,40 @@ async function validateBootstrapAuth(req, cors) {
   };
 }
 
+// Kinds that serve the shared public seed payload with no per-user variation.
+// They all get ACAO:* and the retryable-outage contract; only the subset below
+// is additionally allowed into a shared cache.
 function isPublicBootstrapKind(authKind) {
+  return authKind === 'public-weather'
+    || authKind === 'anonymous-weather'
+    || authKind === 'public-tier'
+    || authKind === 'public-on-demand';
+}
+
+// Only the explicitly-marked `&public=1` URLs may be stored by a shared cache.
+// The unmarked weather URL is public but no-store — see
+// isAnonymousWeatherBootstrapRequest for why (#5386).
+function isSharedCacheableBootstrapKind(authKind) {
   return authKind === 'public-weather' || authKind === 'public-tier' || authKind === 'public-on-demand';
 }
 
-function successCacheHeaders(tier, authKind, cors) {
+function getPublicBootstrapHeaders() {
+  return {
+    ...getPublicCorsHeaders(),
+    'Timing-Allow-Origin': '*',
+  };
+}
+
+// `tier` is the requested tier, or null for a single-key read. The on-demand
+// default lives here rather than at the call site so there is ONE resolution
+// path: a test that re-derived "on-demand falls back to slow" would be checking
+// its own copy of the rule, which is the rule that was wrong (#6763).
+function successCacheHeaders(requestedTier, authKind, cors, onDemandKey = null) {
+  // Most on-demand keys carry slow-tier seed data. Keys with a faster publisher
+  // cadence must override that through ON_DEMAND_CACHE_PROFILES — the slow CDN
+  // shield is 2h, which outlives the freshness budget of anything seeded more
+  // often than that.
+  const tier = requestedTier ?? (authKind === 'public-on-demand' ? 'slow' : null);
   if (!isPublicBootstrapKind(authKind)) {
     return {
       ...cors,
@@ -368,18 +552,37 @@ function successCacheHeaders(tier, authKind, cors) {
   // pin an echoed ACAO onto a cached response. Safe because isDisallowedOrigin()
   // already rejected unauthorized origins at the handler entry (this is exactly
   // the contract getPublicCorsHeaders documents).
-  const publicCors = getPublicCorsHeaders();
-  const cacheControl = (tier && TIER_CACHE[tier]) || 'public, s-maxage=600, stale-while-revalidate=120, stale-if-error=900';
+  const publicCors = getPublicBootstrapHeaders();
+  if (!isSharedCacheableBootstrapKind(authKind)) {
+    return {
+      ...publicCors,
+      'Cache-Control': 'no-store',
+    };
+  }
+  const onDemandProfile = authKind === 'public-on-demand'
+    ? ON_DEMAND_CACHE_PROFILES[onDemandKey]
+    : null;
+  const cacheControl = onDemandProfile?.browser
+    || (tier && TIER_CACHE[tier])
+    || 'public, s-maxage=600, stale-while-revalidate=120, stale-if-error=900';
   return {
     ...publicCors,
     'Cache-Control': cacheControl,
-    'CDN-Cache-Control': (tier && TIER_CDN_CACHE[tier]) || TIER_CDN_CACHE.fast,
+    'CDN-Cache-Control': onDemandProfile?.cdn
+      || (tier && TIER_CDN_CACHE[tier])
+      || TIER_CDN_CACHE.fast,
   };
 }
 
 export default async function handler(req, ctx) {
+  // no-store because this rejection is decided by the Origin header, which no
+  // cache layer here keys on (CF ignores Vary — see TIER_CACHE above). Without
+  // it, a 403 minted by one disallowed origin is an ordinary cacheable response
+  // on a `&public=1` URL that every other caller shares, and a shared cache is
+  // free to replay it to legitimate ones. Same reasoning as the split below:
+  // anything whose answer depends on the request must never be cacheable.
   if (isDisallowedOrigin(req))
-    return new Response('Forbidden', { status: 403 });
+    return new Response('Forbidden', { status: 403, headers: { 'Cache-Control': 'no-store' } });
 
   const cors = getCorsHeaders(req);
   if (req.method === 'OPTIONS')
@@ -408,7 +611,10 @@ export default async function handler(req, ctx) {
 
   let cached;
   try {
-    cached = await getCachedJsonBatch(keys, measureR2Shadow ? tier : null);
+    cached = await getCachedJsonBatch(
+      bootstrapRedisReadKeys(keys),
+      measureR2Shadow ? tier : null,
+    );
   } catch {
     const isPublic = isPublicBootstrapKind(auth.kind);
     if (isPublic) {
@@ -419,7 +625,7 @@ export default async function handler(req, ctx) {
         { error: 'Bootstrap service temporarily unavailable' },
         503,
         {
-          ...getPublicCorsHeaders(),
+          ...getPublicBootstrapHeaders(),
           'Cache-Control': 'no-store',
           'Retry-After': '5',
         },
@@ -440,13 +646,26 @@ export default async function handler(req, ctx) {
   const data = {};
   const missing = [];
   for (let i = 0; i < names.length; i++) {
-    const val = cached.get(keys[i]);
+    const val = keys[i] === BOOTSTRAP_CACHE_KEYS.canadaAlerts
+      && !cached.has(BOOTSTRAP_CACHE_KEYS.canadaAlerts)
+      ? canadaAlertsCutoverFallbackValue(cached)
+      : cached.get(keys[i]);
     if (val !== undefined) {
       let responseValue = val;
       // Strip seed-internal metadata not intended for API clients
       if (names[i] === 'forecasts' && val != null && 'enrichmentMeta' in val) {
         const { enrichmentMeta: _stripped, ...rest } = val;
         responseValue = rest;
+      }
+      // R4 (#6654): X post bodies must never leave the first-party path.
+      // `?tier=slow&public=1` is unauthenticated, ACAO:*, and CDN-cacheable for
+      // 2h, so anything here reaches embed/OEM and server-to-server callers —
+      // exactly the audience R4 excludes. `xFeed` is deliberately NOT registered
+      // in BOOTSTRAP_CACHE_KEYS (same as `telegramFeed`); this strip is the
+      // regression guard if it is ever re-added. Post text is served only by
+      // /api/x-feed. Mirrored in scripts/publish-bootstrap-tiers.mjs.
+      if (names[i] === 'xFeed' && val != null && typeof val === 'object' && !Array.isArray(val)) {
+        responseValue = stripXFeedRestrictedFields(val);
       }
       if (names[i] === 'wildfires') responseValue = compactWildfireBootstrapPayload(responseValue);
       data[names[i]] = responseValue;
@@ -464,17 +683,31 @@ export default async function handler(req, ctx) {
   // The browser runtime sends API requests with credentials so session and
   // entitlement cookies can ride along. Credentialed requests cannot consume
   // ACAO: * responses, even for public bootstrap data.
-  // On-demand keys carry slow-tier seed data, so they get the slow-tier CDN
-  // profile (s-maxage=7200) rather than the 600s default that a tier-less
-  // `?keys=` request would otherwise fall back to.
-  const cacheTier = tier ?? (auth.kind === 'public-on-demand' ? 'slow' : null);
-  const response = jsonResponse({ data, missing }, 200, successCacheHeaders(cacheTier, auth.kind, cors));
+  const onDemandKey = auth.kind === 'public-on-demand' && names.length === 1
+    ? names[0]
+    : null;
+  // A public on-demand miss is an empty body, not a payload. Caching it at the
+  // publisher interval would hide a recovered seeder until the shield expires
+  // (#6784): health probes Redis, so nothing pages, and the client stamps the
+  // empty hit as a fresh read.
+  const cacheHeaders = onDemandKey && missing.includes(onDemandKey)
+    ? { ...getPublicBootstrapHeaders(), 'Cache-Control': 'no-store' }
+    : successCacheHeaders(tier, auth.kind, cors, onDemandKey);
+  const response = jsonResponse(
+    { data, missing },
+    200,
+    cacheHeaders,
+  );
   return measureR2Shadow
     ? finishBootstrapR2ShadowResponse(req, ctx, tier, response, redisDurationMs)
     : response;
 }
 
 export const __testing__ = {
+  // The real resolver, so the CDN-shield guard in
+  // tests/bootstrap-on-demand-cache-budget.test.mts calls the same code the
+  // handler does instead of restating the fallback chain.
+  successCacheHeaders,
   resetBootstrapR2ShadowForTests() {
     nextBootstrapR2ShadowProbeIsCold = true;
     scheduleBootstrapR2Shadow = vercelWaitUntil;
