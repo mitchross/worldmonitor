@@ -23,10 +23,6 @@ COPY . .
 # the clean image context before handlers import or bundle them.
 RUN node scripts/generate-inventory-facts.mjs
 
-# Compile TypeScript API handlers → self-contained ESM bundles
-# Output is api/**/*.js alongside the source .ts files
-RUN node docker/build-handlers.mjs
-
 # public/pro/ is a build product, not committed bytes (#6898), so this image has
 # to build it. Skipping it does NOT 404: this image installs docker/nginx.conf,
 # whose `location /` ends in `try_files $uri $uri/ /dashboard.html`,
@@ -43,6 +39,13 @@ RUN npm run build:pro
 ARG VITE_SELF_HOSTED=false
 ENV VITE_SELF_HOSTED=$VITE_SELF_HOSTED
 RUN npm run build:crawlable-corpus && npm run build:sitemap && npx tsc && npx vite build
+
+# Compile TypeScript API handlers → self-contained ESM bundles only after the
+# source-attribution scan above. The bundles are emitted as api/**/*.js beside
+# their .ts sources; generating them first makes the scanner see duplicate,
+# uncommitted references and reject the committed attribution manifest as stale.
+RUN node docker/build-handlers.mjs
+
 # Assert the /pro pages survived the public/ -> dist/ copy (#6898). build:pro
 # succeeding proves public/pro/ exists; it does NOT prove Vite copied it, and
 # docker/nginx.conf's SPA fallback would serve the dashboard shell at 200 for a
