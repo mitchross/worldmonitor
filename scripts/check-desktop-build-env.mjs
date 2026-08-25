@@ -61,6 +61,7 @@ export const EXCLUDED_DESKTOP_BUILD_ENV = {
   VITE_HORMUZ_CRISIS_START_DATE: 'editorial re-pin override; default pinned in code',
   VITE_TELEGRAM_BOT_USERNAME: "defaults to 'WorldMonitorBot' in code",
   VITE_E2E: 'test-harness flag, never set in real builds',
+  VITE_SELF_HOSTED: 'Docker-only entitlement bypass; desktop builds use the normal authenticated Pro entitlement flow',
 };
 
 // Workflow files are discovered rather than hand-listed so a new release or
