@@ -50,9 +50,21 @@ const EXPOSED_HEADERS = [
   'Idempotency-Key',
   'Idempotent-Replayed',
   'Location',
+  // See api/_cors.js — the gateway emits this on every billing-verification
+  // denial and cross-origin clients could not read it (#5622).
+  'X-Billing-Verification',
   'X-RateLimit-Limit',
   'X-RateLimit-Remaining',
   'X-RateLimit-Reset',
+  // IETF draft-ietf-httpapi-ratelimit-headers fields — emitted by the
+  // per-account API-key limiter; docs/usage-rate-limits.mdx tells browser
+  // clients to self-throttle on these, so they must be readable cross-origin
+  // (parity with api/_cors.js).
+  'RateLimit',
+  'RateLimit-Policy',
+  'RateLimit-Limit',
+  'RateLimit-Remaining',
+  'RateLimit-Reset',
   'X-WorldMonitor-Bbox',
   'X-WorldMonitor-Bbox-Missing',
   'X-WorldMonitor-Bbox-Invalid',

@@ -17,12 +17,33 @@
 import { CHROME_UA, loadEnvFile, runSeed } from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 import { resolveR2StorageConfig, putR2JsonObject } from './_r2-storage.mjs';
-import { parseMetricKey, resolveHardSpec, extractMetricValue, extractMetricObservation } from './_forecast-resolution-eval.mjs';
+import { parseMetricKey, resolveHardSpec, extractMetricValue, extractMetricObservation, MARKET_SETTLEMENT_FEED_KEY } from './_forecast-resolution-eval.mjs';
+import { finiteObservations } from './_bet-templates-macro.mjs';
 import { CONFLICT_COUNT_FEED_AVAILABLE, UNREST_COUNT_FEED_AVAILABLE, CONFLICT_COUNT_SOURCE_FEED, UNREST_COUNT_SOURCE_FEED } from './_forecast-resolution.mjs';
 import { computeScorecard, DEFAULT_ROLLING_WINDOW_DAYS } from './_forecast-scorecard.mjs';
 import { BETS_HISTORY_KEY } from './_forecast-bets-keys.mjs';
+import { updateMarketSettlements } from './_forecast-market-settlements.mjs';
 import { callForecastLLM } from './seed-forecasts.mjs';
+import { GROQ_DEFAULT_MODEL } from './_llm-model-timeouts.mjs';
 import { readStoryTracksChunked, STORY_TRACK_HGETALL_BATCH } from './lib/story-track-batch-reader.mjs';
+import {
+  FORECAST_EVIDENCE_KEY,
+  FORECAST_EVIDENCE_COVERAGE_KEY,
+  FORECAST_EVIDENCE_MAX_LOOKBACK_MS,
+  forecastEvidenceCoversWindow,
+  forecastEvidenceRecordKey,
+  isForecastEvidenceHash,
+  parseForecastEvidenceCoverage,
+  parseForecastEvidenceMember,
+  resolveForecastEvidenceCoverageMaxLagMs,
+} from './_forecast-evidence-archive.mjs';
+
+/**
+ * Hash cap for the pre-cutover archive/accumulator divergence log. This read is
+ * telemetry only — a bounded sample answers "are the two paths diverging?" and
+ * the unbounded read cost up to ~31 extra pipeline round-trips per judged run.
+ */
+export const MIGRATION_DIVERGENCE_SAMPLE_HASHES = 500;
 
 export const HISTORY_KEY = 'forecast:predictions:history:v1';
 export const RESOLUTIONS_KEY = 'forecast:resolutions:v1';
@@ -78,6 +99,14 @@ export function declareScorecardRecords(scorecard) {
   return Number.isInteger(scorecard?.totals?.entries) ? scorecard.totals.entries : 0;
 }
 
+// Gate-2 promotion flag (#5525 U14): default OFF — setting
+// FORECAST_PROMOTE_BET_ENGINE=1 on the resolutions service is the deliberate
+// promotion act that lifts bet_engine into the scorecard's skill headline.
+// Read at call time (not module load) so both sides are testable.
+function promoteBetEngineEnabled() {
+  return process.env.FORECAST_PROMOTE_BET_ENGINE === '1';
+}
+
 export function processResolutionCycle(existingLedger, historySnapshots, feedsByKey, nowMs) {
   const ingested = ingestHistory(existingLedger, historySnapshots, nowMs);
   samplePendingEntries(ingested, feedsByKey, nowMs);
@@ -87,7 +116,7 @@ export function processResolutionCycle(existingLedger, historySnapshots, feedsBy
   // resolveDueEntries so entries resolved this cycle (resolvedAt === nowMs, not
   // yet archived) are always retained and still emit a receipt above.
   const ledger = pruneArchivedTerminalEntries(ingested, nowMs);
-  const scorecard = computeScorecard(ledger, nowMs);
+  const scorecard = computeScorecard(ledger, nowMs, { promoteBetEngine: promoteBetEngineEnabled() });
   return { ledger, receipts, scorecard };
 }
 
@@ -97,7 +126,7 @@ export async function processResolutionCycleWithJudges(existingLedger, historySn
   const receipts = resolveDueEntries(ingested, feedsByKey, nowMs);
   receipts.push(...await resolvePendingJudgedEntries(ingested, newsArchive, nowMs, options));
   const ledger = pruneArchivedTerminalEntries(ingested, nowMs);
-  const scorecard = computeScorecard(ledger, nowMs);
+  const scorecard = computeScorecard(ledger, nowMs, { promoteBetEngine: promoteBetEngineEnabled() });
   return { ledger, receipts, scorecard };
 }
 
@@ -273,12 +302,12 @@ export async function resolveJudgedEntry(entry, newsArchive, nowMs, options = {}
     judgments.push(normalized);
   }
 
+  if (!archiveComplete) {
+    return { status: 'pending', reason: 'archive_unavailable', detail: 'archive_window_incomplete' };
+  }
   const nonVoidOutcomes = judgments.map((judgment) => judgment.outcome).filter((outcome) => outcome !== 'VOID');
   if (nonVoidOutcomes.length === judgments.length && new Set(nonVoidOutcomes).size === 1) {
     return resolvedJudgedResult(nonVoidOutcomes[0], 'dual_model_agreement', entry, judgments, archiveItems, nowMs);
-  }
-  if (!archiveComplete) {
-    return { status: 'pending', reason: 'archive_unavailable', detail: 'archive_window_incomplete' };
   }
   if (judgments.every((judgment) => judgment.outcome === 'VOID')) {
     return resolvedJudgedResult('VOID', 'all_judges_void', entry, judgments, archiveItems, nowMs);
@@ -496,7 +525,7 @@ function createLiveJudgeModels(options = {}) {
       stage: 'forecast_resolution_judge_groq',
       providerOrder: ['groq'],
       modelOverrides: {
-        groq: process.env.FORECAST_RESOLUTION_JUDGE_MODEL_GROQ || 'llama-3.3-70b-versatile',
+        groq: process.env.FORECAST_RESOLUTION_JUDGE_MODEL_GROQ || GROQ_DEFAULT_MODEL,
       },
     }),
   ];
@@ -726,7 +755,14 @@ function truncateText(value, maxLength) {
 function toFiniteMs(value) {
   if (value == null || value === '') return undefined;
   const numeric = Number(value);
-  if (Number.isFinite(numeric)) return numeric > 0 && numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
+  if (Number.isFinite(numeric)) {
+    // Epoch-seconds heuristic needs a plausibility FLOOR, not just > 0:
+    // bare calendar years (2026) and small offsets are otherwise multiplied
+    // into 1970-era ms. 1e9 s = 2001-09 - no tracked feed predates it.
+    if (numeric >= 1_000_000_000_000) return numeric;
+    if (numeric > 1_000_000_000 && numeric < 1_000_000_000_000) return numeric * 1000;
+    return undefined;
+  }
   const parsed = Date.parse(String(value));
   return Number.isFinite(parsed) ? parsed : undefined;
 }
@@ -972,6 +1008,18 @@ function createEntry(id, forecast, spec, generatedAt, snapshotAt, deadline) {
     probability: Number(forecast.probability),
     firstSeenProbability: Number(forecast.probability),
     calibration: forecast.calibration ? cloneJson(forecast.calibration) : undefined,
+    // Phase-2 bet-engine fields (#5525). This is an explicit whitelist, so the
+    // three-baseline contract (KTD5) and the settlement path both need their
+    // fields passed through here or they silently never reach the ledger:
+    // baselineProbability = the base-rate the ensemble is compared against;
+    // probabilitySource   = 'ensemble' | 'base_rate' (guards updateOpenWindow);
+    // passes              = per-pass ensemble probabilities (KTD1 post-hoc);
+    // marketSlug/Source   = what the settlement loader tracks through close.
+    baselineProbability: Number.isFinite(Number(forecast.baselineProbability)) ? Number(forecast.baselineProbability) : undefined,
+    probabilitySource: typeof forecast.probabilitySource === 'string' ? forecast.probabilitySource : undefined,
+    passes: Array.isArray(forecast.passes) ? cloneJson(forecast.passes) : undefined,
+    marketSlug: typeof forecast.marketSlug === 'string' ? forecast.marketSlug : undefined,
+    marketSource: typeof forecast.marketSource === 'string' ? forecast.marketSource : undefined,
     generatedAt,
     deadline,
     firstSeenAt: snapshotAt,
@@ -985,8 +1033,48 @@ function updateOpenWindow(entry, forecast, generatedAt, snapshotAt) {
   if (entry.status !== 'pending' && entry.status !== 'pending-judge') return;
   if (generatedAt >= entry.deadline) return;
   const probability = Number(forecast.probability);
-  if (Number.isFinite(probability)) entry.probability = probability;
+  if (Number.isFinite(probability)) {
+    // Probability provenance is RANKED: full 3-pass ensemble (2) over a 1-2
+    // pass partial (1) over the base-rate placeholder (0). An update may keep
+    // or raise the rank, never lower it (#5525): a bet falling out of top-K
+    // (or hitting the LLM budget) on a later run re-ingests as 'base_rate',
+    // and letting it clobber EITHER derived aggregate would silently grade the
+    // placeholder prior. Same-rank refreshes and partial→full upgrades pass.
+    if (sourceRank(forecast.probabilitySource) >= sourceRank(entry.probabilitySource)) {
+      entry.probability = probability;
+      if (typeof forecast.probabilitySource === 'string') entry.probabilitySource = forecast.probabilitySource;
+      if (Number.isFinite(Number(forecast.baselineProbability))) entry.baselineProbability = Number(forecast.baselineProbability);
+      // Copy passes for full AND partial ensemble runs ('ensemble_partial'
+      // carries the failed passes too — KTD1 post-hoc calibration needs them).
+      const forecastRanEnsemble = typeof forecast.probabilitySource === 'string' && forecast.probabilitySource.startsWith('ensemble');
+      if (forecastRanEnsemble && Array.isArray(forecast.passes)) entry.passes = cloneJson(forecast.passes);
+      // Refresh the market snapshot alongside the probability: vsMarketSkill /
+      // deviationSkill compare entry.probability against calibration.marketPrice,
+      // so a re-graded probability must not be measured against the first-seen
+      // crowd price.
+      if (forecast.calibration && typeof forecast.calibration === 'object') entry.calibration = cloneJson(forecast.calibration);
+    }
+  }
+  // Market-settlement bets track the venue's CURRENT endDate: venues move
+  // close dates, and freezing the first-seen deadline would run the settlement
+  // clock (and its 14d VOID grace) against a date the venue no longer honors.
+  // Scoped to the settlement feed — other domains derive deadlines from
+  // wall-clock horizons, so advancing them would keep windows open forever.
+  const incomingDeadline = Number(forecast.resolution?.deadline);
+  if (entry.spec?.sourceFeed === MARKET_SETTLEMENT_FEED_KEY
+    && Number.isFinite(incomingDeadline)
+    && incomingDeadline !== Number(entry.deadline)) {
+    entry.deadline = incomingDeadline;
+    entry.spec.deadline = incomingDeadline;
+  }
   entry.lastSeenAt = Math.max(Number(entry.lastSeenAt || 0), snapshotAt);
+}
+
+// Provenance rank for updateOpenWindow's no-downgrade guard.
+function sourceRank(source) {
+  if (source === 'ensemble') return 2;
+  if (source === 'ensemble_partial') return 1;
+  return 0; // base_rate, legacy/undefined
 }
 
 function findOpenWindowKey(ledger, id, generatedAt) {
@@ -1106,6 +1194,27 @@ export function shapeResolutionFeed(key, data) {
     }
     return d;
   }
+  if (key.startsWith('economic:fred:v1:')) {
+    // FRED (#5525): stored as {series:{observations:[{date,value},...]}} per
+    // #5098; FRED marks missing values with '.'. Expose one record carrying the
+    // latest finite observation — `value(metric==<SERIES>)` reads it, and the
+    // observation date is the settlement `asOf` the calendar-derived grace
+    // gates on (KTD4). SERIES is the 4th key segment (exact `:0`-suffixed keys).
+    const series = key.split(':')[3];
+    const d = data?.data ?? data;
+    // Shared filter with the bet generator (finiteObservations in
+    // _bet-templates-macro.mjs) — the '.'-sentinel handling must not drift
+    // between generation and resolution.
+    const finite = finiteObservations(d);
+    const latest = finite[finite.length - 1];
+    return latest ? [{ metric: series, value: latest.value, asOf: latest.date }] : [];
+  }
+  if (key === MARKET_SETTLEMENT_FEED_KEY) {
+    // Settlement feed (#5525 KTD2): records already carry {market, slug,
+    // yesPrice, asOf} — expose the array directly.
+    const d = data?.data ?? data;
+    return Array.isArray(d?.records) ? d.records : (Array.isArray(d) ? d : []);
+  }
   return data;
 }
 
@@ -1128,23 +1237,283 @@ async function readResolutionFeeds(ledger) {
   return Object.fromEntries(pairs);
 }
 
-async function readJudgedNewsArchiveForLedger(ledger, nowMs, options = {}) {
+export async function readJudgedNewsArchiveForLedger(ledger, nowMs, options = {}) {
   const dueEntries = Object.values(normalizeLedger(ledger))
     .filter((entry) => entry?.status === 'pending-judge')
     .filter((entry) => Number(entry.deadline ?? entry.spec?.deadline) <= nowMs);
   if (!dueEntries.length) return { items: [], available: false };
+  const cutoverEnabled = typeof options.cutoverEnabled === 'boolean'
+    ? options.cutoverEnabled
+    : (options.env ?? process.env).FORECAST_EVIDENCE_CUTOVER_ENABLED === '1';
 
   const windowStartMs = Math.min(...dueEntries.map((entry) => judgedArchiveWindowForEntry(entry, nowMs).startMs));
+  // judgedArchiveWindowForEntry returns endMs: nowMs for every entry, so the
+  // window end is nowMs by construction.
+  const windowEndMs = nowMs;
+  // #7082: judge from the dedicated evidence archive first — it is
+  // self-contained (no story:track dependency) and covers the full 14-day
+  // contract. The accumulator reader stays as the migration fallback while
+  // both paths exist; divergence between them is logged, not swallowed.
   try {
-    return await readDigestAccumulatorArchive(windowStartMs, nowMs, options);
+    const archived = await readForecastEvidenceArchive(windowStartMs, windowEndMs, options);
+    if (archived.available) {
+      if (!cutoverEnabled && !options.quietArchiveMigration) {
+        try {
+          // Telemetry only — a bounded sample is enough to spot divergence, and
+          // the unbounded read cost ~31 extra pipeline round-trips on every
+          // pre-cutover judged run just to compare two counts.
+          const legacy = await readDigestAccumulatorArchive(windowStartMs, windowEndMs, {
+            ...options,
+            maxHashes: Math.min(
+              MIGRATION_DIVERGENCE_SAMPLE_HASHES,
+              Number.isFinite(options.maxHashes) ? options.maxHashes : MIGRATION_DIVERGENCE_SAMPLE_HASHES,
+            ),
+          });
+          if (legacy.available && legacy.items.length !== archived.items.length) {
+            console.warn(
+              `  [forecast-resolutions] evidence archive/accumulator divergence: ` +
+              `archive=${archived.items.length} accumulator=${legacy.items.length} ` +
+              `(sampled at ${MIGRATION_DIVERGENCE_SAMPLE_HASHES} hashes; expected while the ` +
+              `archive backfills — the accumulator lacks evidence beyond its retention window)`,
+            );
+          }
+        } catch {
+          // The comparison is best-effort telemetry; the archive read already
+          // succeeded and must not fail because the legacy path did.
+        }
+      }
+      return archived;
+    }
+    // After the explicit deployment cutover, the pruned accumulator is never
+    // a trustworthy fallback. Before it, migration failures may still use the
+    // intact legacy path while operators validate archive parity.
+    if (cutoverEnabled) return { ...archived, available: false };
+  } catch (err) {
+    if (cutoverEnabled) {
+      console.warn(`  [forecast-resolutions] evidence archive unavailable after cutover: ${err?.message || err}`);
+      return {
+        items: [],
+        available: false,
+        incomplete: true,
+        cutoverEnabled: true,
+        incompleteReason: 'archive_read_failed',
+      };
+    }
+    console.warn(`  [forecast-resolutions] evidence archive unavailable, falling back to accumulator: ${err?.message || err}`);
+  }
+  try {
+    return await readDigestAccumulatorArchive(windowStartMs, windowEndMs, options);
   } catch (err) {
     console.warn(`  [forecast-resolutions] judged archive unavailable: ${err?.message || err}`);
     return { items: [], available: false };
   }
 }
 
+/**
+ * #7082: read the dedicated forecast evidence archive. Members are
+ * self-contained JSON records (title/link/description/publishedAt ride on
+ * the member), so — unlike the accumulator reader — there is no story:track
+ * dependency that expires after 7 days. Malformed or oversized members are
+ * counted as tombstones and surfaced in the result instead of being
+ * silently omitted, and truncation tightens the reported coverage window so
+ * missing evidence can never be converted into a judged negative.
+ *
+ * The coverage marker is compared with a staleness budget
+ * (FORECAST_EVIDENCE_COVERAGE_MAX_LAG_MS). The marker records the last
+ * confirmed digest publication and this seeder runs in a different process at
+ * a later instant, so demanding `coverageEndMs >= Date.now()` is a race no
+ * deployment can win — it would make the archive permanently unreadable.
+ * Evidence that would have been published inside the budget does not exist in
+ * any store yet, so a marker within it has no hole behind it.
+ */
+export async function readForecastEvidenceArchive(windowStartMs, nowMs, options = {}) {
+  const { url, token } = getArchiveRedisCredentials(options);
+  const fetchFn = options.fetchFn ?? ((...args) => globalThis.fetch(...args));
+  const configuredMaxLookbackMs = Number.isFinite(options.maxLookbackMs)
+    ? Math.max(1, Math.floor(options.maxLookbackMs))
+    : resolveJudgedEvidenceMaxLookbackMs();
+  const coverageMaxLagMs = Number.isFinite(options.coverageMaxLagMs)
+    ? Math.max(0, Math.floor(options.coverageMaxLagMs))
+    : resolveForecastEvidenceCoverageMaxLagMs(options.env ?? process.env);
+  const requestedCoverageStartMs = Math.max(windowStartMs, nowMs - configuredMaxLookbackMs);
+  const maxHashes = Number.isFinite(options.maxHashes)
+    ? Math.max(1, Math.floor(options.maxHashes))
+    : envPositiveInt('FORECAST_RESOLUTION_JUDGE_ARCHIVE_HASH_LIMIT', DEFAULT_JUDGED_ARCHIVE_HASH_LIMIT);
+  const archiveTimeoutMs = Number.isFinite(options.archiveTimeoutMs)
+    ? Math.max(1_000, Math.floor(options.archiveTimeoutMs))
+    : envPositiveInt('FORECAST_RESOLUTION_JUDGE_ARCHIVE_TIMEOUT_MS', DEFAULT_JUDGED_ARCHIVE_TIMEOUT_MS);
+  const archiveDeadlineMs = Date.now() + archiveTimeoutMs;
+  const base = {
+    requestedStartMs: windowStartMs,
+    requestedEndMs: nowMs,
+    coverageStartMs: requestedCoverageStartMs,
+    coverageEndMs: nowMs,
+    archive: FORECAST_EVIDENCE_KEY,
+  };
+  // One budget for the whole read, not per request: the record fan-out below
+  // can issue ceil(maxHashes / recordBatchSize) sequential pipelines, and a
+  // per-request timeout lets their sum blow past any caller deadline. Mirrors
+  // readDigestAccumulatorArchive's archiveDeadlineMs.
+  const requestRedis = async (endpoint, command, context) => {
+    const remainingMs = archiveDeadlineMs - Date.now();
+    if (remainingMs <= 0) throw new Error(`${context} exceeded ${archiveTimeoutMs}ms archive budget`);
+    const response = await fetchFn(endpoint, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'User-Agent': CHROME_UA },
+      body: JSON.stringify(command),
+      signal: AbortSignal.timeout(remainingMs),
+    });
+    if (!response.ok) throw new Error(`${context} failed: HTTP ${response.status}`);
+    return response.json();
+  };
+
+  const coveragePayload = await requestRedis(
+    url,
+    ['GET', FORECAST_EVIDENCE_COVERAGE_KEY],
+    `Redis GET ${FORECAST_EVIDENCE_COVERAGE_KEY}`,
+  );
+  const coverage = parseForecastEvidenceCoverage(coveragePayload?.result);
+  if (!forecastEvidenceCoversWindow(coverage, requestedCoverageStartMs, nowMs, coverageMaxLagMs)) {
+    return {
+      ...base,
+      coverageStartMs: coverage?.coverageStartMs,
+      coverageEndMs: coverage?.coverageEndMs,
+      coverageComplete: false,
+      incomplete: true,
+      incompleteReason: coverage ? 'coverage_window_incomplete' : 'coverage_unverified',
+      cutoverVerified: Boolean(coverage),
+      coverageLagMs: coverage ? nowMs - coverage.coverageEndMs : undefined,
+      coverageMaxLagMs,
+      items: [],
+      available: false,
+    };
+  }
+
+  const zsetPayload = await requestRedis(url, [
+    'ZREVRANGEBYSCORE',
+    FORECAST_EVIDENCE_KEY,
+    String(nowMs),
+    String(requestedCoverageStartMs),
+    'WITHSCORES',
+    'LIMIT',
+    '0',
+    String(maxHashes + 1),
+  ], `Redis ZREVRANGEBYSCORE ${FORECAST_EVIDENCE_KEY}`);
+  if (!Array.isArray(zsetPayload?.result)) {
+    throw new Error(`Redis ZREVRANGEBYSCORE ${FORECAST_EVIDENCE_KEY} returned non-array WITHSCORES data`);
+  }
+  const zsetRows = zsetPayload.result;
+  if (zsetRows.length % 2 !== 0) {
+    throw new Error(`Redis ZREVRANGEBYSCORE ${FORECAST_EVIDENCE_KEY} returned malformed WITHSCORES data`);
+  }
+
+  // Determine the cap from raw pairs before filtering. Otherwise malformed
+  // rows can consume the extra sentinel and hide unread valid evidence.
+  const rawPairCount = zsetRows.length / 2;
+  const truncated = rawPairCount > maxHashes;
+  const rawSelected = zsetRows.slice(0, maxHashes * 2);
+  const selectedHashes = [];
+  const selectedScores = [];
+  const seenHashes = new Set();
+  let malformedTombstones = 0;
+  for (let index = 0; index < rawSelected.length; index += 2) {
+    const hash = rawSelected[index];
+    const score = Number(rawSelected[index + 1]);
+    if (!isForecastEvidenceHash(hash) || !Number.isFinite(score) || seenHashes.has(hash)) {
+      malformedTombstones += 1;
+      continue;
+    }
+    seenHashes.add(hash);
+    selectedHashes.push(hash);
+    selectedScores.push(score);
+  }
+
+  // Truncation NARROWS the window rather than failing the read, mirroring
+  // readDigestAccumulatorArchive below. The cap is a standing property of a
+  // busy 14-day window, not a transient blip: failing the whole read on it
+  // means no judged forecast ever resolves again once the archive gets big.
+  // The narrowed coverageStartMs is what keeps this fail-closed —
+  // archiveCoversEntryWindow still refuses any entry whose own window reaches
+  // past the retained range, so missing evidence is never judged as absence.
+  // Scores descend (ZREVRANGEBYSCORE), so the oldest retained score is last.
+  const oldestRetainedScore = selectedScores.at(-1);
+  const firstDroppedScore = truncated ? Number(zsetRows[maxHashes * 2 + 1]) : undefined;
+  const retainedCoverageStartMs = Number.isFinite(oldestRetainedScore)
+    ? (firstDroppedScore === oldestRetainedScore ? oldestRetainedScore + 1 : oldestRetainedScore)
+    : requestedCoverageStartMs;
+  const effectiveCoverageStartMs = truncated
+    ? Math.max(requestedCoverageStartMs, retainedCoverageStartMs)
+    : requestedCoverageStartMs;
+
+  const recordBatchSize = Number.isFinite(options.recordBatchSize)
+    ? Math.max(1, Math.min(500, Math.floor(options.recordBatchSize)))
+    : 500;
+  const rawRecords = [];
+  for (let offset = 0; offset < selectedHashes.length; offset += recordBatchSize) {
+    const batch = selectedHashes.slice(offset, offset + recordBatchSize);
+    const commands = batch.map(hash => ['GET', forecastEvidenceRecordKey(hash)]);
+    const payload = await requestRedis(`${url}/pipeline`, commands, 'Redis forecast evidence record pipeline');
+    if (!Array.isArray(payload) || payload.length !== commands.length) {
+      throw new Error('Redis forecast evidence record pipeline returned incomplete data');
+    }
+    rawRecords.push(...payload);
+  }
+
+  const records = [];
+  for (let index = 0; index < selectedHashes.length; index += 1) {
+    const row = rawRecords[index];
+    if (row?.error || typeof row?.result !== 'string') {
+      malformedTombstones += 1;
+      continue;
+    }
+    const { record, malformed, oversized } = parseForecastEvidenceMember(row.result);
+    if (malformed || oversized || !record || record.hash !== selectedHashes[index]) {
+      malformedTombstones += 1;
+      continue;
+    }
+    records.push({ record, score: selectedScores[index] });
+  }
+
+  // A tombstone is a member we KNOW we could not read — a real hole inside the
+  // retained range that narrowing cannot describe — so it still fails the read.
+  // Truncation is different: nothing is missing inside the narrowed window.
+  const incomplete = malformedTombstones > 0;
+  if (truncated) {
+    console.warn(`  [forecast-resolutions] evidence archive raw hash cap reached (${rawPairCount}/${maxHashes}) for ${new Date(requestedCoverageStartMs).toISOString()}..${new Date(nowMs).toISOString()}; retained coverage begins ${new Date(effectiveCoverageStartMs).toISOString()}; increase FORECAST_RESOLUTION_JUDGE_ARCHIVE_HASH_LIMIT or page the archive scan`);
+  }
+  if (malformedTombstones > 0) {
+    console.warn(`  [forecast-resolutions] evidence archive reported ${malformedTombstones} missing/malformed/oversized/duplicate member(s)`);
+  }
+  const items = records.map(({ record }, index) => ({
+    id: `N${index + 1}`,
+    title: record.title,
+    description: record.description,
+    url: record.link,
+    publishedAt: record.publishedAt,
+    hash: record.hash,
+  }));
+  return {
+    ...base,
+    // Report the window actually served: the marker's proof intersected with
+    // what this query asked for and what the hash cap let us retain. Returning
+    // the marker's frozen start would claim coverage the read did not deliver.
+    coverageStartMs: Math.max(coverage.coverageStartMs, effectiveCoverageStartMs),
+    coverageEndMs: nowMs,
+    markerCoverageEndMs: coverage.coverageEndMs,
+    coverageLagMs: nowMs - coverage.coverageEndMs,
+    coverageComplete: !incomplete && !truncated,
+    cutoverVerified: true,
+    incomplete,
+    truncated,
+    malformedTombstones,
+    items,
+    available: !incomplete,
+  };
+}
+
 export async function readDigestAccumulatorArchive(windowStartMs, nowMs, options = {}) {
   const { url, token } = getArchiveRedisCredentials(options);
+  const fetchFn = options.fetchFn ?? ((...args) => globalThis.fetch(...args));
   const configuredMaxLookbackMs = Number.isFinite(options.maxLookbackMs)
     ? Math.max(1, Math.floor(options.maxLookbackMs))
     : resolveJudgedEvidenceMaxLookbackMs();
@@ -1158,7 +1527,7 @@ export async function readDigestAccumulatorArchive(windowStartMs, nowMs, options
     coverageStartMs: requestedCoverageStartMs,
     coverageEndMs: nowMs,
   };
-  const zsetResp = await fetch(url, {
+  const zsetResp = await fetchFn(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'User-Agent': CHROME_UA },
     body: JSON.stringify([
@@ -1217,7 +1586,7 @@ export async function readDigestAccumulatorArchive(windowStartMs, nowMs, options
   const rows = await readStoryTracksChunked(selectedHashes, async (commands) => {
     const remainingMs = archiveDeadlineMs - Date.now();
     if (remainingMs <= 0) throw new Error(`Redis story-track pipeline exceeded ${archiveTimeoutMs}ms archive budget`);
-    const pipelineResp = await fetch(`${url}/pipeline`, {
+    const pipelineResp = await fetchFn(`${url}/pipeline`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'User-Agent': CHROME_UA },
       body: JSON.stringify(commands),
@@ -1309,6 +1678,12 @@ async function buildLedgerForRun() {
     }),
   ]);
   const preLedger = ingestHistory(existingLedger || {}, [...history, ...betsHistory], nowMs);
+  // Populate the market settlement feed for due bets BEFORE the feed read so
+  // this run can resolve freshly adjudicated markets (#5525 KTD2). Best-effort:
+  // a failure leaves the bets pending within the settlement grace.
+  await updateMarketSettlements(preLedger, nowMs, { readJson: readRedisJson }).catch((err) => {
+    console.warn(`  [forecast-resolutions] settlement update failed: ${err?.message || err}`);
+  });
   const feeds = await readResolutionFeeds(preLedger);
   const judgedOptions = buildLiveJudgedOptions(nowMs);
   const judgedArchive = await readJudgedNewsArchiveForLedger(preLedger, nowMs, judgedOptions);
@@ -1400,7 +1775,7 @@ if (DIRECT_RUN && process.argv.includes('--dry-run')) {
     extraKeys: [{
       key: SCORECARD_KEY,
       ttl: SCORECARD_TTL_SECONDS,
-      transform: (ledger) => computeScorecard(ledger, Date.now()),
+      transform: (ledger) => computeScorecard(ledger, Date.now(), { promoteBetEngine: promoteBetEngineEnabled() }),
       declareRecords: declareScorecardRecords,
       metaKey: SCORECARD_META_KEY,
       metaCritical: true,

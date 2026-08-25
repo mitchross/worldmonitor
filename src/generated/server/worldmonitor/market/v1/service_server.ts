@@ -10,6 +10,7 @@ export interface ListMarketQuotesResponse {
   finnhubSkipped: boolean;
   skipReason: string;
   rateLimited: boolean;
+  unavailableSymbols: MarketQuoteUnavailable[];
 }
 
 export interface MarketQuote {
@@ -21,12 +22,19 @@ export interface MarketQuote {
   sparkline: number[];
 }
 
+export interface MarketQuoteUnavailable {
+  symbol: string;
+  reason: MarketQuoteUnavailableReason;
+}
+
 export interface ListCryptoQuotesRequest {
   ids: string[];
 }
 
 export interface ListCryptoQuotesResponse {
   quotes: CryptoQuote[];
+  unresolvedIds: string[];
+  provider: string;
 }
 
 export interface CryptoQuote {
@@ -55,6 +63,39 @@ export interface CommodityQuote {
   sparkline: number[];
 }
 
+export interface GetPhysicalPremiumsRequest {
+  metals: string[];
+}
+
+export interface GetPhysicalPremiumsResponse {
+  premiums: PhysicalPremium[];
+  fx?: FxSnapshot;
+}
+
+export interface PhysicalPremium {
+  metal: string;
+  physical?: BenchmarkLeg;
+  paper?: BenchmarkLeg;
+  premiumUsdPerOz: number;
+  premiumPct: number;
+  computedAt: string;
+}
+
+export interface BenchmarkLeg {
+  price: number;
+  currency: string;
+  unit: string;
+  source: string;
+  asOf: string;
+}
+
+export interface FxSnapshot {
+  pair: string;
+  rate: number;
+  source: string;
+  asOf: string;
+}
+
 export interface GetSectorSummaryRequest {
   period: string;
 }
@@ -77,6 +118,8 @@ export interface ListStablecoinMarketsResponse {
   timestamp: string;
   summary?: StablecoinSummary;
   stablecoins: Stablecoin[];
+  unresolved: UnresolvedStablecoin[];
+  dataStatus: string;
 }
 
 export interface StablecoinSummary {
@@ -99,6 +142,11 @@ export interface Stablecoin {
   change24h: number;
   change7d: number;
   image: string;
+}
+
+export interface UnresolvedStablecoin {
+  id: string;
+  reason: string;
 }
 
 export interface ListEtfFlowsRequest {
@@ -231,6 +279,23 @@ export interface AnalyzeStockResponse {
   marketSession: string;
   extendedPrice?: number;
   extendedChangePercent?: number;
+  fundamentals?: Fundamentals;
+  fundamentalScore?: number;
+  compositeScore: number;
+  nextEarningsDate?: string;
+  consensusEps?: number;
+  consensusRevenue?: number;
+  newsSentiment?: number;
+  realizedVolatility: number;
+  atr: number;
+  maxDrawdown: number;
+  ratingSignal: string;
+  ratingSummary: string;
+  ratingAction: string;
+  ratingConfidence: string;
+  ratingWhyNow: string;
+  ratingBullishFactors: string[];
+  ratingRiskFactors: string[];
 }
 
 export interface StockAnalysisHeadline {
@@ -238,6 +303,9 @@ export interface StockAnalysisHeadline {
   source: string;
   link: string;
   publishedAt: number;
+  marketSessionAtPublish: string;
+  alignedTradingDate: string;
+  alignmentRule: HeadlineAlignmentRule;
 }
 
 export interface AnalystConsensus {
@@ -265,6 +333,22 @@ export interface UpgradeDowngrade {
   fromGrade: string;
   action: string;
   epochGradeDate: number;
+}
+
+export interface Fundamentals {
+  profitMargin?: number;
+  grossMargin?: number;
+  operatingMargin?: number;
+  returnOnEquity?: number;
+  returnOnAssets?: number;
+  revenueGrowth?: number;
+  earningsGrowth?: number;
+  debtToEquity?: number;
+  totalCash?: number;
+  totalDebt?: number;
+  freeCashflow?: number;
+  ebitda?: number;
+  financialCurrency?: string;
 }
 
 export interface GetStockAnalysisHistoryRequest {
@@ -307,6 +391,7 @@ export interface BacktestStockResponse {
   generatedAt: string;
   evaluations: BacktestStockEvaluation[];
   engineVersion: string;
+  ratingBasis: string;
 }
 
 export interface BacktestStockEvaluation {
@@ -462,6 +547,9 @@ export interface CotInstrument {
   dealerLong: string;
   dealerShort: string;
   netPct: number;
+  smallTraderLong: string;
+  smallTraderShort: string;
+  smallTraderAvailable: boolean;
 }
 
 export interface GetInsiderTransactionsRequest {
@@ -650,6 +738,10 @@ export interface HyperliquidAssetFlow {
   alerts: string[];
 }
 
+export type HeadlineAlignmentRule = "HEADLINE_ALIGNMENT_RULE_UNSPECIFIED" | "HEADLINE_ALIGNMENT_RULE_REGULAR_SESSION_SAME_TRADING_DAY" | "HEADLINE_ALIGNMENT_RULE_PREMARKET_SAME_TRADING_DAY" | "HEADLINE_ALIGNMENT_RULE_AFTER_HOURS_NEXT_TRADING_DAY" | "HEADLINE_ALIGNMENT_RULE_NON_SESSION_NEXT_TRADING_DAY" | "HEADLINE_ALIGNMENT_RULE_OVERNIGHT_SAME_TRADING_DAY";
+
+export type MarketQuoteUnavailableReason = "MARKET_QUOTE_UNAVAILABLE_REASON_UNSPECIFIED" | "MARKET_QUOTE_UNAVAILABLE_REASON_NOT_FOUND" | "MARKET_QUOTE_UNAVAILABLE_REASON_PROVIDER_ERROR" | "MARKET_QUOTE_UNAVAILABLE_REASON_PROVIDER_RATE_LIMITED" | "MARKET_QUOTE_UNAVAILABLE_REASON_PROVIDER_NOT_CONFIGURED" | "MARKET_QUOTE_UNAVAILABLE_REASON_REQUEST_LIMIT_EXCEEDED" | "MARKET_QUOTE_UNAVAILABLE_REASON_UPSTREAM_BUDGET_EXHAUSTED" | "MARKET_QUOTE_UNAVAILABLE_REASON_SEED_UNAVAILABLE";
+
 export interface FieldViolation {
   field: string;
   description: string;
@@ -698,6 +790,7 @@ export interface MarketServiceHandler {
   listMarketQuotes(ctx: ServerContext, req: ListMarketQuotesRequest): Promise<ListMarketQuotesResponse>;
   listCryptoQuotes(ctx: ServerContext, req: ListCryptoQuotesRequest): Promise<ListCryptoQuotesResponse>;
   listCommodityQuotes(ctx: ServerContext, req: ListCommodityQuotesRequest): Promise<ListCommodityQuotesResponse>;
+  getPhysicalPremiums(ctx: ServerContext, req: GetPhysicalPremiumsRequest): Promise<GetPhysicalPremiumsResponse>;
   getSectorSummary(ctx: ServerContext, req: GetSectorSummaryRequest): Promise<GetSectorSummaryResponse>;
   listStablecoinMarkets(ctx: ServerContext, req: ListStablecoinMarketsRequest): Promise<ListStablecoinMarketsResponse>;
   listEtfFlows(ctx: ServerContext, req: ListEtfFlowsRequest): Promise<ListEtfFlowsResponse>;
@@ -845,6 +938,53 @@ export function createMarketServiceRoutes(
 
           const result = await handler.listCommodityQuotes(ctx, body);
           return new Response(JSON.stringify(result as ListCommodityQuotesResponse), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (err: unknown) {
+          if (err instanceof ValidationError) {
+            return new Response(JSON.stringify({ violations: err.violations }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          if (options?.onError) {
+            return options.onError(err, req);
+          }
+          const message = err instanceof Error ? err.message : String(err);
+          return new Response(JSON.stringify({ message }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/market/v1/get-physical-premiums",
+      handler: async (req: Request): Promise<Response> => {
+        try {
+          const pathParams: Record<string, string> = {};
+          const url = new URL(req.url, "http://localhost");
+          const params = url.searchParams;
+          const body: GetPhysicalPremiumsRequest = {
+            metals: params.getAll("metals"),
+          };
+          if (options?.validateRequest) {
+            const bodyViolations = options.validateRequest("getPhysicalPremiums", body);
+            if (bodyViolations) {
+              throw new ValidationError(bodyViolations);
+            }
+          }
+
+          const ctx: ServerContext = {
+            request: req,
+            pathParams,
+            headers: Object.fromEntries(req.headers.entries()),
+          };
+
+          const result = await handler.getPhysicalPremiums(ctx, body);
+          return new Response(JSON.stringify(result as GetPhysicalPremiumsResponse), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           });

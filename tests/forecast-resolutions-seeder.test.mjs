@@ -603,7 +603,7 @@ describe('processResolutionCycleWithJudges', () => {
           model: 'deepseek/deepseek-v4-flash',
           text: JSON.stringify({ outcome: 'YES', citations: [{ id: 'N1', quote: 'The bill passed before the forecast deadline' }], rationale: 'The cited article confirms passage.' }),
         }),
-        async () => ({ provider: 'groq', model: 'llama-3.3-70b-versatile', outcome: 'YES', citations: [{ id: 'N1', quote: 'The bill passed before the forecast deadline' }], rationale: 'The policy passed before the deadline.' }),
+        async () => ({ provider: 'groq', model: 'openai/gpt-oss-20b', outcome: 'YES', citations: [{ id: 'N1', quote: 'The bill passed before the forecast deadline' }], rationale: 'The policy passed before the deadline.' }),
       ],
     });
 
@@ -620,7 +620,7 @@ describe('processResolutionCycleWithJudges', () => {
     const result = await processResolutionCycleWithJudges({}, [snapshot(T0, [judgedForecast()])], {}, archive, T0 + DAY_MS + 2, {
       judgeModels: [
         async () => ({ provider: 'openrouter', model: 'deepseek/deepseek-v4-flash', outcome: 'YES', citations: [{ id: 'N1', quote: 'The bill passed before the forecast deadline' }], rationale: 'The article says it passed.' }),
-        async () => ({ provider: 'groq', model: 'llama-3.3-70b-versatile', outcome: 'NO', citations: [{ id: 'N1', quote: 'The bill passed before the forecast deadline' }], rationale: 'The article does not establish passage.' }),
+        async () => ({ provider: 'groq', model: 'openai/gpt-oss-20b', outcome: 'NO', citations: [{ id: 'N1', quote: 'The bill passed before the forecast deadline' }], rationale: 'The article does not establish passage.' }),
       ],
     });
 
@@ -853,7 +853,7 @@ describe('processResolutionCycleWithJudges', () => {
     }, T0 + DAY_MS + 2, {
       judgeModels: [
         async () => ({ provider: 'openrouter', model: 'deepseek/deepseek-v4-flash', outcome: 'VOID', citations: [], rationale: 'Archive is insufficient.' }),
-        async () => ({ provider: 'groq', model: 'llama-3.3-70b-versatile', outcome: 'VOID', citations: [], rationale: 'Not enough coverage.' }),
+        async () => ({ provider: 'groq', model: 'openai/gpt-oss-20b', outcome: 'VOID', citations: [], rationale: 'Not enough coverage.' }),
       ],
     });
 
@@ -869,7 +869,7 @@ describe('processResolutionCycleWithJudges', () => {
     const result = await processResolutionCycleWithJudges({}, [snapshot(T0, [judgedForecast()])], {}, archive, T0 + DAY_MS + 2, {
       judgeModels: [
         async () => ({ provider: 'openrouter', model: 'deepseek/deepseek-v4-flash', outcome: 'YES', citations: [{ id: 'N1' }], rationale: 'The article says it passed.' }),
-        async () => ({ provider: 'groq', model: 'llama-3.3-70b-versatile', outcome: 'YES', citations: [{ id: 'N1', quote: 'A fabricated sentence that is not in the archive' }], rationale: 'The policy passed before the deadline.' }),
+        async () => ({ provider: 'groq', model: 'openai/gpt-oss-20b', outcome: 'YES', citations: [{ id: 'N1', quote: 'A fabricated sentence that is not in the archive' }], rationale: 'The policy passed before the deadline.' }),
       ],
     });
 
@@ -916,7 +916,7 @@ describe('processResolutionCycleWithJudges', () => {
     const result = await processResolutionCycleWithJudges({}, [snapshot(T0, [judgedForecast()])], {}, archive, T0 + DAY_MS + 2, {
       judgeModels: [
         async () => ({ provider: 'openrouter', model: 'deepseek/deepseek-v4-flash', outcome: 'YES', citations: [{ id: 'N1', quote: 'The bill passed before the forecast deadline' }], rationale: 'The article says it passed.' }),
-        async () => ({ provider: 'groq', model: 'llama-3.3-70b-versatile', text: 'not-json' }),
+        async () => ({ provider: 'groq', model: 'openai/gpt-oss-20b', text: 'not-json' }),
       ],
     });
 
@@ -1773,5 +1773,35 @@ describe('processResolutionCycle retention', () => {
 
     assert.equal(ledger[`fc-hormuz@${T0 + DAY_MS}`].status, 'resolved');
     assert.equal(receipts.length, 1, 'the receipt is still emitted for R2 archival');
+  });
+});
+
+describe('Gate-2 promotion env wiring (review R3 #8)', () => {
+  const scoredBetEngineLedger = () => ({
+    'bet@1': {
+      key: 'bet@1',
+      id: 'bet',
+      status: 'resolved',
+      outcome: 'YES',
+      probability: 0.8,
+      generationOrigin: 'bet_engine',
+      domain: 'market',
+      resolvedAt: T0,
+    },
+  });
+
+  it('FORECAST_PROMOTE_BET_ENGINE=1 lifts bet_engine into the skill headline; default stays excluded', () => {
+    delete process.env.FORECAST_PROMOTE_BET_ENGINE;
+    const off = processResolutionCycle(scoredBetEngineLedger(), [], {}, T0 + DAY_MS);
+    assert.ok(off.scorecard.skill.excludedOrigins.includes('bet_engine'), 'default: shadow slice excluded');
+
+    process.env.FORECAST_PROMOTE_BET_ENGINE = '1';
+    try {
+      const on = processResolutionCycle(scoredBetEngineLedger(), [], {}, T0 + DAY_MS);
+      assert.ok(!on.scorecard.skill.excludedOrigins.includes('bet_engine'), 'env flip promotes');
+      assert.equal(on.scorecard.skill.count, 1);
+    } finally {
+      delete process.env.FORECAST_PROMOTE_BET_ENGINE;
+    }
   });
 });

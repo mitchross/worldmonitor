@@ -53,6 +53,7 @@ import { setCachedFuelShortageRegistry } from '../shared/fuel-shortage-registry-
 import { setCachedPipelineRegistries } from '../shared/pipeline-registry-store';
 import { setCachedStorageFacilityRegistry } from '../shared/storage-facility-registry-store';
 import type { WeatherAlert } from '../services/weather';
+import { CHINA_LOGISTICS_CORRIDORS } from '../../shared/china-logistics-corridors';
 
 type Scenario = 'alpha' | 'beta';
 type HarnessVariant = 'full' | 'tech' | 'finance' | 'commodity' | 'energy' | 'happy';
@@ -132,6 +133,7 @@ type MapHarness = {
   getProtestClusterCount: () => number;
   getOverlaySnapshot: () => OverlaySnapshot;
   getCyberTooltipHtml: (indicator: string) => string;
+  showChinaCorridor: (index?: number) => void;
   destroy: () => void;
 };
 
@@ -168,6 +170,8 @@ const allLayersEnabled: MapLayers = {
   irradiators: true,
   sanctions: true,
   weather: true,
+  canadaRoads: true,
+  canadaAlerts: true,
   economic: true,
   waterways: true,
   outages: true,
@@ -228,6 +232,8 @@ const allLayersDisabled: MapLayers = {
   irradiators: false,
   sanctions: false,
   weather: false,
+  canadaRoads: false,
+  canadaAlerts: false,
   economic: false,
   waterways: false,
   outages: false,
@@ -451,6 +457,8 @@ const internals = map as unknown as {
   serverBaseClusters?: unknown[];
   serverBasesLoaded?: boolean;
   fetchServerBases?: () => void;
+  aptGroups?: typeof APT_GROUPS;
+  aptGroupsLoaded?: boolean;
 };
 
 internals.loadLiveTankers = async (): Promise<void> => {
@@ -463,6 +471,11 @@ const seedHarnessBases = (): void => {
   internals.serverBasesLoaded = true;
 };
 
+const seedHarnessAptGroups = (): void => {
+  internals.aptGroups = APT_GROUPS;
+  internals.aptGroupsLoaded = true;
+};
+
 // Keep the harness deterministic: the live RPC path can legitimately return an
 // empty viewport payload in local/dev runs, which would wipe the shared
 // `bases-layer` snapshot even though the harness is meant to exercise the
@@ -471,6 +484,7 @@ internals.fetchServerBases = (): void => {
   seedHarnessBases();
 };
 seedHarnessBases();
+seedHarnessAptGroups();
 
 const buildLayerState = (enabledLayers: HarnessLayerKey[]): MapLayers => {
   const next: MapLayers = { ...allLayersDisabled };
@@ -867,7 +881,8 @@ const VISUAL_SCENARIOS: VisualScenario[] = [
   {
     id: 'apt-groups-z5',
     variant: 'full',
-    enabledLayers: [],
+    // APT markers are gated on cyberThreats in DeckGLMap (lazy-loaded).
+    enabledLayers: ['cyberThreats'],
     camera: toCamera(aptLon, aptLat, 5.1),
     expectedDeckLayers: ['apt-groups-layer'],
     expectedSelectors: [],
@@ -1186,6 +1201,8 @@ const seedAllDynamicData = (): void => {
       testSiteName: '',
       concernScore: 0,
       concernLevel: '',
+      source: 'usgs',
+      category: '',
     },
   ];
 
@@ -1457,6 +1474,7 @@ const seedAllDynamicData = (): void => {
     },
   ]);
   map.setNewsLocations(SEEDED_NEWS_LOCATIONS);
+  seedHarnessAptGroups();
   map.setRenderPaused(false);
   map.render();
 };
@@ -1672,6 +1690,14 @@ window.__mapHarness = {
   getProtestClusterCount,
   getOverlaySnapshot,
   getCyberTooltipHtml,
+  showChinaCorridor: (index = 0): void => {
+    const definition = CHINA_LOGISTICS_CORRIDORS[index] ?? CHINA_LOGISTICS_CORRIDORS[0]!;
+    map.setChinaCorridorSelection({
+      ...definition,
+      availability: 'partial',
+      conditions: [],
+    });
+  },
   destroy: (): void => {
     map.destroy();
   },

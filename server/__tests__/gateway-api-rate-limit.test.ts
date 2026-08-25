@@ -8,9 +8,9 @@
  * and assert only the GATEWAY wiring at server/gateway.ts:1034 — the parts the
  * reviewers flagged as defect-prone:
  *   - eligibility via isUserApiKey (user keys carry NO keyCheck.kind)
- *   - the per-IP bypass is ENFORCE-only (shadow keeps per-IP active)
+ *   - the global fallback bypass is ENFORCE-only (shadow keeps it active)
  *   - ordering + 429 shape
- *   - downgraded / ineligible keys fall through to per-IP
+ *   - downgraded / ineligible keys are rejected before limiting
  */
 
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
@@ -25,7 +25,7 @@ vi.mock("../_shared/api-key-rate-limit", () => ({
   ENTERPRISE_API_RATE_LIMIT: 1000,
 }));
 
-// --- Stub the per-IP layer: spy whether checkRateLimit runs ------------------
+// --- Stub the global fallback layer: spy whether checkRateLimit runs --------
 const checkRateLimit = vi.fn().mockResolvedValue(null);
 const checkFailClosedScopedIpRateLimit = vi.fn().mockResolvedValue(null);
 vi.mock("../_shared/rate-limit", async (importActual) => {
@@ -72,6 +72,7 @@ vi.mock("../_shared/user-api-key", () => ({
 }));
 
 import { createDomainGateway } from "../gateway";
+import { hashKeySync } from "../_shared/usage-identity";
 
 function makeGateway() {
   return createDomainGateway([
@@ -91,6 +92,16 @@ function userKeyRequest() {
   return new Request("https://www.worldmonitor.app/api/news/v1/list-feed-digest", {
     method: "GET",
     headers: { "X-Api-Key": "wm_test_starter_key" },
+  });
+}
+
+function mixedEnterpriseRequest(sessionToken: string) {
+  return new Request("https://www.worldmonitor.app/api/news/v1/list-feed-digest", {
+    method: "GET",
+    headers: {
+      "X-WorldMonitor-Key": sessionToken,
+      Cookie: "wm-pro-key=enterprise-browser-key",
+    },
   });
 }
 
@@ -119,6 +130,24 @@ afterEach(() => {
 });
 
 describe("#3199 U4 — gateway per-account rate-limit wiring", () => {
+  test("mixed browser auth keeps the enterprise burst identity stable across wms_ rotation", async () => {
+    process.env.WORLDMONITOR_VALID_KEYS = "enterprise-browser-key";
+    process.env.API_RATE_LIMIT_ENFORCE = "true";
+    const gateway = makeGateway();
+
+    const first = await gateway(mixedEnterpriseRequest("wms_first-anonymous-session"), ctx);
+    const second = await gateway(mixedEnterpriseRequest("wms_second-anonymous-session"), ctx);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(checkBurst).toHaveBeenCalledTimes(2);
+    expect(checkBurst.mock.calls.map(([, identity]) => identity)).toEqual([
+      hashKeySync("enterprise-browser-key"),
+      hashKeySync("enterprise-browser-key"),
+    ]);
+    expect(checkRateLimit).not.toHaveBeenCalled();
+  });
+
   test("eligible Starter wm_ key engages the per-account layer (isUserApiKey discriminator)", async () => {
     const res = await makeGateway()(userKeyRequest(), ctx);
     expect(res.status).toBe(200);
@@ -136,13 +165,17 @@ describe("#3199 U4 — gateway per-account rate-limit wiring", () => {
     expect(checkRateLimit).not.toHaveBeenCalled();
   });
 
-  test("SHADOW + burst trip → served (200) and per-IP checkRateLimit STILL runs", async () => {
+  test("SHADOW + burst trip → served (200) and principal global fallback still runs", async () => {
     delete process.env.API_RATE_LIMIT_ENFORCE; // shadow (default)
     checkBurst.mockResolvedValue({ ok: false, limit: 60, reset: Date.now() + 30_000 });
 
     const res = await makeGateway()(userKeyRequest(), ctx);
     expect(res.status).toBe(200);
-    expect(checkRateLimit).toHaveBeenCalledTimes(1); // protection retained in shadow
+    expect(checkRateLimit).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.any(Object),
+      { principalUserId: "acct_starter" },
+    ); // protection retained in shadow, isolated by the validated key owner
   });
 
   test("ENFORCE + over daily limit → 429, meter rolled back, per-IP bypassed", async () => {

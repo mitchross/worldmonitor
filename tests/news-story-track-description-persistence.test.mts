@@ -343,6 +343,54 @@ describe('buildStoryTrackHsetFields — story:track:v1 HSET contract', () => {
     });
   });
 
+  it('#6428: counts publisher families, so one newsroom cannot corroborate itself', () => {
+    const now = 1_745_000_000_000;
+    const oneWire = [
+      baseItem({
+        source: 'Reuters World',
+        title: 'US and Iran close deal to ease Hormuz tensions',
+        titleHash: 'h-world',
+        publishedAt: now,
+      }),
+      baseItem({
+        source: 'Reuters US',
+        title: 'Iran deal could calm oil markets after Hormuz alarm',
+        titleHash: 'h-us',
+        publishedAt: now,
+      }),
+      baseItem({
+        source: 'Reuters Business',
+        title: 'US-Iran deal averts immediate Hormuz disruption',
+        titleHash: 'h-business',
+        publishedAt: now,
+      }),
+    ];
+
+    const signals = computeEntityCorroborationSignals(
+      oneWire as Array<Parameters<typeof computeEntityCorroborationSignals>[0][number]>,
+      now,
+    );
+    assert.strictEqual(
+      signals.get('h-world'),
+      undefined,
+      'a bucket carried by a single publisher must emit no corroboration signal',
+    );
+
+    // Premise check: identical titles under three real publishers still do.
+    const distinct = oneWire.map((item, i) => ({
+      ...item,
+      source: ['Reuters World', 'BBC World', 'Al Jazeera'][i]!,
+    }));
+    const distinctSignals = computeEntityCorroborationSignals(
+      distinct as Array<Parameters<typeof computeEntityCorroborationSignals>[0][number]>,
+      now,
+    );
+    assert.deepStrictEqual(distinctSignals.get('h-world'), {
+      sourceCount: 3,
+      tier12SourceCount: 3,
+    });
+  });
+
   it('round-trips Unicode / newlines cleanly', () => {
     const description = 'Brief d’actualité avec des accents : élections, résultats — et des émojis 🇫🇷.\nDeuxième ligne.';
     const item = baseItem({ description });
@@ -396,7 +444,7 @@ describe('buildStoryTrackHsetFields — story:track:v1 HSET contract', () => {
 });
 
 describe('fetchAndParseRss — cache prefix invalidation contract', () => {
-  it('rss:feed cache prefix is v8 (duration-led historical-explainer stamp), not v4/v5/v6/v7', () => {
+  it('rss:feed cache prefix is v9 (per-attempt fetch verdicts), not v4/v5/v6/v7/v8', () => {
     // Pre-PR ParsedItems cached at rss:feed:v4 lack the
     // isEphemeralLiveCoverage field. If a cache hit returned one of those,
     // the falsy-coerce in
@@ -413,19 +461,20 @@ describe('fetchAndParseRss — cache prefix invalidation contract', () => {
       resolve(__dirname, '..', 'server', 'worldmonitor', 'news', 'v1', 'list-feed-digest.ts'),
       'utf-8',
     );
-    // v7→v8: duration-led historical explainers now receive the same stable
-    // ingest stamp. Digest reads trust explicit stamps, so warm v7 rows must
-    // not retain a pre-rule "0" verdict for a cache TTL.
+    // v8→v9: cached ParseResult rows now carry the fetch attempt verdict
+    // (source + failure classification, #7083). Warm v8 rows lack the
+    // attempt field and would misreport feed health as an unknown state.
     assert.ok(
-      src.includes("`rss:feed:v8:${variant}:${feed.url}`"),
-      'rss:feed cache key must use v8 prefix — see comment above the cacheKey assignment in fetchAndParseRss',
+      src.includes("`rss:feed:v9:${variant}:${feed.url}`"),
+      'rss:feed cache key must use v9 prefix — see comment above the cacheKey assignment in fetchAndParseRss',
     );
     assert.ok(
-      !src.includes("`rss:feed:v7:${variant}:${feed.url}`") &&
+      !src.includes("`rss:feed:v8:${variant}:${feed.url}`") &&
+        !src.includes("`rss:feed:v7:${variant}:${feed.url}`") &&
         !src.includes("`rss:feed:v6:${variant}:${feed.url}`") &&
         !src.includes("`rss:feed:v5:${variant}:${feed.url}`") &&
         !src.includes("`rss:feed:v4:${variant}:${feed.url}`"),
-      'must NOT leave a residual v4/v5/v6/v7 cacheKey assignment — would silently revert the cutover',
+      'must NOT leave a residual v4/v5/v6/v7/v8 cacheKey assignment — would silently revert the cutover',
     );
   });
 });

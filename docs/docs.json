@@ -46,8 +46,8 @@
     ],
     "primary": {
       "type": "button",
-      "label": "Get Early Access",
-      "href": "https://www.worldmonitor.app/pro#waitlist"
+      "label": "View Pro plans",
+      "href": "https://www.worldmonitor.app/pro#pricing"
     }
   },
   "navigation": {
@@ -85,6 +85,7 @@
                 "pages": [
                   "overview",
                   "features",
+                  "data-sources",
                   "global-procurement-intelligence",
                   "hotspots"
                 ]
@@ -94,7 +95,13 @@
                 "pages": [
                   "signal-intelligence",
                   "ai-intelligence",
+                  "china-data-coverage",
+                  "china-official-macro-policy",
+                  "china-corporate-disclosures",
+                  "china-logistics-corridors",
+                  "methodology/china-activity-nowcast",
                   "methodology/news-digest-and-briefing",
+                  "methodology/news-credibility",
                   "country-instability-index",
                   "methodology/country-resilience-index",
                   "methodology/chokepoints",
@@ -175,6 +182,7 @@
                   "panels/monitors",
                   "panels/oref-sirens",
                   "panels/telegram-intel",
+                  "panels/x-intel",
                   "panels/fsi"
                 ]
               },
@@ -200,6 +208,7 @@
                   "cli",
                   "sdks",
                   "mcp-overview",
+                  "webmcp",
                   "mcp-apps",
                   "mcp-tools-reference",
                   "mcp-jmespath",
@@ -231,7 +240,9 @@
                   "cors",
                   "health-endpoints",
                   "relay-parameters",
-                  "data-sources"
+                  "decision-signal-provenance",
+                  "china-decision-signals",
+                  "source-attribution"
                 ]
               },
               {
@@ -243,21 +254,25 @@
               {
                 "group": "Legal",
                 "pages": [
+                  "eula",
+                  "terms",
+                  "dpa",
                   "license",
                   "trademark-policy",
-                  "privacy",
-                  "terms"
+                  "privacy"
                 ]
               }
             ]
           },
           {
             "tab": "API Reference",
+            "openapi": "api/worldmonitor.openapi.yaml",
             "groups": [
               {
                 "group": "Overview",
                 "pages": [
-                  "api-reference"
+                  "api-reference",
+                  "api-versioning"
                 ]
               },
               {
@@ -460,8 +475,8 @@
           ],
           "primary": {
             "type": "button",
-            "label": "获取早期访问权限",
-            "href": "https://www.worldmonitor.app/pro#waitlist"
+            "label": "查看 Pro 方案",
+            "href": "https://www.worldmonitor.app/pro#pricing"
           }
         },
         "footer": {
@@ -542,6 +557,7 @@
                 "pages": [
                   "zh/overview",
                   "zh/features",
+                  "zh/data-sources",
                   "zh/hotspots"
                 ]
               },
@@ -550,7 +566,13 @@
                 "pages": [
                   "zh/signal-intelligence",
                   "zh/ai-intelligence",
+                  "zh/china-data-coverage",
+                  "zh/china-official-macro-policy",
+                  "zh/china-corporate-disclosures",
+                  "zh/china-logistics-corridors",
+                  "zh/methodology/china-activity-nowcast",
                   "zh/methodology/news-digest-and-briefing",
+                  "zh/methodology/news-credibility",
                   "zh/country-instability-index",
                   "zh/methodology/country-resilience-index",
                   "zh/methodology/chokepoints",
@@ -631,6 +653,7 @@
                   "zh/panels/monitors",
                   "zh/panels/oref-sirens",
                   "zh/panels/telegram-intel",
+                  "zh/panels/x-intel",
                   "zh/panels/fsi"
                 ]
               },
@@ -656,6 +679,7 @@
                   "zh/cli",
                   "zh/sdks",
                   "zh/mcp-overview",
+                  "zh/webmcp",
                   "zh/mcp-apps",
                   "zh/mcp-tools-reference",
                   "zh/mcp-jmespath",
@@ -687,7 +711,9 @@
                   "zh/cors",
                   "zh/health-endpoints",
                   "zh/relay-parameters",
-                  "zh/data-sources"
+                  "zh/decision-signal-provenance",
+                  "zh/china-decision-signals",
+                  "zh/source-attribution"
                 ]
               },
               {
@@ -699,21 +725,25 @@
               {
                 "group": "法律",
                 "pages": [
+                  "zh/eula",
+                  "zh/terms",
+                  "zh/dpa",
                   "zh/license",
                   "zh/trademark-policy",
-                  "zh/privacy",
-                  "zh/terms"
+                  "zh/privacy"
                 ]
               }
             ]
           },
           {
             "tab": "API 参考",
+            "openapi": "api/worldmonitor.openapi.yaml",
             "groups": [
               {
                 "group": "概览",
                 "pages": [
-                  "zh/api-reference"
+                  "zh/api-reference",
+                  "zh/api-versioning"
                 ]
               },
               {

@@ -10,7 +10,9 @@ import {
 
 // @ts-expect-error — JS module, no declaration file
 import { validateApiKey } from '../../../../api/_api-key.js';
-import { isCallerPremium } from '../../../_shared/premium-check';
+import {
+  requirePremiumRpcAccess,
+} from '../../../_shared/premium-check';
 import { runRedisPipeline } from '../../../_shared/redis';
 import {
   WEBHOOK_TTL,
@@ -37,16 +39,13 @@ export async function registerWebhook(
   // gate and the documented "X-WorldMonitor-Key required" contract in
   // docs/api-shipping-v2.mdx.
   const apiKeyResult = (await validateApiKey(ctx.request, { forceKey: true })) as {
-    valid: boolean; required: boolean; error?: string;
+    valid: boolean; required: boolean; error?: string; credential?: string;
   };
   if (apiKeyResult.required && !apiKeyResult.valid) {
     throw new ApiError(401, apiKeyResult.error ?? 'API key required', '');
   }
 
-  const isPro = await isCallerPremium(ctx.request);
-  if (!isPro) {
-    throw new ApiError(403, 'PRO subscription required', '');
-  }
+  await requirePremiumRpcAccess(ctx.request, ApiError, 'PRO subscription required');
 
   const callbackUrl = (req.callbackUrl ?? '').trim();
   if (!callbackUrl) {
@@ -81,7 +80,7 @@ export async function registerWebhook(
     ]);
   }
 
-  const ownerTag = await callerFingerprint(ctx.request);
+  const ownerTag = await callerFingerprint(ctx.request, apiKeyResult.credential);
   const newSubscriberId = generateSubscriberId();
   const secret = await generateSecret();
 

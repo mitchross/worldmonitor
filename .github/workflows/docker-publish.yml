@@ -28,9 +28,7 @@ jobs:
       - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         id: meta
         with:
-          # Fork: publish under our own namespace, renamed so this frontend-only
-          # image can't clobber the self-hosted full-stack `worldmonitor` image.
-          images: ghcr.io/${{ github.repository_owner }}/worldmonitor-frontend
+          images: ghcr.io/koala73/worldmonitor
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -42,6 +40,8 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
+          provenance: mode=max
+          sbom: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha

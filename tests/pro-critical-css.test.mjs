@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { guardProBuiltOutput, shouldSkipProBuiltOutput } from './_lib/pro-built-output.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
@@ -109,14 +110,18 @@ describe('pro critical CSS parser', () => {
 describe('pro critical CSS source contract', () => {
   it('applies the shared critical CSS transform to every pro-test page', () => {
     const prerender = src('pro-test/prerender.mjs');
-    assert.match(prerender, /html\.js #seo-prerender/);
+    assert.doesNotMatch(prerender, /seo-prerender/);
     assert.match(prerender, /const PAGES = \[/);
     assert.match(prerender, /html = inlineCriticalCss\(html, file\);/);
     assert.doesNotMatch(prerender, /file === 'welcome\.html'/);
   });
 });
 
-describe('pro built HTML critical CSS contract', () => {
+// public/pro/ is built by `npm run build:pro`, not committed (#6898): skip when the
+// checkout has not built it, fail when WM_EXPECT_BUILT_OUTPUT=1 says CI did.
+describe('pro built HTML critical CSS contract', { skip: shouldSkipProBuiltOutput() }, () => {
+  guardProBuiltOutput();
+
   for (const { relPath, label } of PRO_PAGES) {
     it(`${label} inlines critical CSS before the deferred stylesheet preload`, () => {
       const html = builtSrc(relPath);
@@ -129,7 +134,7 @@ describe('pro built HTML critical CSS contract', () => {
       assert.ok(previousStyles.length > 0, `${relPath} should inline critical CSS before the deferred preload`);
       const criticalCss = previousStyles.join('\n');
       assert.match(criticalCss, /#root,#root>div/);
-      assert.match(criticalCss, /html\.js #seo-prerender/);
+      assert.doesNotMatch(criticalCss, /html\.js #seo-prerender/);
     });
 
     it(`${label} has no render-blocking stylesheet outside noscript`, () => {
@@ -156,60 +161,71 @@ describe('pro built HTML critical CSS contract', () => {
 
     it(`${label} re-shows responsive nav/hero reveals so unlayered .hidden can't hide them at all widths`, () => {
       // Regression guard for #4603: the inline critical CSS is UNLAYERED and beats
-      // the @layer-wrapped Tailwind sheet, so `nav .hidden{display:none}` /
-      // `main .hidden{display:none}` permanently hide `hidden md:flex` desktop nav
-      // rows and `hidden sm:block` unless the breakpoint reveal is ALSO inlined here.
+      // the @layer-wrapped Tailwind sheet, so `nav[data-wm-nav] .hidden{display:none}`
+      // / `main .hidden{display:none}` permanently hide `hidden lg:flex` desktop nav,
+      // `hidden md:flex` /pro nav, `hidden md:block` tablet nav, and `hidden sm:block`
+      // unless each breakpoint reveal is ALSO inlined here. The `md:flex` row shipped
+      // without its reveal and was display:none at every width until #6983.
+      //
+      // The nav selectors carry the `[data-wm-nav]` header marker: unscoped, they
+      // reached every nav landmark on the page, and the legal footer row added in
+      // #6982 pinned itself over the header (see deploy-config.test.mjs).
       const html = builtSrc(relPath);
       const criticalCss = inlineStyleTags(html)
         .filter((tag) => html.indexOf(tag) < html.indexOf(deferredStylePreloadTags(html)[0]))
         .join('\n');
 
-      const navHideIdx = criticalCss.indexOf('nav .hidden{display:none}');
+      const nav = 'nav[data-wm-nav]';
+      const navHideIdx = criticalCss.indexOf(`${nav} .hidden{display:none}`);
       const mainHideIdx = criticalCss.indexOf('main .hidden{display:none}');
       const sm640Idx = criticalCss.indexOf('@media (min-width:640px){');
       const md768Idx = criticalCss.indexOf('@media (min-width:768px){');
-      const navRevealIdx = criticalCss.indexOf('nav [class~="md:flex"]{display:flex}');
+      const lg1024Idx = criticalCss.indexOf('@media (min-width:1024px){');
+      const tabletNavRevealIdx = criticalCss.indexOf(`${nav} [class~="md:block"]{display:block}`);
+      const proNavRevealIdx = criticalCss.indexOf(`${nav} [class~="md:flex"]{display:flex}`);
+      const desktopNavRevealIdx = criticalCss.indexOf(`${nav} [class~="lg:flex"]{display:flex}`);
+      const tabletNavHideIdx = criticalCss.indexOf(`${nav} [class~="lg:hidden"]{display:none}`);
       const smBlockRevealIdx = criticalCss.indexOf('main [class~="sm:block"]{display:block}');
 
       assert.notEqual(navHideIdx, -1, `${relPath} critical CSS should hide plain .hidden nav elements`);
       assert.notEqual(mainHideIdx, -1, `${relPath} critical CSS should hide plain .hidden main elements`);
-      assert.notEqual(navRevealIdx, -1, `${relPath} critical CSS must re-show hidden md:flex nav rows at >=768px`);
+      assert.notEqual(tabletNavRevealIdx, -1, `${relPath} critical CSS must re-show hidden md:block tablet nav at >=768px`);
+      assert.notEqual(proNavRevealIdx, -1, `${relPath} critical CSS must re-show the hidden md:flex /pro nav row at >=768px`);
+      assert.notEqual(desktopNavRevealIdx, -1, `${relPath} critical CSS must re-show hidden lg:flex desktop nav at >=1024px`);
+      assert.notEqual(tabletNavHideIdx, -1, `${relPath} critical CSS must hide lg:hidden tablet nav at >=1024px`);
       assert.notEqual(smBlockRevealIdx, -1, `${relPath} critical CSS must re-show hidden sm:block at >=640px`);
       // Equal-specificity rules: each reveal must come AFTER its unlayered hide to win the cascade.
-      assert.ok(navRevealIdx > navHideIdx, `${relPath} nav md:flex reveal must follow nav .hidden to win the cascade`);
+      assert.ok(tabletNavRevealIdx > navHideIdx, `${relPath} nav md:block reveal must follow ${nav} .hidden to win the cascade`);
+      assert.ok(proNavRevealIdx > navHideIdx, `${relPath} nav md:flex reveal must follow ${nav} .hidden to win the cascade`);
+      assert.ok(desktopNavRevealIdx > navHideIdx, `${relPath} nav lg:flex reveal must follow ${nav} .hidden to win the cascade`);
       assert.ok(smBlockRevealIdx > mainHideIdx, `${relPath} main sm:block reveal must follow main .hidden to win the cascade`);
-      // The nav reveal must sit inside the >=768px block (gated to desktop, not applied at all widths).
-      assert.ok(md768Idx !== -1 && navRevealIdx > md768Idx, `${relPath} nav md:flex reveal must be inside the min-width:768px media block`);
+      // Tablet nav appears in the 768–1023px band; the desktop row replaces it at 1024px.
+      assert.ok(md768Idx !== -1 && tabletNavRevealIdx > md768Idx && tabletNavRevealIdx < lg1024Idx, `${relPath} nav md:block reveal must be inside the min-width:768px media block`);
+      assert.ok(proNavRevealIdx > md768Idx && proNavRevealIdx < lg1024Idx, `${relPath} nav md:flex reveal must be inside the min-width:768px media block`);
+      assert.ok(lg1024Idx !== -1 && desktopNavRevealIdx > lg1024Idx, `${relPath} nav lg:flex reveal must be inside the min-width:1024px media block`);
+      assert.ok(tabletNavHideIdx > lg1024Idx, `${relPath} nav lg:hidden hide must be inside the min-width:1024px media block`);
       // The sm:block reveal must sit inside the >=640px block (between the 640 and 768 media opens).
       assert.ok(sm640Idx !== -1 && smBlockRevealIdx > sm640Idx && smBlockRevealIdx < md768Idx, `${relPath} sm:block reveal must be inside the min-width:640px media block`);
     });
   }
 
-  it('/pro preserves crawler-visible prerendered content while JS browsers can hide it', () => {
+  it('/pro seeds a crawlable H1 in #root without duplicating it in the no-JavaScript fallback', () => {
     const html = builtSrc('public/pro/index.html');
-    assert.match(html, /id="seo-prerender"/);
+    const rootMatch = html.match(/<div id="root">(?<content>[\s\S]*?)<\/div>\s*<noscript>/);
+    assert.ok(rootMatch?.groups, 'the /pro static H1 should be seeded inside #root');
+    assert.equal([...rootMatch.groups.content.matchAll(/<h1\b/g)].length, 1);
+    assert.equal([...stripNoscript(html).matchAll(/<h1\b/g)].length, 1);
     assert.match(html, /World Monitor Pro/);
-    assert.match(html, /document\.documentElement\.classList\.add\('js'\)/);
-    assert.match(html, /html\.js #seo-prerender/);
+    assert.doesNotMatch(html, /id="seo-prerender"/);
+    assert.doesNotMatch(html, /html\.js #seo-prerender/);
   });
 
-  it('/ welcome ships a crawler-visible SEO block kept OUT of the hydrated #root', () => {
+  it('/ welcome ships its real, user-visible SSR app without a hidden sibling', () => {
     const html = builtSrc('public/pro/welcome.html');
     assert.match(html, /data-wm-prerendered="welcome"/);
-    // welcome.html now ships a prose-dense #seo-prerender block for AEO/RAG
-    // indexers (lifts the apex page's text-to-markup ratio), injected as a
-    // SIBLING BEFORE #root so React hydration of the SSR'd shell is untouched.
-    // Hidden for JS users via the .js class + html.js #seo-prerender rule,
-    // mirroring /pro (above). pro-welcome-prerender.test.mjs enforces that the
-    // hydrated #root CONTENT stays free of the block; here we guard placement
-    // (block must PRECEDE #root) and the JS-hide mechanism.
-    assert.match(html, /id="seo-prerender"/);
-    assert.match(html, /document\.documentElement\.classList\.add\('js'\)/);
-    assert.match(html, /html\.js #seo-prerender/);
-    assert.ok(
-      html.indexOf('id="seo-prerender"') < html.indexOf('<div id="root"'),
-      'the #seo-prerender block must precede #root (sibling, not nested — nesting it inside the hydrated root breaks hydration)',
-    );
+    assert.doesNotMatch(html, /id="seo-prerender"/);
+    assert.doesNotMatch(html, /html\.js #seo-prerender/);
+    assert.match(html, /<h1\b/);
     assert.match(html, /fetchPriority="high"/);
   });
 });
