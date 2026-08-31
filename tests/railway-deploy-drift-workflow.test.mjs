@@ -19,7 +19,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const workflowPath = resolve(repoRoot, '.github/workflows/railway-deploy-drift.yml');
 const source = readFileSync(workflowPath, 'utf8');
 const workflow = YAML.parse(source);
-const MAIN_GUARD = "${{ github.ref == 'refs/heads/main' }}";
+const MAIN_GUARD = "${{ github.ref == 'refs/heads/main' && (github.repository == 'koala73/worldmonitor' || github.event_name == 'workflow_dispatch') }}";
 
 function steps(job) {
   assert.ok(Array.isArray(job?.steps), 'job must define steps');
@@ -239,7 +239,7 @@ describe('Railway Native Deploy Health workflow', () => {
     });
   });
 
-  it('publishes one combined configuration and deployment conclusion on main only', () => {
+  it('publishes one combined configuration and deployment conclusion on canonical main or a manual fork run', () => {
     assert.deepEqual(Object.keys(workflow.jobs), ['monitor']);
     const job = workflow.jobs.monitor;
     assert.equal(job.if, MAIN_GUARD);

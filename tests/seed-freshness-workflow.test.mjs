@@ -21,6 +21,7 @@ const workflowSource = readFileSync(
 );
 const workflow = YAML.parse(workflowSource);
 const monitorSteps = workflow.jobs.monitor.steps;
+const CANONICAL_OR_MANUAL = "${{ github.repository == 'koala73/worldmonitor' || github.event_name == 'workflow_dispatch' }}";
 
 // The one condition allowed to stop a probe: the fail-closed green-main gate.
 // Anything else (an earlier probe failing) must leave the later probes running.
@@ -388,6 +389,7 @@ describe('seed freshness workflow control plane', () => {
 
   it('reports ingestion acceptance only', () => {
     assert.deepEqual(Object.keys(workflow.jobs), ['monitor']);
+    assert.equal(workflow.jobs.monitor.if, CANONICAL_OR_MANUAL);
     assert.deepEqual(workflow.jobs.monitor.environment, {
       name: 'ingestion-acceptance-production',
       deployment: false,

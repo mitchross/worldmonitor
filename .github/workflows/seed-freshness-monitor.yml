@@ -19,6 +19,9 @@ permissions:
 
 jobs:
   monitor:
+    # The health endpoint and anchored statuses describe canonical production.
+    # Fork schedules must not republish that state under an unrelated commit.
+    if: ${{ github.repository == 'koala73/worldmonitor' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:

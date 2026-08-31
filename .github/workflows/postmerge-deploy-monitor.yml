@@ -29,6 +29,10 @@ concurrency:
 
 jobs:
   monitor:
+    # Scheduled production acceptance belongs to the canonical repository.
+    # Forks inherit schedules but not the deployments they observe; keep an
+    # explicit dispatch available for intentional fork diagnostics.
+    if: ${{ github.repository == 'koala73/worldmonitor' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

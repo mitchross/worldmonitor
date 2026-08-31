@@ -16,6 +16,9 @@ permissions:
 
 jobs:
   monitor:
+    # Forks do not inherit the canonical Railway environment or its secrets.
+    # Do not turn that expected absence into a scheduled production alarm.
+    if: ${{ github.repository == 'koala73/worldmonitor' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment:
