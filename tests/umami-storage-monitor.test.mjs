@@ -25,6 +25,7 @@ const workflowSource = readFileSync(
   'utf8',
 );
 const workflow = YAML.parse(workflowSource);
+const CANONICAL_OR_MANUAL = "${{ github.repository == 'koala73/worldmonitor' || github.event_name == 'workflow_dispatch' }}";
 const retentionSql = readFileSync(
   new URL('../scripts/umami-retention.sql', import.meta.url),
   'utf8',
@@ -344,6 +345,7 @@ describe('Umami storage monitor', () => {
   });
 
   it('supersedes stale probes without broadening production credential access', () => {
+    assert.equal(workflow.jobs.monitor.if, CANONICAL_OR_MANUAL);
     assert.deepEqual(
       workflow.concurrency,
       {

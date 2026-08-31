@@ -16,6 +16,7 @@ import { MONITORED_WORKFLOWS } from '../scripts/check-postmerge-deploys.mjs';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const workflowPath = resolve(repoRoot, '.github/workflows/postmerge-deploy-monitor.yml');
 const workflow = YAML.parse(readFileSync(workflowPath, 'utf8'));
+const CANONICAL_OR_MANUAL = "${{ github.repository == 'koala73/worldmonitor' || github.event_name == 'workflow_dispatch' }}";
 
 describe('post-merge deploy monitor workflow', () => {
   it('runs on a schedule and on demand, and supersedes longer runs', () => {
@@ -26,6 +27,7 @@ describe('post-merge deploy monitor workflow', () => {
       group: 'postmerge-deploy-monitor',
       'cancel-in-progress': true,
     });
+    assert.equal(workflow.jobs.monitor.if, CANONICAL_OR_MANUAL);
   });
 
   it('runs the checker with a blobless full-history checkout', () => {

@@ -15,7 +15,9 @@ permissions:
 jobs:
   monitor:
     name: Railway native deployment health
-    if: ${{ github.ref == 'refs/heads/main' }}
+    # Forks do not inherit the canonical Railway Viewer token or project.
+    # Preserve manual main-branch diagnostics without alarming on fork crons.
+    if: ${{ github.ref == 'refs/heads/main' && (github.repository == 'koala73/worldmonitor' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
