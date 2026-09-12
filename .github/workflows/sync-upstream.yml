@@ -38,6 +38,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        env:
+          # The default GITHUB_TOKEN (the default "GitHub Actions" app) can
+          # NEVER push changes to .github/workflows/* on a fork — no fork
+          # setting can grant it workflows permission. A personal access
+          # token stored as SYNC_TOKEN can. Falls back to the default token
+          # when the secret is absent (in which case syncs that touch
+          # workflow files will keep failing on the push).
+          GITHUB_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
         with:
           persist-credentials: true
           fetch-depth: 0       # full history so the merge base is available
@@ -83,7 +91,7 @@ jobs:
       - name: Open or update pull request
         if: steps.check.outputs.has_changes == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
           CONFLICTS: ${{ steps.merge.outputs.conflicts }}
         run: |
           if [ "$CONFLICTS" = "true" ]; then
