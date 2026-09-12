@@ -35,6 +35,36 @@ open http://localhost:3000
 
 The dashboard works out of the box with public data sources (earthquakes, weather, conflicts, etc.). API keys unlock additional data feeds.
 
+## Documentation indexing
+
+The bundled documentation identifies `https://www.worldmonitor.app/docs` as its
+original location. `docs/docs.json` sets this canonical base for Mintlify, and
+`src/config/docs-locale-seo.ts` uses `DOCS_PUBLIC_ORIGIN` to produce an absolute,
+page-specific canonical and language links.
+
+Deployments that run `middleware.ts` also return `X-Robots-Tag: noindex` for docs
+HTML on hosts other than the configured public host. This includes preview
+hosts. The policy also applies to HEAD and 304 responses, and preserves existing
+robots restrictions. It does not stop people from reading the docs. Static
+exports and proxies that bypass this middleware must set their own indexing
+headers; they retain the canonical metadata only if they preserve it.
+
+Inspect canonical URLs before publishing a static export. The pinned Mintlify
+CLI currently includes `/src/_props` in local preview and export canonicals;
+that local output does not establish the hosted provider's URL behavior.
+
+For a fork that publishes its own documentation, deliberately update the
+canonical base in `docs/docs.json`, `DOCS_PUBLIC_ORIGIN`, and the docs upstream and
+reverse-proxy routes (`DOCS_UPSTREAM_ORIGIN` and `vercel.json`) together. Configure
+the provider's base path to match. Check the resulting canonical URLs, language
+links, structured data, sitemap, and indexing headers before requesting indexing.
+Do not derive the canonical origin from the incoming request or a forwarded-host
+header. Keep shared caches separated by host and preserve the response's `Vary`
+selectors.
+
+Canonical metadata is a search-engine signal, not a guarantee. A proxy can rewrite
+or remove it, and older deployed copies will not receive changes to this repo.
+
 ## 🔐 Required Environment Variables
 
 These must be set before `docker compose up -d`, or one of the containers will exit on boot.
@@ -51,6 +81,8 @@ These must be set before `docker compose up -d`, or one of the containers will e
 ## Self-hosted API authentication
 
 Docker mode (`LOCAL_API_MODE=docker`) has no Clerk or Convex entitlement backend. The dashboard still mints an anonymous `wms_` session signed with `WM_SESSION_SECRET`.
+
+Native administration routes under `/api/local-` return `403` in Docker mode, including configuration updates, secret validation, and local status/debug controls. The internal sidecar token does not grant administrator access through nginx. Change operator settings through Compose environment variables or Docker secrets, then recreate the app container. Desktop administration remains available through the native app.
 
 - Only `GET /api/intelligence/v1/get-country-intel-brief` accepts that session as the authentication boundary. The handler still returns the shared (non-premium) brief.
 - Direct-LLM spend on that route is capped at 50 calls per UTC day per client IP. nginx stamps `X-Real-IP` from `$remote_addr`, so a caller cannot rotate the header to reset the cap. Rotating the session token also does not reset spend.
@@ -106,10 +138,16 @@ services:
       LLM_API_URL: ""             # e.g. http://localhost:11434/v1/chat/completions
       LLM_API_KEY: ""
       LLM_MODEL: ""
+      # Same value as ais-relay — gateway accepts it on list-feed-digest (#7437).
+      WORLDMONITOR_RELAY_KEY: ""
 
   ais-relay:
     environment:
       AISSTREAM_API_KEY: ""       # same key as above — relay needs it too
+      # Classify fetches the local digest (compose defaults API_BASE_URL to
+      # http://worldmonitor:8080). Set the same WORLDMONITOR_RELAY_KEY on
+      # worldmonitor so the digest GET is not a silent 401.
+      WORLDMONITOR_RELAY_KEY: ""
 ```
 
 ### 💰 Free vs Paid
@@ -192,8 +230,10 @@ node scripts/seed-military-flights.mjs
 | `worldmonitor-ais-relay` | Live vessel tracking WebSocket | 3004 (internal) |
 
 > **`redis-rest` command allowlist**: the bundled proxy (`docker/redis-rest-proxy.mjs`) only
-> forwards a fixed allowlist of Redis commands and rejects `EVAL`/`EVALSHA`/`SCRIPT` (no Lua
-> scripting). Two consequences for a self-hosted stack:
+> forwards a fixed allowlist of Redis commands. It permits byte-pinned `EVAL` scripts for
+> the news digest's atomic last-good publication, fenced story-alias publication, and Pro MCP
+> quota reservation; all caller-selected Lua plus `EVALSHA` and `SCRIPT` remain rejected.
+> Two consequences for a self-hosted stack:
 >
 > - `@upstash/ratelimit`'s Lua-based sliding-window limiter (`server/_shared/rate-limit.ts`,
 >   `api/_rate-limit.js`) can't run against it. Both automatically detect the rejection once and
@@ -204,6 +244,67 @@ node scripts/seed-military-flights.mjs
 >   never satisfies. Set `UPSTASH_ALLOW_INSECURE_HTTP=true` on the `ais-relay` service (already
 >   wired for `redis-rest` in `docker-compose.yml`) to opt into using the proxy from
 >   inside the relay container.
+
+## Revoking a news item
+
+Sometimes a headline has to come down now — a retracted story, a defamatory
+claim, a wrong attribution. The digest keeps a narrow, versioned set of
+suppressed URLs and filters against it at **read** time, on every path that can
+return bytes: a fresh build, a digest cache hit, the durable last-good
+snapshot, the warm-isolate replay, the country brief, and the chat analyst.
+
+```bash
+# Source .env so REDIS_TOKEN is available, then point at the REST proxy.
+set -a; . ./.env; set +a
+export UPSTASH_REDIS_REST_URL=http://localhost:8079
+export UPSTASH_REDIS_REST_TOKEN="$REDIS_TOKEN"
+
+# 1. Suppress the URL. Match is EXACT string equality on the item's `link` —
+#    scheme, trailing slash, and query string all count. Copy the URL from the
+#    API response rather than retyping it.
+curl -s -X POST "$UPSTASH_REDIS_REST_URL/pipeline" \
+  -H "Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '[["SADD","news:digest:revoked-urls:v1","https://example.com/retracted-story"]]'
+```
+
+That single `SADD` is enough for everything served out of Redis — no key
+deletion is required, because suppression happens on read.
+
+**Two things it does not do**, both of which matter during an incident:
+
+1. **It does not evict shared caches.** `/api/news/v1/list-feed-digest` is
+   served with `s-maxage=1800` and `CDN-Cache-Control: s-maxage=3600`. Once a
+   revocation is live the endpoint stops feeding shared caches, but copies
+   already stored survive. **Purge the CDN for that path** if you have one in
+   front of the stack. A purely local Docker stack has no CDN and can skip this.
+2. **It does not force a rebuild.** The existing digest keeps being rebuilt on
+   its normal ~900s cycle. To rebuild immediately:
+
+   ```bash
+   curl -s -X POST "$UPSTASH_REDIS_REST_URL/pipeline" \
+     -H "Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN" \
+     -H 'Content-Type: application/json' \
+     -d '[["DEL","news:digest:v1:full:en"],["DEL","news:digest:lastgood:v1:full:en"]]'
+   ```
+
+   Note the key version is **v1**. Repeat per `<variant>:<lang>` scope you serve.
+
+To lift a revocation, `SREM` the same URL — stored bodies are kept unfiltered on
+purpose, so the item reappears on the next read without waiting for a rebuild.
+
+```bash
+curl -s -X POST "$UPSTASH_REDIS_REST_URL/pipeline" \
+  -H "Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '[["SREM","news:digest:revoked-urls:v1","https://example.com/retracted-story"]]'
+```
+
+> If the revocation set cannot be read at all (Redis erroring, not merely
+> absent), every serving path fails **closed** — it serves nothing rather than
+> serving content it could not check. A stack with no Redis configured is a
+> different case: there is no suppression store to consult, so serving proceeds
+> normally.
 
 > **`redis-rest` request body limit**: the proxy accepts request bodies up to **16 MB**,
 > overridable with `SRH_MAX_BODY_BYTES` (bytes) on the `redis-rest` service. The default is

@@ -9,7 +9,13 @@ import { isIP } from 'node:net';
 import { promisify } from 'node:util';
 import { brotliCompress, gzipSync } from 'node:zlib';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const sharedResourceRoot = process.env.LOCAL_API_RESOURCE_DIR
+  || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const { getConfiguredLlmHealthProviders } = await import(
+  pathToFileURL(path.join(sharedResourceRoot, 'shared/llm-health-providers.js')).href
+);
 
 const brotliCompressAsync = promisify(brotliCompress);
 const DESKTOP_AUTH_SECRET_ENV = 'WM_DESKTOP_SHARED_SECRET';
@@ -205,7 +211,7 @@ async function assertSafeSidecarFetchUrl(url) {
 globalThis.fetch = async function ipv4Fetch(input, init) {
   const isRequest = input && typeof input === 'object' && 'url' in input;
   let url;
-  try { url = new URL(typeof input === 'string' ? input : input.url); } catch { return _originalFetch(input, init); }
+  try { url = new URL(isRequest ? input.url : input); } catch { return _originalFetch(input, init); }
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return _originalFetch(input, init);
   const allowPrivateNetwork = init?.[ALLOW_PRIVATE_NETWORK_FETCH] === true;
   const safety = allowPrivateNetwork
@@ -304,6 +310,12 @@ const ALLOWED_ENV_KEYS = new Set([
 ]);
 
 const CHROME_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const RSS_PROXY_SECURITY_HEADERS = Object.freeze({
+  // RSS publishers are untrusted. The response must not become a same-origin
+  // document if a caller navigates to or frames the proxy URL.
+  'content-security-policy': "sandbox; default-src 'none'; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'",
+  'x-content-type-options': 'nosniff',
+});
 
 // ── SSRF protection ──────────────────────────────────────────────────────
 // Block requests to private/reserved IP ranges to prevent the RSS proxy
@@ -339,10 +351,30 @@ const BLOCKED_IPV4_RANGES = [
   return [baseInt, mask];
 });
 
+function ipv4FromMappedIPv6(ip) {
+  const normalized = String(ip).replace(/^\[|\]$/g, '');
+  if (isIP(normalized) !== 6) return null;
+
+  let canonical = normalized;
+  try {
+    canonical = new URL(`http://[${normalized}]/`).hostname.slice(1, -1);
+  } catch {
+    return null;
+  }
+
+  const match = canonical.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (!match) return null;
+
+  const high = Number.parseInt(match[1], 16);
+  const low = Number.parseInt(match[2], 16);
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.');
+}
+
 function isPrivateIP(ip) {
-  // IPv4-mapped IPv6 — extract the v4 portion
-  const v4Mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
-  const addr = v4Mapped ? v4Mapped[1] : ip;
+  // IPv4-mapped IPv6 — WHATWG URL parsing canonicalizes mapped literals to
+  // hexadecimal (for example, ::ffff:127.0.0.1 -> ::ffff:7f00:1), so
+  // normalize every valid IPv6 spelling before extracting the v4 portion.
+  const addr = ipv4FromMappedIPv6(ip) || ip;
 
   // IPv6 loopback
   if (addr === '::1' || addr === '::') return true;
@@ -432,8 +464,36 @@ function json(data, status = 200, extraHeaders = {}) {
   });
 }
 
+function rssProxyJson(data, status = 200) {
+  return json(data, status, RSS_PROXY_SECURITY_HEADERS);
+}
+
+function rssProxyResponse(body, status = 200) {
+  return new Response(body, {
+    status,
+    headers: {
+      ...RSS_PROXY_SECURITY_HEADERS,
+      'content-type': 'application/xml; charset=utf-8',
+    },
+  });
+}
+
 function canCompress(headers, body) {
-  return body.length > 1024 && !headers['content-encoding'];
+  if (!(body.length > 1024) || headers['content-encoding']) return false;
+  const contentType = String(headers['content-type'] || '').toLowerCase();
+  // Already-compressed rasters/media gain nothing from gzip/br and waste CPU (#7382).
+  // SVG (image/svg+xml) is text and still compresses — keep it eligible.
+  if (
+    /^image\/(jpeg|jpg|png|gif|webp|avif|heic|heif|bmp|tiff)(?:;|$)/.test(contentType)
+    || contentType.startsWith('audio/')
+    || contentType.startsWith('video/')
+    || contentType.includes('zip')
+    || contentType.includes('gzip')
+    || contentType.includes('octet-stream')
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function appendVary(existing, token) {
@@ -703,14 +763,21 @@ const cloudPreferredPrefixes = !process.env.WS_RELAY_URL
 // hold. They must stay cloud-preferred even when a desktop configures WS relay;
 // relay availability does not provide Upstash credentials to local handlers.
 const cloudPreferredExact = new Set([
+  '/api/intelligence/v1/list-wsb-tickers',
+  '/api/displacement/v1/get-displacement-summary',
   '/api/bootstrap',
   '/api/military/v1/get-defense-industrial-base',
+  '/api/supply-chain/v1/get-country-vulnerabilities',
+  '/api/supply-chain/v1/get-chokepoint-dependencies',
+  '/api/supply-chain/v1/list-vulnerability-rankings',
 ]);
+const cloudPreferredAlwaysPrefixes = ['/api/scorecard/v1/'];
 
 function isCloudPreferred(pathname) {
   if (cloudPreferred.has(pathname)) return true;
   if (cloudPreferredExact.has(pathname)) return true;
-  return cloudPreferredPrefixes.some(p => pathname.startsWith(p));
+  return cloudPreferredAlwaysPrefixes.some(p => pathname.startsWith(p))
+    || cloudPreferredPrefixes.some(p => pathname.startsWith(p));
 }
 
 const TRAFFIC_LOG_MAX = 200;
@@ -1342,6 +1409,11 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
 }
 
 async function dispatch(requestUrl, req, routes, context) {
+  // Docker's public proxy supplies transport auth, not native administration authority.
+  if (context.mode === 'docker' && requestUrl.pathname.startsWith('/api/local-')) {
+    return json({ error: 'Native administration is unavailable in Docker mode' }, 403);
+  }
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: makeCorsHeaders(req) });
   }
@@ -1487,8 +1559,6 @@ async function dispatch(requestUrl, req, routes, context) {
       routes: routes.length,
     });
   }
-  // LLM health endpoint — mirrors probe logic from server/_shared/llm-health.ts.
-  // TODO: refactor to import getLlmHealthStatus() once handlers share a process-level module cache.
   if (requestUrl.pathname === '/api/llm-health') {
     const PROBE_TIMEOUT = 2000;
     async function probeOrigin(url, options = {}) {
@@ -1499,33 +1569,15 @@ async function dispatch(requestUrl, req, routes, context) {
         return false;
       }
     }
-    const providers = [];
-    const providerChecks = [];
-    const ollamaUrl = process.env.OLLAMA_API_URL || process.env.LLM_API_URL;
-    const groqKey = process.env.GROQ_API_KEY;
-    const openrouterKey = process.env.OPENROUTER_API_KEY;
-
-    if (ollamaUrl) {
-      try {
-        const origin = new URL(ollamaUrl).origin;
-        providerChecks.push(
-          probeOrigin(origin, { allowPrivateNetwork: true }).then((available) => ({ name: 'ollama', url: origin, available })),
-        );
-      } catch {}
-    }
-    if (groqKey?.startsWith('gsk_')) {
-      providerChecks.push(
-        probeOrigin('https://api.groq.com').then((available) => ({ name: 'groq', url: 'https://api.groq.com', available })),
-      );
-    }
-    if (openrouterKey) {
-      providerChecks.push(
-        probeOrigin('https://openrouter.ai').then((available) => ({ name: 'openrouter', url: 'https://openrouter.ai', available })),
-      );
-    }
-    if (providerChecks.length > 0) {
-      providers.push(...(await Promise.all(providerChecks)));
-    }
+    const providers = await Promise.all(
+      getConfiguredLlmHealthProviders(process.env).map(async (provider) => ({
+        name: provider.name,
+        url: provider.url,
+        available: await probeOrigin(provider.url, {
+          allowPrivateNetwork: provider.allowPrivateNetwork,
+        }),
+      })),
+    );
 
     const anyAvailable = providers.some(p => p.available);
     return json({ available: anyAvailable, providers, checkedAt: Date.now() });
@@ -1552,8 +1604,9 @@ async function dispatch(requestUrl, req, routes, context) {
     }
     return json({ verboseMode });
   }
-  // Registration — call Convex directly when CONVEX_URL is available (self-hosted),
-  // otherwise proxy to cloud (desktop sidecar never has CONVEX_URL).
+  // Registration — use the authenticated Convex HTTP bridge when CONVEX_URL is
+  // available (self-hosted), otherwise proxy to cloud (desktop sidecar never
+  // has CONVEX_URL).
   // Keeps the legacy /api/register-interest local path so older desktop builds
   // continue to work; cloud fallback rewrites to the new sebuf RPC path.
   if (requestUrl.pathname === '/api/register-interest' && req.method === 'POST') {
@@ -1584,22 +1637,44 @@ async function dispatch(requestUrl, req, routes, context) {
       if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return json({ error: 'Invalid email address' }, 400);
       }
-      const response = await fetchWithTimeout(`${convexUrl}/api/mutation`, {
+      const sharedSecret = process.env.CONVEX_SERVER_SHARED_SECRET;
+      if (!sharedSecret) {
+        context.logger.warn('[local-api] self-hosted register-interest bridge is not configured');
+        return json({ error: 'Registration service unavailable' }, 503);
+      }
+      const convexSiteUrl = (
+        process.env.CONVEX_SITE_URL || convexUrl.replace(/\.convex\.cloud\/?$/, '.convex.site')
+      ).replace(/\/$/, '');
+      const args = {
+        email,
+        source: typeof parsed.source === 'string' ? parsed.source : 'desktop',
+        appVersion: typeof parsed.appVersion === 'string' ? parsed.appVersion : 'unknown',
+      };
+      if (typeof parsed.referredBy === 'string') args.referredBy = parsed.referredBy;
+      const response = await fetchWithTimeout(`${convexSiteUrl}/api/internal-register-interest`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          path: 'registerInterest:register',
-          args: { email, source: parsed.source || 'desktop', appVersion: parsed.appVersion || 'unknown' },
-          format: 'json',
-        }),
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'worldmonitor-sidecar/1.0',
+          'x-convex-shared-secret': sharedSecret,
+        },
+        body: JSON.stringify(args),
       }, 15000);
+      if (!response.ok) {
+        context.logger.warn(`[local-api] self-hosted register-interest bridge returned ${response.status}`);
+        return json({ error: 'Registration failed' }, 502);
+      }
       const responseBody = await response.text();
       let result;
-      try { result = JSON.parse(responseBody); } catch { result = { status: 'registered' }; }
-      if (result.status === 'error') {
-        return json({ error: result.errorMessage || 'Registration failed' }, 500);
+      try {
+        result = JSON.parse(responseBody);
+      } catch {
+        return json({ error: 'Registration failed' }, 502);
       }
-      return json(result.value || result);
+      if (!result || (result.status !== 'registered' && result.status !== 'already_registered')) {
+        return json({ error: 'Registration failed' }, 502);
+      }
+      return json({ status: 'registered', referralCode: '', referralCount: 0, position: 0, emailSuppressed: false });
     } catch (e) {
       context.logger.error(`[register-interest] error: ${e.message}`);
       return json({ error: 'Registration service unreachable' }, 502);
@@ -1618,13 +1693,13 @@ async function dispatch(requestUrl, req, routes, context) {
   // RSS proxy — fetch public feeds with SSRF protection
   if (requestUrl.pathname === '/api/rss-proxy') {
     const feedUrl = requestUrl.searchParams.get('url');
-    if (!feedUrl) return json({ error: 'Missing url parameter' }, 400);
+    if (!feedUrl) return rssProxyJson({ error: 'Missing url parameter' }, 400);
 
     // SSRF protection: block private IPs, reserved ranges, and DNS rebinding
     const safety = await isSafeUrl(feedUrl);
     if (!safety.safe) {
       context.logger.warn(`[local-api] rss-proxy SSRF blocked: ${safety.reason} (url=${feedUrl})`);
-      return json({ error: safety.reason }, 403);
+      return rssProxyJson({ error: safety.reason }, 403);
     }
 
     try {
@@ -1635,7 +1710,7 @@ async function dispatch(requestUrl, req, routes, context) {
       const pinned = pickPinnedAddress(safety.resolvedAddresses);
       if (!pinned) {
         context.logger.warn(`[local-api] rss-proxy SSRF blocked: no validated address (url=${feedUrl})`);
-        return json({ error: 'Could not resolve hostname' }, 403);
+        return rssProxyJson({ error: 'Could not resolve hostname' }, 403);
       }
       const response = await fetchWithTimeout(feedUrl, {
         headers: {
@@ -1645,16 +1720,12 @@ async function dispatch(requestUrl, req, routes, context) {
         },
         resolvedAddress: pinned.address,
         resolvedFamily: pinned.family,
-      }, parsed.hostname.includes('news.google.com') ? 20000 : 12000);
-      const contentType = response.headers?.get?.('content-type') || 'application/xml';
+      }, parsed.hostname === 'news.google.com' ? 20000 : 12000);
       const rssBody = await response.text();
-      return new Response(rssBody || '', {
-        status: response.status,
-        headers: { 'content-type': contentType },
-      });
+      return rssProxyResponse(rssBody || '', response.status);
     } catch (e) {
       const isTimeout = e.name === 'AbortError' || e.message?.includes('timeout');
-      return json({ error: isTimeout ? 'Feed timeout' : 'Failed to fetch feed', url: feedUrl }, isTimeout ? 504 : 502);
+      return rssProxyJson({ error: isTimeout ? 'Feed timeout' : 'Failed to fetch feed', url: feedUrl }, isTimeout ? 504 : 502);
     }
   }
 
@@ -1819,6 +1890,7 @@ async function dispatch(requestUrl, req, routes, context) {
 // Production code never calls this.
 export const __testing__ = {
   isCloudPreferred,
+  canCompress,
   setUpstreamIdleTimeoutMs(ms) {
     _upstreamIdleTimeoutMs = ms;
   },
@@ -1974,20 +2046,6 @@ export async function createLocalApiServer(options = {}) {
       }
 
       context.logger.log(`[local-api] listening on http://127.0.0.1:${boundPort} (apiDir=${context.apiDir}, routes=${routes.length}, cloudFallback=${context.cloudFallback})`);
-
-      // Warm LLM health cache in background (non-blocking)
-      (async () => {
-        const urls = [
-          process.env.OLLAMA_API_URL || process.env.LLM_API_URL,
-          process.env.GROQ_API_KEY ? 'https://api.groq.com' : null,
-          process.env.OPENROUTER_API_KEY ? 'https://openrouter.ai' : null,
-        ].filter(Boolean);
-        for (const url of urls) {
-          const allowPrivateNetwork = url === process.env.OLLAMA_API_URL || url === process.env.LLM_API_URL;
-          try { await fetchWithTimeout(url, { method: 'GET', allowPrivateNetwork }, 2000); } catch {}
-        }
-        if (urls.length) console.log(`[local-api] LLM health warmed for ${urls.length} provider(s)`);
-      })();
 
       return { port: boundPort };
     },

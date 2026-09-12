@@ -510,6 +510,12 @@ export default async function handler(req: Request, ctx: { waitUntil: (p: Promis
       const resp = relay.response;
       if (!resp.ok) {
         console.error(`[notification-channels] POST ${relayAction} relay error:`, resp.status);
+        if (welcomeChannelType === 'email' && resp.status === 400) {
+          const failure = await resp.json().catch(() => null);
+          if (failure?.error === 'EMAIL_OWNERSHIP_REQUIRED') {
+            return finish(json({ error: 'EMAIL_OWNERSHIP_REQUIRED' }, 400, corsHeaders));
+          }
+        }
         if (resp.status === 503) {
           return finish(json({ error: 'Service unavailable' }, 503, corsHeaders));
         }
@@ -545,7 +551,13 @@ export default async function handler(req: Request, ctx: { waitUntil: (p: Promis
         const { channelType, email, webhookEnvelope, webhookLabel } = body;
         if (!channelType) return finish(json({ error: 'channelType required' }, 400, corsHeaders));
 
-        if (webhookEnvelope) {
+        // Same predicate as the persist guard below (#7207): these two
+        // conditions guarded the same variable with different tests
+        // (truthiness here, definedness below), so webhookEnvelope: ''
+        // skipped validation entirely and was encrypted + stored as a junk
+        // channel config. The validator rejects empty/blank itself, so the
+        // gap value now 400s instead of persisting.
+        if (webhookEnvelope !== undefined) {
           try {
             await assertNotificationWebhookRegistrationUrlSafe(webhookEnvelope);
           } catch (error) {
