@@ -624,11 +624,7 @@ describe('crawlable content corpus deployment contracts', () => {
     );
     assert.ok(
       dockerfileSource.indexOf('npm run build:crawlable-corpus') < dockerfileSource.indexOf('node docker/build-handlers.mjs'),
-<<<<<<< HEAD
-      'the self-host image must validate source attribution before generated handler bundles add duplicate references',
-=======
       'the self-host image must run the attribution gate before build-handlers writes compiled .js into api/',
->>>>>>> upstream/main
     );
     assert.match(frontendDockerfileSource, /RUN test -s dist\/product-facts\.json/);
     assert.ok(!packageJson.scripts['build:full'].includes('npm run build:blog &&'), 'build:full must not regenerate inventory facts inside build:blog');
