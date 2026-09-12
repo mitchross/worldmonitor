@@ -31,6 +31,17 @@ concurrency:
 
 jobs:
   prepare:
+    # The dispatched 5-platform build (build-desktop.yml, #5905) hard-fails
+    # without these four client env secrets. Until they exist in the fork,
+    # every scheduled cycle re-tags the pending version and dispatches a
+    # build that cannot succeed. Skip the whole job as a successful no-op
+    # until all four are set; the train resumes automatically the moment
+    # they are added — no re-enabling step needed.
+    if: >-
+      secrets.VITE_CLERK_PUBLISHABLE_KEY != '' &&
+      secrets.VITE_WS_RELAY_URL != '' &&
+      secrets.VITE_PMTILES_URL_PUBLIC != '' &&
+      secrets.CONVEX_URL != ''
     runs-on: ubuntu-latest
     steps:
       - name: Require the default branch
