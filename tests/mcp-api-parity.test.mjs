@@ -224,6 +224,8 @@ const EXCLUDED_FROM_MCP_PARITY = new Map([
     "manual-mapping: parameterized cache key not statically resolvable — equivalent data covered by sibling cache tool at the prefix level"],
   ["GET /api/intelligence/v1/get-regional-snapshot",
     "manual-mapping: parameterized cache key not statically resolvable — equivalent data covered by sibling cache tool at the prefix level"],
+  ["GET /api/intelligence/v1/list-wsb-tickers",
+    "deferred-to-future-tool: premium WSB panel transport; WSB seed has no MCP tool"],
   ["GET /api/intelligence/v1/list-market-implications",
     "manual-mapping: parameterized cache key not statically resolvable — equivalent data covered by sibling cache tool at the prefix level"],
   ["GET /api/intelligence/v1/list-telegram-feed",
@@ -257,7 +259,7 @@ const EXCLUDED_FROM_MCP_PARITY = new Map([
   ["POST /api/economic/v1/get-fred-series-batch",
     "manual-mapping: parameterized cache key not statically resolvable — equivalent data covered by sibling cache tool at the prefix level"],
 
-  // === deferred-to-future-tool (59) ===
+  // === deferred-to-future-tool (60) ===
   ["GET /api/consumer-prices/v1/get-consumer-price-basket-series",
     "deferred-to-future-tool: handler reads parameterized consumer-prices:basket-series:<market>:<basket>:<range> key NOT in get_consumer_prices._coverageKeys — bundle into a future expanded_consumer_prices tool that exposes the basket-series time series"],
   ["GET /api/company-monitoring/v1/get-company-coverage",
@@ -379,6 +381,8 @@ const EXCLUDED_FROM_MCP_PARITY = new Map([
     "deferred-to-future-tool: pure-read but no MCP tool exposes energy:pipelines:gas:v1 yet — bundle into a future expanded-domain tool"],
   ["GET /api/supply-chain/v1/list-storage-facilities",
     "deferred-to-future-tool: pure-read but no MCP tool exposes energy:storage-facilities:v1 yet — bundle into a future expanded-domain tool"],
+  ["GET /api/supply-chain/v1/list-vulnerability-rankings",
+    "deferred-to-future-tool: issue #6449 deliberately exposes country and chokepoint MCP tools only; keep the global ranking RPC available to REST and UI clients until a bounded ranking-tool contract is approved"],
   ["GET /api/thermal/v1/list-thermal-escalations",
     "deferred-to-future-tool: pure-read but no MCP tool exposes thermal:escalation:v1 yet — bundle into a future expanded-domain tool"],
   ["GET /api/trade/v1/get-trade-barriers",

@@ -8,7 +8,7 @@
 # =============================================================================
 
 # ── Stage 1: Builder ─────────────────────────────────────────────────────────
-FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS builder
+FROM node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS builder
 
 WORKDIR /app
 
@@ -19,9 +19,20 @@ RUN npm ci --ignore-scripts
 # Copy full source
 COPY . .
 
+# The crawlable-corpus step runs the source-attribution drift gate against
+# scripts/, server/, api/, and src/. generate-inventory-facts and
+# build-handlers write untracked .js into those same roots, so the gate must
+# run on the pristine checkout first (#7435). tsc + vite stay later: they
+# need the generated inventory assets and compiled handlers.
+RUN npm run build:crawlable-corpus && npm run build:sitemap
+
 # Generated inventory modules are intentionally untracked. Recreate them in
 # the clean image context before handlers import or bundle them.
 RUN node scripts/generate-inventory-facts.mjs
+
+# Compile TypeScript API handlers → self-contained ESM bundles
+# Output is api/**/*.js alongside the source .ts files
+RUN node docker/build-handlers.mjs
 
 # public/pro/ is a build product, not committed bytes (#6898), so this image has
 # to build it. Skipping it does NOT 404: this image installs docker/nginx.conf,
@@ -32,20 +43,13 @@ RUN node scripts/generate-inventory-facts.mjs
 # build:pro installs pro-test's own lockfile.
 RUN npm run build:pro
 
-# Build the crawlable static corpus and Vite frontend (outputs to dist/)
+# Build the Vite frontend (outputs to dist/)
 # Skip blog build — blog-site has its own deps not installed here
 # Self-hosted builds set VITE_SELF_HOSTED=true (docker-publish-selfhosted.yml)
 # to unlock Pro-gated panels — there is no billing backend to entitle against.
 ARG VITE_SELF_HOSTED=false
 ENV VITE_SELF_HOSTED=$VITE_SELF_HOSTED
-RUN npm run build:crawlable-corpus && npm run build:sitemap && npx tsc && npx vite build
-
-# Compile TypeScript API handlers → self-contained ESM bundles only after the
-# source-attribution scan above. The bundles are emitted as api/**/*.js beside
-# their .ts sources; generating them first makes the scanner see duplicate,
-# uncommitted references and reject the committed attribution manifest as stale.
-RUN node docker/build-handlers.mjs
-
+RUN npx tsc && npx vite build
 # Assert the /pro pages survived the public/ -> dist/ copy (#6898). build:pro
 # succeeding proves public/pro/ exists; it does NOT prove Vite copied it, and
 # docker/nginx.conf's SPA fallback would serve the dashboard shell at 200 for a
@@ -53,7 +57,7 @@ RUN node docker/build-handlers.mjs
 RUN test -s dist/pro/index.html && test -s dist/pro/welcome.html
 
 # ── Stage 2: Runtime dependencies ───────────────────────────────────────────
-FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS runtime-deps
+FROM node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS runtime-deps
 
 WORKDIR /app
 
@@ -67,7 +71,7 @@ COPY docker/runtime-package-lock.json ./package-lock.json
 RUN npm ci --omit=dev --omit=optional --ignore-scripts
 
 # ── Stage 3: Runtime ─────────────────────────────────────────────────────────
-FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS final
+FROM node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS final
 
 # nginx + supervisord
 RUN apk add --no-cache nginx supervisor gettext && \
@@ -80,6 +84,8 @@ WORKDIR /app
 # API server
 COPY --from=builder /app/src-tauri/sidecar/local-api-server.mjs ./local-api-server.mjs
 COPY --from=builder /app/src-tauri/sidecar/package.json ./package.json
+COPY --from=builder /app/shared/llm-health-providers.js ./shared/llm-health-providers.js
+ENV LOCAL_API_RESOURCE_DIR=/app
 
 # Minimal runtime node_modules — required by raw .js handlers that aren't
 # bundled by build-handlers.mjs. Without this the Node sidecar dispatches

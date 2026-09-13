@@ -15,6 +15,7 @@ import {
   OPENROUTER_FREE_BACKUP_MODEL,
   OPENROUTER_FREE_PRIMARY_MODEL,
 } from '../scripts/_llm-model-timeouts.mjs';
+import { extractDelimitedBlock } from '../scripts/lib/js-source-structure.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..');
@@ -222,19 +223,9 @@ function extractArrayLiteralValues(src, constName) {
 }
 
 function extractFunctionBody(src, functionName) {
-  const re = new RegExp(`function\\s+${functionName}\\s*\\([^)]*\\)\\s*(?::[^\\{]+)?\\{`);
-  const match = src.match(re);
-  assert.ok(match?.index !== undefined, `failed to locate function ${functionName}`);
-
-  let depth = 1;
-  const bodyStart = match.index + match[0].length;
-  for (let i = bodyStart; i < src.length; i++) {
-    const ch = src[i];
-    if (ch === '{') depth++;
-    if (ch === '}') depth--;
-    if (depth === 0) return src.slice(bodyStart, i);
-  }
-  assert.fail(`failed to parse function body for ${functionName}`);
+  const body = extractDelimitedBlock(src, `function ${functionName}`);
+  assert.notEqual(body, null, `failed to locate function ${functionName}`);
+  return body;
 }
 
 function extractInterfaceBody(src, interfaceName) {
@@ -349,7 +340,7 @@ function extractYamlSchemaBlock(yamlText, schemaName) {
   assert.notEqual(start, -1, `failed to locate YAML schema ${schemaName}`);
 
   const end = lines.findIndex((line, index) =>
-    index > start && /^        \S.*:\s*$/.test(line),
+    index > start && /^ {8}\S.*:\s*$/.test(line),
   );
   return lines.slice(start, end === -1 ? undefined : end).join('\n');
 }
@@ -372,7 +363,7 @@ function extractFeedInventoryRows(src) {
     if (!inVariants) continue;
     if (line.startsWith('};')) break;
 
-    const variantMatch = line.match(/^  ([A-Za-z][A-Za-z0-9_]*): \{$/);
+    const variantMatch = line.match(/^ {2}([A-Za-z][A-Za-z0-9_]*): \{$/);
     if (variantMatch) {
       currentVariant = variantMatch[1];
       currentCategory = null;
@@ -384,7 +375,7 @@ function extractFeedInventoryRows(src) {
       continue;
     }
 
-    const categoryMatch = line.match(/^    (?:(['"])(.*?)\1|([A-Za-z][A-Za-z0-9_]*)):\s\[$/);
+    const categoryMatch = line.match(/^ {4}(?:(['"])(.*?)\1|([A-Za-z][A-Za-z0-9_]*)):\s\[$/);
     if (currentVariant && categoryMatch) {
       currentCategory = categoryMatch[2] ?? categoryMatch[3];
       rows.push({ variant: currentVariant, category: currentCategory, sources: [] });
@@ -528,7 +519,20 @@ describe('news digest methodology parity', () => {
   it('documents news digest cache TTLs from the implementation', () => {
     const healthyTtl = extractNumericConst(digestSrc, 'CACHE_TTL_HEALTHY_S');
     const emptyTtl = extractNumericConst(digestSrc, 'CACHE_TTL_EMPTY_S');
-    const digestTtl = digestSrc.match(/cachedFetchJson<ListFeedDigestResponse>\(\s*digestCacheKey,\s*([0-9_]+)/s);
+    // Matches either cachedFetchJson wrapper — #7084 switched the digest to
+    // cachedFetchJsonWithMeta to learn whether the fetcher actually ran, and
+    // pinning the exact wrapper name made this guard fail on a rename with the
+    // TTL unchanged (the match went null, so the parsed TTL became NaN).
+    const digestTtl = digestSrc.match(
+      /cachedFetchJson(?:WithMeta)?<ListFeedDigestResponse>\(\s*digestCacheKey,\s*([0-9_]+)/s,
+    );
+    // Fail on the LOOKUP before failing on the value: without this, a match
+    // that goes null parses to NaN and the failure reads as "the TTL changed"
+    // when the truth is "this guard can no longer find the TTL".
+    assert.ok(
+      digestTtl,
+      'could not locate the digest cachedFetchJson call to read its TTL; update this guard alongside the call',
+    );
 
     assert.equal(
       healthyTtl,
@@ -818,7 +822,7 @@ describe('news digest methodology parity', () => {
       assert.ok(cacheKeysSrc.includes(field), `cache-key contract comment must mention ${field}`);
       assertDocIncludes(`\`${field}\``, `story-track field ${field}`);
     }
-    const hashSummary = cacheKeysSrc.match(/^\/\/ Hash:[^\n]*(?:\n\/\/       [^\n]*)*/m)?.[0] ?? '';
+    const hashSummary = cacheKeysSrc.match(/^\/\/ Hash:[^\n]*(?:\n\/\/ {7}[^\n]*)*/m)?.[0] ?? '';
     const alwaysWrittenSummary = cacheKeysSrc.match(/story:track:v1:\$\{titleHash\}.*\(always-written\)/)?.[0] ?? '';
     assert.ok(hashSummary.length > 0, 'failed to locate cache-key hash summary comment');
     assert.ok(alwaysWrittenSummary.length > 0, 'failed to locate cache-key always-written summary comment');
@@ -889,13 +893,13 @@ describe('news digest methodology parity', () => {
     assert.deepEqual(providerModels, [
       'deepseek/deepseek-v4-flash',
       'google/gemma-4-26b-a4b-it:free',
-      'openai/gpt-oss-20b:free',
+      'minimax/minimax-m3:free',
       'openai/gpt-oss-20b',
     ]);
     assert.equal(weeklyTemperature, 0.3);
 
     assertDocMatches(
-      /Regional weekly briefs[\s\S]*tr(?:y|ies) OpenRouter first[\s\S]*`deepseek\/deepseek-v4-flash`[\s\S]*`google\/gemma-4-26b-a4b-it:free`[\s\S]*`openai\/gpt-oss-20b:free`[\s\S]*Groq `openai\/gpt-oss-20b`[\s\S]*temperature\s+`0\.3`/,
+      /Regional weekly briefs[\s\S]*tr(?:y|ies) OpenRouter first[\s\S]*`deepseek\/deepseek-v4-flash`[\s\S]*`google\/gemma-4-26b-a4b-it:free`[\s\S]*`minimax\/minimax-m3:free`[\s\S]*Groq `openai\/gpt-oss-20b`[\s\S]*temperature\s+`0\.3`/, // pragma: allowlist secret
       'regional weekly brief provider order, models, and temperature',
     );
     assertDocMatches(

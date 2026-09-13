@@ -86,6 +86,11 @@ export type RequestReason =
   // is unavailable so an atomic claim can't be made. Distinct from auth_401
   // so a Redis outage is not conflated with genuine signature/auth failures.
   | 'replay_cache_unavailable'
+  // Missing MCP_INTERNAL_HMAC_SECRET on a request that presented an internal
+  // MCP signature. HTTP remains 500 CONFIGURATION; this reason keeps a
+  // deploy/config incident out of caller-auth dashboards. Distinct from
+  // auth_401, which still covers malformed or invalid signatures.
+  | 'hmac_secret_unconfigured'
   | 'unknown_route'
   | 'method_not_allowed'
   | 'cors_error'
@@ -414,7 +419,7 @@ export function deriveReqBytes(req: Request): number {
 }
 
 export function deriveSentryTraceId(req: Request): string | null {
-  return req.headers.get('sentry-trace') ?? null;
+  return capHeaderValue(req.headers.get('sentry-trace'));
 }
 
 // ua_hash: SHA-256(UA + monthly-rotated pepper). Pepper key: USAGE_UA_PEPPER.

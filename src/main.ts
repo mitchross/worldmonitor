@@ -3,6 +3,7 @@ import './bootstrap/zod-csp';
 import { SITE_VARIANT } from '@/config/variant';
 import { installLcpAttributionDebug } from '@/bootstrap/lcp-attribution';
 import { markLcpDebug } from '@/utils/lcp-debug';
+import { safeStorageGet, safeStorageRemove, safeStorageSet } from '@/utils/safe-storage';
 import { enqueueSentryCall, installPreInitErrorQueue, scheduleSentryInit } from '@/bootstrap/sentry-defer';
 import { registerClsReporting } from '@/bootstrap/cls-report';
 import { registerInpReporting } from '@/bootstrap/inp-report';
@@ -198,6 +199,55 @@ function shouldSuppressCspViolation(
     (directive === 'script-src-elem' || directive === 'script-src')
     && /^https:\/\/www\.youtube\.com\/iframe_api(?:\?|$)/.test(blockedURI)
   ) return true;
+  // HeyTap Browser (the stock browser on OPPO / realme / OnePlus Android
+  // devices) injects its own chrome scripts from `dhfs.heytapimage.com` — the
+  // vendor's asset CDN — into every page it renders. The string `heytap`
+  // appears nowhere in `src/`, `pro-test/src/`, `public/`, `index.html` or
+  // `tests/`, so we never request it; the block is the browser's own injection
+  // failing against our policy, and the injected feature stays broken in that
+  // environment regardless of our code.
+  //
+  // Host-pinned rather than "any cross-origin script-src block", even though
+  // our `script-src` is `'self' 'strict-dynamic' <nonce> <hashes>` and admits
+  // no cross-origin host at all. That invariant would license the broader rule
+  // by the same argument the font-src section uses, but it must NOT be taken
+  // here: a script one of our OWN trusted scripts injects without carrying the
+  // nonce forward is also cross-origin and also blocked, and that is a real
+  // first-party defect. WORLDMONITOR-HP holds exactly that shape in its
+  // history — `clerk.worldmonitor.app/npm/@clerk/ui@1/dist/ui.browser.js` and
+  // `www.worldmonitor.app/assets/locale-zh-*.js` blocks through June/July —
+  // so the cross-origin invariant is the wrong axis and the vendor host is the
+  // right one. Exact parsed hostname (not a suffix) so a
+  // `dhfs.heytapimage.com.evil.com` lookalike still surfaces.
+  //
+  // Sizing: HP's 33k lifetime events are a fixed bug's residue. A 40-event
+  // sample taken 2026-08-29 spanned 2026-06-25 → 2026-08-27, and the only
+  // events after 2026-07-19 were 3 heytapimage blocks and 1 first-party
+  // `locale-zh` block — so this host IS the live tail, and pinning it lets the
+  // issue be resolved and act as a canary for any NEW script-src block class.
+  if (directive === 'script-src-elem' || directive === 'script-src') {
+    try {
+      const url = new URL(blockedURI);
+      if (url.protocol === 'https:' && url.hostname === 'dhfs.heytapimage.com') return true;
+    } catch { /* scheme-only values ('inline', 'eval') fall through */ }
+  }
+  // UC Browser (Alibaba's Android browser) fetches its own bottom-banner ad
+  // plugin from `uc.gre`, a pseudo-host the browser resolves internally, and
+  // reports the result to its `*.uc.cn` tracker. Both are http:, which our
+  // `connect-src 'self' https: wss: blob: data:` never admits, so no policy
+  // state of ours can reach them. `uc.cn` and `uc.gre` appear nowhere in our
+  // sources, so this is the browser's injection failing, the HeyTap case above
+  // on a different directive. The only blockedURIs WORLDMONITOR-HN has recorded
+  // since 2026-08-19 are these two (UC Browser 12.3.0 / Android 14,
+  // 2026-09-09). Exact `uc.gre`; `uc.cn` by registrable-domain suffix with a
+  // leading `.` because its tracker hosts vary, so `uc.cn.evil.com` and
+  // `notuc.cn` still surface.
+  if (directive === 'connect-src') {
+    try {
+      const host = new URL(blockedURI).hostname;
+      if (host === 'uc.gre' || host === 'uc.cn' || host.endsWith('.uc.cn')) return true;
+    } catch { /* scheme-only values fall through */ }
+  }
   // Zscaler enterprise content-filter proxy: `gateway.zscloud.net` is injected into
   // corporate users' frames by Zscaler's web filter agent. We never load it ourselves;
   // it's inserted into the host page outside our control (WORLDMONITOR-HT). Match by
@@ -349,6 +399,14 @@ function shouldSuppressCspViolation(
       // script-src still surfaces.
       if (url.protocol === 'https:' && url.hostname === 'use.fontawesome.com'
           && url.pathname.startsWith('/releases/') && cssFile.test(url.pathname)) return true;
+      // Font Awesome's Kit service, the same vendor's other delivery host:
+      // `kit.fontawesome.com/<kit-id>.css`, where the hex kit ID is a per-account
+      // key. We never adopted Font Awesome, so the kit belongs to whoever
+      // injected it (WORLDMONITOR-J0 round 5, the only blockedURI since the
+      // unpkg rule shipped on 2026-08-16). Exact host + kit-ID path; the kit's
+      // JS loader under script-src still surfaces.
+      if (url.protocol === 'https:' && url.hostname === 'kit.fontawesome.com'
+          && /^\/[0-9a-f]+\.css$/.test(url.pathname)) return true;
       // Adobe Typekit / Adobe Fonts kit CSS, from both hosts it serves:
       // `use.typekit.net/<kit>.css` and the `p.typekit.net/p.css?...` tracking
       // sheet — together 17% of this issue's current volume. We self-host every
@@ -545,12 +603,7 @@ requestAnimationFrame(() => {
 });
 
 // Clear stale settings-open flag (survives ungraceful shutdown)
-try {
-  localStorage.removeItem('wm-settings-open');
-} catch {
-  // Storage may be unavailable (blocked cookies, sandboxed iframe). The flag is
-  // only a convenience hint, so boot must continue with the in-memory default.
-}
+safeStorageRemove('wm-settings-open');
 
 // Standalone windows: ?settings=1 = panel display settings, ?live-channels=1 = channel management
 // Both need i18n initialized so t() does not return undefined.
@@ -602,13 +655,13 @@ if (urlParams.get('settings') === '1') {
 // Beta mode toggle: type `beta=true` / `beta=false` in console
 Object.defineProperty(window, 'beta', {
   get() {
-    const on = localStorage.getItem('worldmonitor-beta-mode') === 'true';
+    const on = safeStorageGet('worldmonitor-beta-mode') === 'true';
     console.log(`[Beta] ${on ? 'ON' : 'OFF'}`);
     return on;
   },
   set(v: boolean) {
-    if (v) localStorage.setItem('worldmonitor-beta-mode', 'true');
-    else localStorage.removeItem('worldmonitor-beta-mode');
+    if (v) safeStorageSet('worldmonitor-beta-mode', 'true');
+    else safeStorageRemove('worldmonitor-beta-mode');
     location.reload();
   },
 });

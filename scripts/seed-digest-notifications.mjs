@@ -42,6 +42,10 @@ const { normalizeResendSender } = require('./lib/resend-from.cjs');
 import { readRawJsonFromUpstash, redisPipeline } from '../api/_upstash-json.js';
 import { classifyFeelGood } from '../server/_shared/feelgood-classifier.js';
 import { classifyEphemeralLiveCoverage } from '../shared/ephemeral-live-classifier.js';
+import {
+  deriveNotificationStoryPhase,
+  formatStoryPhaseBadge,
+} from '../shared/story-phase.js';
 import { shouldDropOpinionTrack } from './lib/digest-opinion-track-filter.mjs';
 import {
   composeBriefFromDigestStories,
@@ -54,6 +58,7 @@ import {
   shouldExitNonZero as shouldExitOnBriefFailures,
 } from './lib/brief-compose.mjs';
 import {
+  carouselUrlsFrom,
   digestWindowStartMs,
   pickWinningCandidateWithPool,
   readTimeAgeCutoffMs,
@@ -542,18 +547,12 @@ function flatArrayToObject(flat) {
   return obj;
 }
 
-function derivePhase(track) {
-  const mentionCount = parseInt(track.mentionCount ?? '1', 10);
-  const firstSeen = parseInt(track.firstSeen ?? '0', 10);
-  const lastSeen = parseInt(track.lastSeen ?? String(Date.now()), 10);
-  const now = Date.now();
-  const ageH = (now - firstSeen) / 3600000;
-  const silenceH = (now - lastSeen) / 3600000;
-  if (silenceH > 24) return 'fading';
-  if (mentionCount >= 3 && ageH >= 12) return 'sustained';
-  if (mentionCount >= 2) return 'developing';
-  if (ageH < 2) return 'breaking';
-  return 'unknown';
+function derivePhase(track, nowMs = Date.now()) {
+  return deriveNotificationStoryPhase({
+    mentionCount: parseInt(track.mentionCount ?? '1', 10),
+    firstSeen: parseInt(track.firstSeen ?? '0', 10),
+    lastSeen: parseInt(track.lastSeen ?? String(nowMs), 10),
+  }, nowMs);
 }
 
 function matchesSensitivity(ruleSensitivity, severity) {
@@ -1083,12 +1082,12 @@ function formatDigestHtml(stories, nowMs) {
   const highCount = buckets.high.length;
 
   const SEVERITY_BORDER = { critical: '#ef4444', high: '#f97316', medium: '#eab308' };
-  const PHASE_COLOR = { breaking: '#ef4444', developing: '#f97316', sustained: '#60a5fa', fading: '#555' };
 
   function storyCard(s) {
     const borderColor = SEVERITY_BORDER[s.severity] ?? '#4ade80';
-    const phaseColor = PHASE_COLOR[s.phase] ?? '#888';
-    const phaseCap = s.phase ? s.phase.charAt(0).toUpperCase() + s.phase.slice(1) : '';
+    const phaseBadge = formatStoryPhaseBadge(s.phase);
+    const phaseColor = phaseBadge?.color;
+    const phaseCap = phaseBadge?.label ?? '';
     const srcText = s.sources.length > 0
       ? s.sources.slice(0, 3).join(', ') + (s.sources.length > 3 ? ` +${s.sources.length - 3}` : '')
       : '';
@@ -1106,7 +1105,7 @@ function formatDigestHtml(stories, nowMs) {
       snippetEl = `<div style="margin-top: 6px; font-size: 12px; color: #999; line-height: 1.45;">${escapeHtml(trimmed)}</div>`;
     }
     const meta = [
-      phaseCap ? `<span style="font-size: 10px; color: ${phaseColor}; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">${phaseCap}</span>` : '',
+      phaseBadge ? `<span style="font-size: 10px; color: ${phaseColor}; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">${phaseCap}</span>` : '',
       srcText ? `<span style="font-size: 11px; color: #555;">${escapeHtml(srcText)}</span>` : '',
     ].filter(Boolean).join('<span style="color: #333; margin: 0 6px;">&bull;</span>');
     return `<div style="background: #111; border: 1px solid #1a1a1a; border-left: 3px solid ${borderColor}; padding: 12px 16px; margin-bottom: 8px;">${titleEl}${snippetEl}${meta ? `<div style="margin-top: 6px;">${meta}</div>` : ''}</div>`;
@@ -1255,31 +1254,6 @@ function truncateTelegramHtml(html, limit = TELEGRAM_MAX_LEN) {
   const lastNewline = truncated.lastIndexOf('\n');
   const cutPoint = lastNewline > limit * 0.6 ? lastNewline : truncated.length;
   return sanitizeTelegramHtml(truncated.slice(0, cutPoint) + '\n\n[truncated]');
-}
-
-/**
- * Phase 8: derive the 3 carousel image URLs from a signed magazine
- * URL. The HMAC token binds (userId, issueSlot), not the path — so
- * the same token verifies against /api/brief/{u}/{slot}?t=T AND against
- * /api/brief/carousel/{u}/{slot}/{0|1|2}?t=T.
- *
- * Returns null when the magazine URL doesn't match the expected shape
- * — caller falls back to text-only delivery.
- */
-function carouselUrlsFrom(magazineUrl) {
-  try {
-    const u = new URL(magazineUrl);
-    const m = u.pathname.match(/^\/api\/brief\/([^/]+)\/(\d{4}-\d{2}-\d{2}-\d{4})\/?$/);
-    if (!m) return null;
-    const [, userId, issueSlot] = m;
-    const token = u.searchParams.get('t');
-    if (!token) return null;
-    return [0, 1, 2].map(
-      (p) => `${u.origin}/api/brief/carousel/${userId}/${issueSlot}/${p}?t=${token}`,
-    );
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -1665,7 +1639,11 @@ async function composeBriefsForRun(rules, nowMs) {
   // was far worse than a brief with dashes on the stats page.)
   let insightsNumbers = { clusters: 0, multiSource: 0 };
   try {
-    const insightsRaw = await readRawJsonFromUpstash(INSIGHTS_KEY);
+    // raw = true pins the bare-key read (#7674): the seeder fleet publishes
+    // bare rows and must keep doing so even if VERCEL_ENV ever leaks into
+    // this container's runtime. The api readers of this key are hard-locked
+    // raw too (api/latest-brief.ts and the brief routes).
+    const insightsRaw = await readRawJsonFromUpstash(INSIGHTS_KEY, 3_000, true);
     if (insightsRaw) insightsNumbers = extractInsights(insightsRaw).numbers;
   } catch (err) {
     console.warn('[digest] brief: insights read failed, using zeroed stats:', err.message);
@@ -2139,10 +2117,13 @@ async function composeAndStoreBriefForUser(userId, annotated, insightsNumbers, d
   // One SET per compose is cheap and always current.
   const latestPointerKey = `brief:latest:${userId}`;
   const latestPointerValue = JSON.stringify({ issueSlot });
+  // raw = true pins the bare-key write (#7674): the digest composer publishes
+  // the envelopes every api/brief reader resolves raw; see the insights read
+  // above for the VERCEL_ENV-leak rationale.
   const pipelineResult = await redisPipeline([
     ['SETEX', key, String(BRIEF_TTL_SECONDS), JSON.stringify(finalEnvelope)],
     ['SETEX', latestPointerKey, String(BRIEF_TTL_SECONDS), latestPointerValue],
-  ]);
+  ], 5_000, true);
   if (!pipelineResult || !Array.isArray(pipelineResult) || pipelineResult.length < 2) {
     throw new Error('null pipeline response from Upstash');
   }
@@ -2410,7 +2391,10 @@ async function main() {
     }
 
     const ruleChannelSet = new Set(rule.channels ?? []);
-    const deliverableChannels = channels.filter(ch => ruleChannelSet.has(ch.channelType) && ch.verified);
+    const deliverableChannels = channels.filter(ch =>
+      ruleChannelSet.has(ch.channelType) && ch.verified &&
+      (ch.channelType !== 'email' || ch.emailOwnership === 'verified_account') &&
+      (ch.channelType !== 'telegram' || ch.telegramOwnership === 'verified_callback'));
     if (deliverableChannels.length === 0) {
       console.log(`[digest] No deliverable channels for ${rule.userId} — skipping`);
       continue;

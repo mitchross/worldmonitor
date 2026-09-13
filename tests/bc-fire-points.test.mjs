@@ -22,6 +22,7 @@ import {
   enrichOrAppendBc,
   fetchApprovedBcUrl,
   fetchBcFirePoints,
+  hasCompleteWorldwideWildfireCoverage,
   latLonTimeKey,
   mergeWildfireSourcesWithBc,
   parseBcFireGeoJson,
@@ -36,6 +37,7 @@ const geojson = readFileSync(resolve(here, 'fixtures/wildfire/bc-current-fire-po
 const cwfisActiveJson = readFileSync(resolve(here, 'fixtures/wildfire/cwfis-national-activefires.json'), 'utf8');
 const parseModuleSrc = readFileSync(resolve(here, '../scripts/wildfire/bc-fire-points.mjs'), 'utf8');
 const cwfisModuleSrc = readFileSync(resolve(here, '../scripts/wildfire/cwfis-wfs.mjs'), 'utf8');
+const firmsModuleSrc = readFileSync(resolve(here, '../scripts/wildfire/firms-area.mjs'), 'utf8');
 const testSrc = readFileSync(fileURLToPath(import.meta.url), 'utf8');
 const seederSrc = readFileSync(resolve(here, '../scripts/seed-fire-detections.mjs'), 'utf8');
 const aisRelaySrc = readFileSync(resolve(here, '../scripts/ais-relay.cjs'), 'utf8');
@@ -61,6 +63,20 @@ function firmsDetection(overrides = {}) {
 }
 
 describe('bc live fixture coordinates and status', () => {
+  it('decodes one XML entity layer in incident names', () => {
+    const fixture = kml.replace('Brunswick Creek', 'Creek &amp;lt;north&amp;gt; &amp; south');
+    const parsed = parseBcFireKml(fixture);
+    assert.equal(parsed.fireDetections.find(fire => fire.fireNumber === 'V10742')?.incidentName,
+      'Creek &lt;north&gt; & south');
+  });
+
+  it('decodes numeric XML references once without corrupting invalid scalars', () => {
+    const fixture = kml.replace('Brunswick Creek', 'Creek &#233; &#x1F332; &#38;lt; &#x110000; &#xD800;');
+    const parsed = parseBcFireKml(fixture);
+    assert.equal(parsed.fireDetections.find(fire => fire.fireNumber === 'V10742')?.incidentName,
+      'Creek é 🌲 &lt; &#x110000; &#xD800;');
+  });
+
   it('parses live KML placemark coordinates and fire status/kind', () => {
     const parsed = parseBcFireKml(kml);
     assert.ok(parsed.fireDetections.length >= 4);
@@ -289,6 +305,209 @@ describe('independent FIRMS + CWFIS + BC merge', () => {
     assert.equal(noBc._bcErrorCode, 'BC_WILDFIRE_SOURCE_FAILED');
   });
 
+  it('grades a resolved-but-zero-coverage FIRMS fetch as failed, not ok', async () => {
+    // fetchAllRegions catches every per-region error internally and always
+    // resolves, so a total FIRMS outage settles 'fulfilled' with zero rows.
+    // Grading on settlement alone published that as _firmsState 'ok', and the
+    // canonical WORLDWIDE key silently became Canada-only while every
+    // downstream content clock read it as healthy (#7141 follow-up).
+    const silentOutage = await mergeWildfireSourcesWithBc({
+      fetchFirms: async () => ({
+        fireDetections: [],
+        pagination: undefined,
+        _firmsFulfilledCalls: 0,
+        _firmsFailedCalls: 27,
+      }),
+      fetchCwfis: async () => parseCwfisGeoJson(cwfisActiveJson, 'active'),
+      fetchBcWildfire: async () => parseBcFireKml(kml),
+    });
+
+    assert.equal(silentOutage._firmsState, 'failed', 'zero successful region calls is an outage');
+    assert.equal(silentOutage._firmsErrorCode, 'FIRMS_SOURCE_FAILED');
+    assert.equal(silentOutage._firmsCount, 0);
+    assert.equal(
+      canadianWildfireAfterPublish(silentOutage).freshnessMetaPatch.sourceState,
+      'degraded',
+      'the canonical key must not report ok when it lost worldwide coverage',
+    );
+  });
+
+  it('reports partial FIRMS coverage instead of passing it off as healthy', async () => {
+    // The FIRMS regions partition the globe, so 26 of 27 failing means most of
+    // the world went dark while the surviving region replaces the canonical
+    // worldwide dataset. Coverage held, so this is not an outage — but it must
+    // not read 'ok' either.
+    const mostlyDark = await mergeWildfireSourcesWithBc({
+      fetchFirms: async () => ({
+        fireDetections: [{ id: 'firms-1', detectedAt: Date.now() }],
+        pagination: undefined,
+        _firmsFulfilledCalls: 1,
+        _firmsFailedCalls: 26,
+      }),
+      fetchCwfis: async () => parseCwfisGeoJson(cwfisActiveJson, 'active'),
+      fetchBcWildfire: async () => parseBcFireKml(kml),
+    });
+
+    assert.equal(mostlyDark._firmsState, 'ok', 'some coverage survived, so not a full outage');
+    assert.equal(mostlyDark._firmsPartial, true);
+    assert.equal(mostlyDark._firmsFailedCalls, 26);
+    assert.equal(
+      hasCompleteWorldwideWildfireCoverage(mostlyDark),
+      false,
+      'an incomplete worldwide snapshot must preserve the last-good keys',
+    );
+    assert.deepEqual(
+      canadianWildfireAfterPublish(mostlyDark, {
+        previousMeta: { sourceState: 'ok' },
+      }).freshnessMetaPatch,
+      {
+        sourceState: 'degraded',
+        errorCode: 'FIRMS_PARTIAL_COVERAGE',
+        canadaSourceFailureCount: 0,
+        consecutiveSourceFailures: 1,
+        lastSourceFailureCode: 'FIRMS_PARTIAL_COVERAGE',
+      },
+      'partial worldwide coverage must be visible, not silent',
+    );
+  });
+
+  it('debounces only the first identical partial FIRMS failure while usable data survives', () => {
+    const now = Date.parse('2026-09-04T20:40:00Z');
+    const dataKey = healthTesting.BOOTSTRAP_KEYS.wildfires;
+    const metaKey = healthTesting.SEED_META.wildfires.key;
+    const partial = {
+      _firmsState: 'ok',
+      _firmsPartial: true,
+      _cwfisState: 'ok',
+      _bcState: 'ok',
+    };
+    const firstPatch = canadianWildfireAfterPublish(partial, {
+      previousMeta: { sourceState: 'ok' },
+    }).freshnessMetaPatch;
+    const classify = (patch, { hasData = true, fetchedAt = now - 60_000 } = {}) => (
+      healthTesting.classifyKey('wildfires', dataKey, { allowOnDemand: false }, {
+        keyStrens: new Map(hasData ? [[dataKey, 256]] : []),
+        keyErrors: new Map(),
+        keyMetaValues: new Map([[metaKey, JSON.stringify({
+          fetchedAt,
+          recordCount: hasData ? 100 : 0,
+          ...patch,
+        })]]),
+        keyMetaErrors: new Map(),
+        now,
+      })
+    );
+
+    assert.equal(firstPatch.consecutiveSourceFailures, 1);
+    assert.equal(firstPatch.lastSourceFailureCode, 'FIRMS_PARTIAL_COVERAGE');
+    assert.deepEqual(classify(firstPatch), {
+      status: 'OK',
+      records: 100,
+      errorCode: 'FIRMS_PARTIAL_COVERAGE',
+      consecutiveSourceFailures: 1,
+      lastSourceFailureCode: 'FIRMS_PARTIAL_COVERAGE',
+      sourceFailurePending: true,
+      seedAgeMin: 1,
+      maxStaleMin: 360,
+    });
+
+    const secondPatch = canadianWildfireAfterPublish(partial, {
+      previousMeta: { fetchedAt: now - 60_000, recordCount: 100, ...firstPatch },
+    }).freshnessMetaPatch;
+    assert.equal(secondPatch.consecutiveSourceFailures, 2);
+    assert.equal(classify(secondPatch).status, 'SEED_ERROR');
+
+    const legacyProductionPatch = canadianWildfireAfterPublish(partial, {
+      previousMeta: {
+        sourceState: 'degraded',
+        errorCode: 'FIRMS_PARTIAL_COVERAGE',
+      },
+    }).freshnessMetaPatch;
+    assert.equal(
+      legacyProductionPatch.consecutiveSourceFailures,
+      2,
+      'the first repaired run must preserve the existing production warning',
+    );
+    assert.equal(classify(legacyProductionPatch).status, 'SEED_ERROR');
+    assert.equal(classify({
+      sourceState: 'degraded',
+      errorCode: 'FIRMS_PARTIAL_COVERAGE',
+    }).status, 'SEED_ERROR', 'legacy production metadata fails closed during rollout');
+
+    const unknownHistoryPatch = canadianWildfireAfterPublish(partial).freshnessMetaPatch;
+    assert.equal(
+      unknownHistoryPatch.consecutiveSourceFailures,
+      2,
+      'an unreadable predecessor cannot restart the one-run grace window',
+    );
+    assert.equal(classify(unknownHistoryPatch).status, 'SEED_ERROR');
+
+    const changedIdentityPatch = canadianWildfireAfterPublish(partial, {
+      previousMeta: {
+        sourceState: 'degraded',
+        errorCode: 'FIRMS_SOURCE_FAILED',
+        consecutiveSourceFailures: 7,
+        lastSourceFailureCode: 'FIRMS_SOURCE_FAILED',
+      },
+    }).freshnessMetaPatch;
+    assert.equal(
+      changedIdentityPatch.consecutiveSourceFailures,
+      1,
+      'a different source failure cannot advance this failure identity',
+    );
+
+    assert.equal(
+      classify(firstPatch, { fetchedAt: now - 5 * 60_000 }).status,
+      'OK',
+      'a usable last-good snapshot receives the same single-run grace',
+    );
+    assert.equal(
+      classify(firstPatch, { fetchedAt: now - 361 * 60_000 }).status,
+      'STALE_SEED',
+      'the first-failure grace cannot hide a last-good snapshot past its freshness budget',
+    );
+    assert.notEqual(
+      classify(firstPatch, { hasData: false }).status,
+      'OK',
+      'missing global data fails immediately even on the first partial failure',
+    );
+    assert.deepEqual(
+      canadianWildfireAfterPublish({
+        _firmsState: 'ok',
+        _firmsPartial: false,
+        _cwfisState: 'ok',
+        _bcState: 'ok',
+      }, { previousMeta: secondPatch }).freshnessMetaPatch,
+      { sourceState: 'ok' },
+      'a successful natural run clears the streak fields from the replacement metadata',
+    );
+  });
+
+  it('keeps FIRMS ok when some region calls succeed but return no rows', async () => {
+    // A live worldwide window can legitimately be empty in the monitored
+    // regions. That is coverage with nothing to report, not an outage.
+    const emptyButLive = await mergeWildfireSourcesWithBc({
+      fetchFirms: async () => ({
+        fireDetections: [],
+        pagination: undefined,
+        _firmsFulfilledCalls: 27,
+        _firmsFailedCalls: 0,
+      }),
+      fetchCwfis: async () => parseCwfisGeoJson(cwfisActiveJson, 'active'),
+      fetchBcWildfire: async () => parseBcFireKml(kml),
+    });
+
+    assert.equal(emptyButLive._firmsState, 'ok');
+    assert.equal(emptyButLive._firmsErrorCode, null);
+    assert.equal(emptyButLive._firmsPartial, false, 'full coverage is not partial');
+    assert.equal(hasCompleteWorldwideWildfireCoverage(emptyButLive), true);
+    assert.equal(
+      canadianWildfireAfterPublish(emptyButLive).freshnessMetaPatch.sourceState,
+      'ok',
+      'a live empty window with full coverage stays healthy',
+    );
+  });
+
   it('publishes Canada-only fallback with health-visible FIRMS degradation metadata', async () => {
     const canadaOnly = await mergeWildfireSourcesWithBc({
       fetchFirms: async () => { throw new Error('FIRMS key rejected'); },
@@ -299,6 +518,7 @@ describe('independent FIRMS + CWFIS + BC merge', () => {
     assert.equal(canadaOnly._firmsErrorCode, 'FIRMS_SOURCE_FAILED');
     assert.equal(canadaOnly._cwfisState, 'ok');
     assert.equal(canadaOnly._bcState, 'ok');
+    assert.equal(hasCompleteWorldwideWildfireCoverage(canadaOnly), false);
 
     // Both Canadian sources are healthy, so canadaSourceFailureCount stays 0 —
     // but the canonical key just lost its worldwide coverage. Never report 'ok'.
@@ -338,6 +558,7 @@ describe('independent FIRMS + CWFIS + BC merge', () => {
       sourceState: 'degraded',
       errorCode: 'BC_WILDFIRE_SOURCE_FAILED',
       canadaSourceFailureCount: 1,
+      failedSources: [], sourceHealth: {}, lastSourceAttemptAt: null,
     });
 
     const now = Date.parse('2026-08-14T12:00:00Z');
@@ -367,6 +588,7 @@ describe('independent FIRMS + CWFIS + BC merge', () => {
       sourceState: 'degraded',
       errorCode: 'CWFIS_PRESCRIBED_FAILED',
       canadaSourceFailureCount: 1,
+      failedSources: [], sourceHealth: {}, lastSourceAttemptAt: null,
     });
     assert.deepEqual(canadianWildfireAfterPublish({
       _cwfisState: 'failed',
@@ -377,6 +599,7 @@ describe('independent FIRMS + CWFIS + BC merge', () => {
       sourceState: 'degraded',
       errorCode: 'CANADA_WILDFIRE_SOURCES_FAILED',
       canadaSourceFailureCount: 2,
+      failedSources: [], sourceHealth: {}, lastSourceAttemptAt: null,
     });
   });
 
@@ -595,11 +818,16 @@ describe('module import contract', () => {
     assert.match(seederSrc, /mergeWildfireSourcesWithBc/);
     assert.match(seederSrc, /fetchBcFirePoints/);
     assert.match(seederSrc, /fetchCwfisFires/);
-    assert.match(seederSrc, /afterPublish:\s*canadianWildfireAfterPublish/);
+    assert.match(seederSrc, /afterPublish:[\s\S]{0,160}canadianWildfireAfterPublish/);
+    assert.match(seederSrc, /afterValidationSkip:[\s\S]{0,160}canadianWildfireAfterPublish/);
+    assert.match(seederSrc, /validateFn:\s*hasCompleteWorldwideWildfireCoverage/);
     assert.match(seederSrc, /wildfire:fires:v1/);
     assert.doesNotMatch(seederSrc, /wildfire:canada/);
     assert.doesNotMatch(seederSrc, /fetch\.bind/);
+    assert.match(firmsModuleSrc, /firms\.modaps\.eosdis\.nasa\.gov/);
+    assert.doesNotMatch(firmsModuleSrc, /firms2\.modaps\.eosdis\.nasa\.gov/);
     assert.match(railwaySrc, /scripts\/wildfire\/bc-fire-points\.mjs/);
     assert.match(railwaySrc, /scripts\/wildfire\/cwfis-wfs\.mjs/);
+    assert.match(railwaySrc, /scripts\/wildfire\/firms-area\.mjs/);
   });
 });
