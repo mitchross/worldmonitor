@@ -1302,6 +1302,27 @@ describe('welcome landing page routing', () => {
     }
   });
 
+  it('opens deployment and branch preview roots through the dashboard route', () => {
+    for (const host of [
+      'worldmonitor-h0zk88n4l-eliewm.vercel.app',
+      'worldmonitor-git-perf-defer-dashboard-app-eliewm.vercel.app',
+    ]) {
+      const redirect = firstRedirectFor({ host, path: '/' });
+      assert.equal(redirect?.destination, '/dashboard');
+      assert.equal(redirect.permanent, false);
+      assert.equal(firstRewriteFor({ host, path: redirect.destination })?.destination, DASHBOARD_HTML_DESTINATION);
+      assert.equal(firstRedirectFor({ host, path: '/', query: { mode: 'agent' } }), null);
+      assert.equal(firstRewriteFor({ host, path: '/', query: { mode: 'agent' } })?.destination, '/agent-view.json');
+    }
+  });
+
+  it('keeps preview root routing off production homepages, unknown pages, and lookalike hosts', () => {
+    for (const host of ['worldmonitor.app', 'www.worldmonitor.app', 'example.com', 'preview.vercel.app.evil.example']) {
+      assert.equal(firstRedirectFor({ host, path: '/' }), null);
+    }
+    assert.equal(firstRedirectFor({ host: 'preview.vercel.app', path: '/missing-page' }), null);
+  });
+
   it('keeps variant canonicals aligned with the /dashboard routing strategy', () => {
     const variantUrls = getVariantUrls();
     assert.equal(variantUrls.full, 'https://www.worldmonitor.app/dashboard');
@@ -5451,15 +5472,12 @@ describe('cold-load metric evidence reaches the CI artifact (#7837)', () => {
     assert.match(testWorkflowSource, /path: test-results\//);
   });
 
-  // #7848 moved the readiness gate to first paint; #7837 added a settled
-  // sample beside it that is deliberately NOT asserted, because a slow runner
-  // must never redden this required job. Folding the settled sample into the
-  // budget assertion would reintroduce exactly the flake both issues exist to
-  // remove — visibly, but only after a live CI run.
-  it('asserts the dashboard budgets against the first-paint sample only', () => {
+  // #7867 gives the first-paint sample its own CI-derived budget. The settled
+  // diagnostic remains optional because hydration readiness is incomplete on CI.
+  it('asserts the first-paint budgets against the first-paint sample only', () => {
     assert.match(
       mapBudgetE2eSource,
-      /assertDashboardMetricBudgets\(samples\.map\(\(sample\) => sample\.firstPaint\.postGc\)\)/,
+      /assertDashboardMetricBudgets\(samples\.map\(\(sample\) => sample\.firstPaint\.postGc\), FIRST_PAINT_METRIC_BUDGETS\)/,
     );
     assert.doesNotMatch(
       mapBudgetE2eSource,

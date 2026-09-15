@@ -50,6 +50,7 @@ const {
   OPENROUTER_PROVIDER_ROUTING,
 } = require('./lib/llm-model-policy.cjs');
 const xNewsAccounts = require('./lib/x-news-accounts.cjs');
+const { SAUDI_CIVIL_DEFENSE, MAX_POST_CHARS, publishSaudiCivilDefenseAlerts } = require('./lib/saudi-civil-defense-alerts.cjs');
 const { createPollGenerationGuard } = require('./lib/poll-generation-guard.cjs');
 const { createXPollCycle, xPollSlot } = require('./lib/x-poll-cycle.cjs');
 const {
@@ -1174,9 +1175,11 @@ function loadTelegramChannels() {
 
 function normalizeTelegramMessage(msg, channel) {
   const handle = sanitizeTelegramUsername(channel.handle);
+  const isSaudiCivilDefense = handle.toLowerCase() === SAUDI_CIVIL_DEFENSE.handle.toLowerCase();
   const textRaw = String(msg?.message || '');
-  const text = textRaw.slice(0, TELEGRAM_MAX_TEXT_CHARS);
-  const ts = msg?.date ? new Date(msg.date * 1000).toISOString() : new Date().toISOString();
+  const text = textRaw.slice(0, isSaudiCivilDefense
+    ? MAX_POST_CHARS : TELEGRAM_MAX_TEXT_CHARS);
+  const ts = msg?.date ? new Date(msg.date * 1000).toISOString() : isSaudiCivilDefense ? '' : new Date().toISOString();
   return {
     id: `${handle}:${msg.id}`,
     source: 'telegram',
@@ -1185,6 +1188,7 @@ function normalizeTelegramMessage(msg, channel) {
     url: `https://t.me/${handle}/${msg.id}`,
     ts,
     text,
+    textTruncated: text.length < textRaw.length,
     topic: channel.topic || 'other',
     tags: [channel.region].filter(Boolean),
     earlySignal: true,
@@ -4531,6 +4535,7 @@ const RELAY_RECENCY_MS = 15 * 60 * 1000; // 15 min — matches client-side recen
 const RELAY_SOURCE_TIERS = {
   ...requireShared('source-tiers.json'),
   ...requireShared('x-account-source-tiers.json'),
+  [SAUDI_CIVIL_DEFENSE.name]: SAUDI_CIVIL_DEFENSE.tier,
 };
 const {
   createExplicitTierFourSourceSet,
@@ -4838,9 +4843,9 @@ const CLASSIFY_LLM_PROVIDERS = [
   },
 ];
 
-function classifyFetchLlmSingle(titles, _apiKey, apiUrl, model, headers, extraBody, timeout) {
+function classifyFetchLlmSingle(titles, _apiKey, apiUrl, model, headers, extraBody, timeout, maxTextChars = 200) {
   return new Promise((resolve) => {
-    const sanitized = titles.map((t) => t.replace(/[\n\r]/g, ' ').replace(/\|/g, '/').slice(0, 200).trim());
+    const sanitized = titles.map((t) => t.replace(/[\n\r]/g, ' ').replace(/\|/g, '/').slice(0, maxTextChars).trim());
     const prompt = sanitized.map((t, i) => `${i}|${t}`).join('\n');
     const bodyStr = JSON.stringify({
       model,
@@ -4883,7 +4888,7 @@ function classifyFetchLlmSingle(titles, _apiKey, apiUrl, model, headers, extraBo
   });
 }
 
-async function classifyFetchLlm(titles) {
+async function classifyFetchLlm(titles, maxTextChars = 200) {
   for (const provider of CLASSIFY_LLM_PROVIDERS) {
     const envVal = process.env[provider.envKey];
     if (!envVal) continue;
@@ -4892,7 +4897,7 @@ async function classifyFetchLlm(titles) {
     const model = typeof provider.model === 'function' ? provider.model() : provider.model;
     const headers = provider.headers(envVal);
 
-    const result = await classifyFetchLlmSingle(titles, envVal, apiUrl, model, headers, provider.extraBody || {}, provider.timeout);
+    const result = await classifyFetchLlmSingle(titles, envVal, apiUrl, model, headers, provider.extraBody || {}, provider.timeout, maxTextChars);
     if (result) {
       return result;
     }
@@ -5114,6 +5119,27 @@ async function seedClassify() {
     if (!hasAnyProvider) {
       console.log('[Classify] Skipped — no LLM provider keys configured');
       return;
+    }
+
+    try {
+      await publishSaudiCivilDefenseAlerts(telegramState.items, {
+        now: Date.now,
+        readCache: upstashGet,
+        writeCache: upstashSet,
+        classify: (posts) => classifyFetchLlm(posts, MAX_POST_CHARS),
+        publish: (event) => publishNotificationEvent({
+          ...event,
+          payload: {
+            ...event.payload,
+            importanceScore: relayComputeImportanceScore(
+              event.severity, event.payload.source, 1, event.payload.publishedAt,
+              { title: event.payload.title, classSource: 'llm', entityCorroborationCount: 0 },
+            ),
+          },
+        }),
+      });
+    } catch (e) {
+      console.warn('[Classify] Saudi Civil Defense alerts failed:', e?.message || e);
     }
 
     let totalClassified = 0;
@@ -7515,6 +7541,14 @@ async function seedSocialVelocity() {
       await new Promise(r => setTimeout(r, 500));
       const posts = await fetchRedditHot(sub, fetchFailures);
       for (const p of posts) {
+        if (!p || typeof p.permalink !== 'string' || !p.permalink.startsWith('/r/')) continue;
+        let postUrl;
+        try {
+          postUrl = new URL(p.permalink, 'https://reddit.com');
+          if (postUrl.origin !== 'https://reddit.com'
+            || !/^\/r\/[A-Za-z0-9_]+\/comments\/[A-Za-z0-9]+(?:\/|$)/.test(postUrl.pathname)
+            || postUrl.href.length > 2048) continue;
+        } catch { continue; }
         // Deduplicate cross-subreddit reposts of the same article URL.
         const articleUrl = p.url || '';
         let articleHostname = '';
@@ -7529,7 +7563,7 @@ async function seedSocialVelocity() {
           id: String(p.id || ''),
           title: String(p.title || '').slice(0, 300),
           subreddit: sub,
-          url: `https://reddit.com${p.permalink || ''}`,
+          url: postUrl.href,
           score: p.score || 0,
           upvoteRatio: p.upvote_ratio || 0,
           numComments: p.num_comments || 0,
@@ -10985,6 +11019,24 @@ const polymarketCache = new Map(); // key: query string → { data, timestamp }
 const polymarketInflight = new Map(); // key → Promise (dedup concurrent requests)
 const POLYMARKET_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min — reduce upstream pressure
 const POLYMARKET_NEG_TTL_MS = 5 * 60 * 1000; // 5 min negative cache on 429/error
+const POLYMARKET_MAX_BODY_BYTES = 2 * 1024 * 1024;
+const POLYMARKET_MAX_CACHE_ENTRIES = 64;
+
+function cachePolymarketResult(key, entry) {
+  polymarketCache.delete(key);
+  while (polymarketCache.size >= POLYMARKET_MAX_CACHE_ENTRIES) {
+    polymarketCache.delete(polymarketCache.keys().next().value);
+  }
+  polymarketCache.set(key, entry);
+}
+
+function backoffPolymarketResult(key) {
+  const cached = polymarketCache.get(key);
+  const now = Date.now();
+  cachePolymarketResult(key, cached?.data
+    ? { ...cached, retryAt: now + POLYMARKET_NEG_TTL_MS }
+    : { data: null, timestamp: now - POLYMARKET_CACHE_TTL_MS + POLYMARKET_NEG_TTL_MS });
+}
 
 // Circuit breaker — stops upstream requests after repeated failures to prevent OOM
 const polymarketCircuitBreaker = { failures: 0, openUntil: 0 };
@@ -11028,7 +11080,7 @@ function acquirePolymarketSlot() {
 function fetchPolymarketUpstream(cacheKey, endpoint, params, tag) {
   return acquirePolymarketSlot().catch(() => 'REJECTED').then((slotResult) => {
     if (slotResult === 'REJECTED') {
-      polymarketCache.set(cacheKey, { data: '[]', timestamp: Date.now() - POLYMARKET_CACHE_TTL_MS + POLYMARKET_NEG_TTL_MS });
+      backoffPolymarketResult(cacheKey);
       return null;
     }
     const gammaUrl = `https://gamma-api.polymarket.com/${endpoint}?${params}`;
@@ -11044,11 +11096,11 @@ function fetchPolymarketUpstream(cacheKey, endpoint, params, tag) {
           polymarketCircuitBreaker.failures = 0;
         } else {
           tripPolymarketCircuitBreaker();
-          polymarketCache.set(cacheKey, { data: '[]', timestamp: Date.now() - POLYMARKET_CACHE_TTL_MS + POLYMARKET_NEG_TTL_MS });
+          backoffPolymarketResult(cacheKey);
         }
       }
       const request = https.get(gammaUrl, {
-        headers: { 'Accept': 'application/json' },
+        headers: { 'Accept': 'application/json', 'User-Agent': CHROME_UA },
         timeout: 10000,
       }, (response) => {
         if (response.statusCode !== 200) {
@@ -11059,10 +11111,30 @@ function fetchPolymarketUpstream(cacheKey, endpoint, params, tag) {
           return;
         }
         let data = '';
-        response.on('data', chunk => data += chunk);
+        let bytes = 0;
+        response.on('data', chunk => {
+          if (finalized) return;
+          bytes += Buffer.byteLength(chunk);
+          if (bytes > POLYMARKET_MAX_BODY_BYTES) {
+            finalize(false);
+            response.destroy();
+            request.destroy();
+            resolve(null);
+            return;
+          }
+          data += chunk;
+        });
         response.on('end', () => {
+          if (finalized) return;
+          try {
+            if (!Array.isArray(JSON.parse(data))) throw new Error('Expected market list');
+          } catch {
+            finalize(false);
+            resolve(null);
+            return;
+          }
           finalize(true);
-          polymarketCache.set(cacheKey, { data, timestamp: Date.now() });
+          cachePolymarketResult(cacheKey, { data, timestamp: Date.now() });
           resolve(data);
         });
         response.on('error', () => { finalize(false); resolve(null); });
@@ -11094,16 +11166,17 @@ function handlePolymarketRequest(req, res) {
   // query-string ordering, tag vs tag_slug alias, or varying limit values.
   // Cache key excludes limit — always fetch upstream with limit=50, slice on serve.
   // This prevents cache fragmentation from different callers (limit=20 vs limit=30).
-  const endpoint = url.searchParams.get('endpoint') || 'markets';
+  const endpoint = url.searchParams.get('endpoint') === 'events' ? 'events' : 'markets';
   const requestedLimit = Math.max(1, Math.min(100, parseInt(url.searchParams.get('limit') || '50', 10) || 50));
   const upstreamLimit = 50; // canonical upstream limit for cache sharing
   const params = new URLSearchParams();
-  params.set('closed', url.searchParams.get('closed') || 'false');
-  params.set('order', url.searchParams.get('order') || 'volume');
-  params.set('ascending', url.searchParams.get('ascending') || 'false');
+  params.set('closed', url.searchParams.get('closed') === 'true' ? 'true' : 'false');
+  const order = url.searchParams.get('order');
+  params.set('order', ['volume', 'liquidity', 'startDate', 'endDate', 'spread'].includes(order) ? order : 'volume');
+  params.set('ascending', url.searchParams.get('ascending') === 'true' ? 'true' : 'false');
   params.set('limit', String(upstreamLimit));
-  const tag = url.searchParams.get('tag') || url.searchParams.get('tag_slug');
-  if (tag && endpoint === 'events') params.set('tag_slug', tag.replace(/[^a-z0-9-]/gi, '').slice(0, 100));
+  const tag = (url.searchParams.get('tag') || url.searchParams.get('tag_slug') || '').replace(/[^a-z0-9-]/gi, '').slice(0, 100);
+  if (tag && endpoint === 'events') params.set('tag_slug', tag);
 
   const cacheKey = endpoint + ':' + params.toString();
 
@@ -11118,6 +11191,7 @@ function handlePolymarketRequest(req, res) {
 
   const cached = polymarketCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < POLYMARKET_CACHE_TTL_MS) {
+    if (cached.data === null) return safeEnd(res, 502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify({ error: 'Polymarket upstream unavailable' }));
     return sendCompressed(req, res, 200, {
       'Content-Type': 'application/json',
       'Cache-Control': 'public, max-age=600',
@@ -11127,18 +11201,19 @@ function handlePolymarketRequest(req, res) {
     }, sliceToLimit(cached.data));
   }
 
-  // Circuit breaker open — serve stale cache or empty, skip upstream
-  if (Date.now() < polymarketCircuitBreaker.openUntil) {
-    if (cached) {
+  const circuitOpen = Date.now() < polymarketCircuitBreaker.openUntil;
+  if (circuitOpen || Date.now() < (cached?.retryAt || 0)) {
+    if (cached?.data) {
       return sendCompressed(req, res, 200, {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',
+        'CDN-Cache-Control': 'no-store',
         'X-Cache': 'STALE',
-        'X-Circuit': 'OPEN',
+        ...(circuitOpen ? { 'X-Circuit': 'OPEN' } : {}),
         'X-Polymarket-Source': 'railway-stale',
-      }, cached.data);
+      }, sliceToLimit(cached.data));
     }
-    return safeEnd(res, 200, { 'Content-Type': 'application/json', 'X-Circuit': 'OPEN' }, JSON.stringify([]));
+    return safeEnd(res, 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Circuit': 'OPEN' }, JSON.stringify({ error: 'Polymarket upstream unavailable' }));
   }
 
   let inflight = polymarketInflight.get(cacheKey);
@@ -11158,7 +11233,7 @@ function handlePolymarketRequest(req, res) {
         'X-Cache': 'MISS',
         'X-Polymarket-Source': 'railway',
       }, sliceToLimit(data));
-    } else if (cached) {
+    } else if (cached?.data) {
       sendCompressed(req, res, 200, {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',
@@ -11167,7 +11242,7 @@ function handlePolymarketRequest(req, res) {
         'X-Polymarket-Source': 'railway-stale',
       }, sliceToLimit(cached.data));
     } else {
-      safeEnd(res, 200, { 'Content-Type': 'application/json' }, JSON.stringify([]));
+      safeEnd(res, 502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify({ error: 'Polymarket upstream unavailable' }));
     }
   });
 }
@@ -11208,7 +11283,7 @@ setInterval(() => {
     if (now - entry.timestamp > WORLDBANK_CACHE_TTL_MS * 2) worldbankCache.delete(key);
   }
   for (const [key, entry] of polymarketCache) {
-    if (now - entry.timestamp > POLYMARKET_CACHE_TTL_MS * 2) polymarketCache.delete(key);
+    if (now - entry.timestamp > POLYMARKET_CACHE_TTL_MS * 2 && now >= (entry.retryAt || 0)) polymarketCache.delete(key);
   }
   for (const [key, entry] of yahooChartCache) {
     if (now - entry.ts > YAHOO_CHART_CACHE_TTL_MS * 2) yahooChartCache.delete(key);
@@ -11534,11 +11609,20 @@ async function ytFetch(url) {
 
 const ytLiveCache = new Map();
 const YT_CACHE_TTL = 5 * 60 * 1000;
+const YT_CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
+const YT_HANDLE_RE = /^[\p{L}\p{N}](?:[\p{L}\p{N}\p{M}._·-]{0,28}[\p{L}\p{N}\p{M}])?$/u;
 
 function handleYouTubeLiveRequest(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const channel = url.searchParams.get('channel');
   const videoIdParam = url.searchParams.get('videoId');
+  const handle = channel?.replace(/^@/, '').normalize('NFC') || '';
+  if ((channel && (channel.length > 128 || channel !== channel.trim()
+    || (!YT_CHANNEL_ID_RE.test(channel) && !YT_HANDLE_RE.test(handle))))
+    || (videoIdParam && (videoIdParam.length !== 11 || !/^[A-Za-z0-9_-]{11}$/.test(videoIdParam)))) {
+    return sendCompressed(req, res, 400, { 'Content-Type': 'application/json' },
+      JSON.stringify({ error: 'Invalid YouTube handle, channel ID or video ID' }));
+  }
 
   if (videoIdParam && /^[A-Za-z0-9_-]{11}$/.test(videoIdParam)) {
     const cacheKey = `vid:${videoIdParam}`;
@@ -11571,7 +11655,7 @@ function handleYouTubeLiveRequest(req, res) {
       JSON.stringify({ error: 'Missing channel parameter' }));
   }
 
-  const channelHandle = channel.startsWith('@') ? channel : `@${channel}`;
+  const channelHandle = YT_CHANNEL_ID_RE.test(channel) ? channel : `@${handle.toLowerCase()}`;
   const cacheKey = `ch:${channelHandle}`;
   const cached = ytLiveCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < YT_CACHE_TTL) {
@@ -11581,7 +11665,8 @@ function handleYouTubeLiveRequest(req, res) {
     }, cached.json);
   }
 
-  const liveUrl = `https://www.youtube.com/${channelHandle}/live`;
+  const channelPath = YT_CHANNEL_ID_RE.test(channel) ? `channel/${channel}` : `@${encodeURIComponent(handle)}`;
+  const liveUrl = `https://www.youtube.com/${channelPath}/live`;
   ytFetch(liveUrl)
     .then(r => {
       if (!r.ok) {
@@ -12912,23 +12997,33 @@ function parseGfDates(text, isRoundTrip) {
     const stripped = text.replace(/^\)\]\}'/, '');
     const outer = JSON.parse(stripped);
     const inner = outer?.[0]?.[2];
-    if (!inner) return [];
+    if (!inner) return null;
 
     const data = JSON.parse(inner);
     const items = data[data.length - 1];
-    if (!Array.isArray(items)) return [];
+    if (!Array.isArray(items)) return null;
 
+    const isCalendarDate = value => {
+      if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+      const time = Date.parse(`${value}T00:00:00Z`);
+      return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
+    };
     const roundTrip = isRoundTrip === 'true' || isRoundTrip === true;
-    return items.map(item => {
+    const dates = [];
+    for (const item of items) {
       try {
         if (!Array.isArray(item) || item.length < 3) return null;
         if (!Array.isArray(item[2]) || !Array.isArray(item[2][0]) || item[2][0].length < 2) return null;
-        const price = parseFloat(item[2][0][1]);
-        if (!price || Number.isNaN(price)) return null;
-        return { date: item[0] ?? '', returnDate: roundTrip ? (item[1] ?? '') : '', price };
+        const date = item[0];
+        const returnDate = item[1];
+        if (!isCalendarDate(date) || (roundTrip && !isCalendarDate(returnDate))) return null;
+        const price = Number(item[2][0][1]);
+        if (!Number.isFinite(price) || price <= 0) return null;
+        dates.push({ date, returnDate: roundTrip ? returnDate : '', price });
       } catch { return null; }
-    }).filter(Boolean);
-  } catch { return []; }
+    }
+    return dates;
+  } catch { return null; }
 }
 
 async function handleGoogleFlightsSearch(req, res) {
@@ -13055,6 +13150,7 @@ async function handleGoogleFlightsDates(req, res) {
     const MAX_DATE_CHUNKS = 6;
     const allDates = [];
     let hasPartialFailure = false;
+    let hasCooldown = false;
 
     if (totalDays <= MAX_CHUNK) {
       incrementRelayMetric('googleFlightsRequests');
@@ -13085,63 +13181,68 @@ async function handleGoogleFlightsDates(req, res) {
         throw new Error(`Google Flights returned ${gfResp.status}`);
       }
       const text = await gfResp.text();
-      allDates.push(...parseGfDates(text, isRoundTrip));
+      const dates = parseGfDates(text, isRoundTrip);
+      if (dates === null) {
+        recordRelayOutcome('googleFlights', 'terminalFailure');
+        throw new Error('Google Flights returned an invalid calendar response');
+      }
+      allDates.push(...dates);
       recordRelayOutcome('googleFlights', 'success');
       incrementRelayMetric('googleFlightsServed');
     } else {
-      const current = new Date(start);
-      let chunksAttempted = 0;
-      while (current <= end && chunksAttempted < MAX_DATE_CHUNKS) {
-        chunksAttempted++;
+      const chunks = [];
+      for (let day = start.getTime(); day <= end.getTime() && chunks.length < MAX_DATE_CHUNKS; day += MAX_CHUNK * 86_400_000) {
+        chunks.push({
+          ...params,
+          startDate: new Date(day).toISOString().slice(0, 10),
+          endDate: new Date(Math.min(day + (MAX_CHUNK - 1) * 86_400_000, end.getTime())).toISOString().slice(0, 10),
+        });
+      }
+      if (totalDays > MAX_CHUNK * MAX_DATE_CHUNKS) hasPartialFailure = true;
+
+      // At most six concurrent 20s fetches fit within the RPC's 30s wait.
+      const results = await Promise.all(chunks.map(async (chunk) => {
         incrementRelayMetric('googleFlightsRequests');
         if (Date.now() < gfGlobal429Until) {
           incrementRelayMetric('googleFlights429');
           recordRelayOutcome('googleFlights', 'throttle');
+          hasCooldown = true;
           hasPartialFailure = true;
-          current.setDate(current.getDate() + MAX_CHUNK);
-          continue;
+          return [];
         }
-        const chunkEnd = new Date(current);
-        chunkEnd.setDate(chunkEnd.getDate() + MAX_CHUNK - 1);
-        if (chunkEnd > end) chunkEnd.setTime(end.getTime());
-
-        const chunkFilters = buildDateFilters({
-          ...params,
-          startDate: current.toISOString().slice(0, 10),
-          endDate: chunkEnd.toISOString().slice(0, 10),
-        });
-        const body = `f.req=${encodeGfFilters(chunkFilters)}`;
-        let gfResp;
         try {
-          gfResp = await fetch(GF_CALENDAR_URL, { method: 'POST', headers: GF_HEADERS, body, signal: AbortSignal.timeout(20_000) });
+          const body = `f.req=${encodeGfFilters(buildDateFilters(chunk))}`;
+          const gfResp = await fetch(GF_CALENDAR_URL, { method: 'POST', headers: GF_HEADERS, body, signal: AbortSignal.timeout(20_000) });
+          if (gfResp.status === 429) {
+            gfGlobal429Until = Date.now() + GF_429_COOLDOWN_MS;
+            console.warn(`[Google Flights] chunk 429 — global cooldown ${GF_429_COOLDOWN_MS / 1000}s`);
+            incrementRelayMetric('googleFlights429');
+            recordRelayOutcome('googleFlights', 'throttle');
+            hasCooldown = true;
+          } else if (gfResp.status === 401 || gfResp.status === 403) {
+            recordRelayOutcome('googleFlights', 'authRejection');
+          } else if (gfResp.ok) {
+            const text = await gfResp.text();
+            const dates = parseGfDates(text, isRoundTrip);
+            if (dates === null) {
+              recordRelayOutcome('googleFlights', 'terminalFailure');
+              console.warn(`[Google Flights] dates chunk ${chunk.startDate} returned an invalid calendar response`);
+            } else {
+              recordRelayOutcome('googleFlights', 'success');
+              incrementRelayMetric('googleFlightsServed');
+              return dates;
+            }
+          } else {
+            recordRelayOutcome('googleFlights', 'terminalFailure');
+            console.warn(`[Google Flights] dates chunk ${chunk.startDate} failed: ${gfResp.status}`);
+          }
         } catch (err) {
           recordRelayOutcome('googleFlights', classifyUpstreamOutcome({ error: err }));
-          hasPartialFailure = true;
-          current.setDate(current.getDate() + MAX_CHUNK);
-          continue;
         }
-        if (gfResp.status === 429) {
-          gfGlobal429Until = Date.now() + GF_429_COOLDOWN_MS;
-          console.warn(`[Google Flights] chunk 429 — global cooldown ${GF_429_COOLDOWN_MS / 1000}s`);
-          incrementRelayMetric('googleFlights429');
-          recordRelayOutcome('googleFlights', 'throttle');
-          hasPartialFailure = true;
-        } else if (gfResp.status === 401 || gfResp.status === 403) {
-          recordRelayOutcome('googleFlights', 'authRejection');
-          hasPartialFailure = true;
-        } else if (gfResp.ok) {
-          const text = await gfResp.text();
-          allDates.push(...parseGfDates(text, isRoundTrip));
-          recordRelayOutcome('googleFlights', 'success');
-          incrementRelayMetric('googleFlightsServed');
-        } else {
-          recordRelayOutcome('googleFlights', 'terminalFailure');
-          hasPartialFailure = true;
-          console.warn(`[Google Flights] dates chunk ${current.toISOString().slice(0, 10)} failed: ${gfResp.status}`);
-        }
-        current.setDate(current.getDate() + MAX_CHUNK);
-      }
-      if (current <= end) hasPartialFailure = true;
+        hasPartialFailure = true;
+        return [];
+      }));
+      for (const dates of results) allDates.push(...dates);
     }
 
     const sortByPrice = url.searchParams.get('sort_by_price') === 'true';
@@ -13150,7 +13251,7 @@ async function handleGoogleFlightsDates(req, res) {
     if (hasPartialFailure && allDates.length > 0) recordRelayOutcome('googleFlights', 'fallback');
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ dates: allDates, partial: hasPartialFailure }));
+    res.end(JSON.stringify({ dates: allDates, partial: hasPartialFailure, cooldown: hasCooldown }));
   } catch (err) {
     const isTimeout = err?.name === 'TimeoutError' || err?.message?.includes('timed out');
     if (isTimeout) {
@@ -13229,11 +13330,11 @@ function isWidgetEndpointAllowed(endpoint) {
 
 const WIDGET_FETCH_TOOL = {
   name: 'fetch_worldmonitor_data',
-  description: 'Fetch live data from WorldMonitor APIs. Only pre-approved endpoint paths are allowed.',
+  description: 'Fetch structured WorldMonitor data from the catalog in the system prompt. Prefer a matching bootstrap key, then a matching RPC; use search_web only for a data gap. Send a GET to /api/bootstrap with params.keys (comma-separated catalog keys), or /api/<service>/v1/<method> with the cataloged RPC params. Supply a path, not a full URL; params are string query parameters appended to the URL. Some cataloged routes require credentials this tool does not send; their authorization error body is returned as text, not data. Successful bootstrap JSON has { data: { <key>: <array or object> }, missing: [<key>] }; RPC JSON has method-specific fields and can include historical series, such as seeded FRED observations. The model receives sanitized response text, normally JSON, truncated to 20,000 characters; it may be incomplete JSON or an API error body. Local policy rejection returns "Endpoint not allowed."; leading <!DOCTYPE or <html pages return an HTML error message with no data; fetch failures return "Fetch failed: <message>". Treat errors or missing data as unavailable, never as zero.',
   input_schema: {
     type: 'object',
     properties: {
-      endpoint: { type: 'string', description: 'Approved API endpoint path (e.g. /api/market/v1/list-crypto-quotes)' },
+      endpoint: { type: 'string', description: 'Cataloged API path, not a full URL (e.g. /api/bootstrap or /api/economic/v1/get-fred-series); put query parameters in params' },
       params: { type: 'object', description: 'Query parameters as key-value string pairs', additionalProperties: { type: 'string' } },
     },
     required: ['endpoint'],
@@ -13424,7 +13525,7 @@ For modify requests: make targeted changes to improve the widget as requested.`;
 
 const WIDGET_SEARCH_TOOL = {
   name: 'search_web',
-  description: 'Search the web for current news, live data, or any topic not covered by WorldMonitor RPCs. Returns up to 8 results with title, URL, snippet, and publish date. Use this for topics like breaking news, weather, specific events, prices not in RPC catalog, etc.',
+  description: 'Search the web for data to display in a widget, only when no suitable WorldMonitor bootstrap key or RPC supplies the requested data, specificity, or freshness. Prefer matching structured WorldMonitor data, including weatherAlerts, news list-feed-digest, and aviation news. A local weather forecast, a breaking event not yet in the feeds, or a price not in the catalog are valid widget requests: use search_web for these gaps. Requests up to 8 results and returns a sanitized JSON array with title, url, snippet, publishedDate. These are web snippets, not structured dashboard values; freshness varies by provider and publishedDate may be a date, relative age, or empty. No usable results or search failures return error text.',
   input_schema: {
     type: 'object',
     properties: {
@@ -13603,6 +13704,8 @@ function handleWidgetAgentHealthRequest(req, res) {
   return safeEnd(res, 200, { 'Content-Type': 'application/json' }, JSON.stringify(status));
 }
 
+const WIDGET_MAX_TOOL_CALLS = 3;
+
 async function handleWidgetAgentRequest(req, res) {
   const status = requireWidgetAgentAccess(req, res);
   if (!status) return;
@@ -13694,6 +13797,7 @@ async function handleWidgetAgentRequest(req, res) {
   // Error (log-failed)" — defeating the entire diagnostic value of this
   // log line. `completed` doesn't need hoisting (not read in catch).
   let toolCallCount = 0;
+  let toolExecutionCount = 0;
 
   try {
     const { default: Anthropic } = await import('@anthropic-ai/sdk');
@@ -13714,13 +13818,16 @@ async function handleWidgetAgentRequest(req, res) {
     messages.push({ role: 'user', content: String(prompt).slice(0, 2000) });
 
     let completed = false;
+    const recoveryCandidates = [];
+    let incompleteMessage = `Widget generation incomplete: tool loop exhausted (${maxTurns} turns)`;
+    let finalizing = false;
+    let truncatedResponses = 0;
     for (let turn = 0; turn < maxTurns; turn++) {
       if (cancelled) break;
 
-      // Option D: on penultimate turn, inject a final-turn directive so the model
-      // emits HTML with whatever data it has instead of making another tool call.
-      const isLastChance = turn === maxTurns - 2;
-      const turnMessages = isLastChance
+      // Finalization is irreversible, including after an incomplete response.
+      finalizing ||= toolCallCount >= WIDGET_MAX_TOOL_CALLS || turn >= maxTurns - 2;
+      const turnMessages = finalizing
         ? [...messages, { role: 'user', content: 'FINAL TURN: You have used all available tool calls. You MUST emit the completed widget HTML now using the data you already have. No more tool calls — output <!-- widget-html --> immediately.' }]
         : messages;
 
@@ -13728,47 +13835,81 @@ async function handleWidgetAgentRequest(req, res) {
         model,
         max_tokens: maxTokens,
         system: systemPrompt,
-        tools: isLastChance ? [] : [WIDGET_FETCH_TOOL, WIDGET_SEARCH_TOOL],
+        // Keep schemas for tool blocks in history while prohibiting new calls.
+        tools: [WIDGET_FETCH_TOOL, WIDGET_SEARCH_TOOL],
+        tool_choice: { type: finalizing ? 'none' : 'auto' },
         messages: turnMessages,
       });
+      if (cancelled) break;
 
-      if (response.stop_reason === 'end_turn') {
+      const hasToolRequests = response.content.some(b => b.type === 'tool_use');
+      if (response.stop_reason === 'end_turn' && !hasToolRequests) {
         const textBlock = response.content.find(b => b.type === 'text');
         const text = textBlock?.text ?? '';
-        const { html, title } = parseWidgetAgentResponse(text, maxHtml);
+        const { html, title, isComplete } = parseWidgetAgentResponse(text, maxHtml);
+        if (!isComplete) {
+          incompleteMessage = 'Widget generation incomplete: expected nonempty HTML inside complete widget-html markers.';
+          break;
+        }
         sendWidgetSSE(res, 'html_complete', { html });
         sendWidgetSSE(res, 'done', { title });
         completed = true;
         break;
       }
 
-      if (response.stop_reason === 'tool_use') {
+      if (hasToolRequests) {
         const toolResults = [];
         for (const block of response.content) {
           if (block.type !== 'tool_use') continue;
+          if (cancelled) break;
+
+          // Count attempts, including invalid/failed/unknown requests. Rejection
+          // never refunds the shared budget, and every block gets a result.
+          toolCallCount++;
+          const rejectTool = content => toolResults.push({ type: 'tool_result', tool_use_id: block.id, is_error: true, content });
+          if (toolCallCount > WIDGET_MAX_TOOL_CALLS) {
+            rejectTool('Tool call budget exhausted. Generate the widget using existing data.');
+            continue;
+          }
+          if (finalizing || response.stop_reason !== 'tool_use') {
+            rejectTool('Tools disabled during finalization or an incomplete response. Generate the complete widget using existing data.');
+            continue;
+          }
+          if (!block.input || typeof block.input !== 'object' || Array.isArray(block.input)) {
+            rejectTool('Invalid tool input.');
+            continue;
+          }
 
           if (block.name === 'search_web') {
             const { query = '' } = block.input;
+            if (typeof query !== 'string') {
+              rejectTool('Invalid search query.');
+              continue;
+            }
             sendWidgetSSE(res, 'tool_call', { endpoint: `search:${String(query).slice(0, 80)}` });
             try {
+              toolExecutionCount++;
               const searchResult = await performWidgetWebSearch(String(query));
               if (searchResult) {
                 toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: sanitizeToolContent(JSON.stringify(searchResult.results)) });
               } else {
-                toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'No search results available. No search provider configured.' });
+                rejectTool('No search results available. No search provider configured.');
               }
             } catch (err) {
-              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: `Search failed: ${err.message}` });
+              rejectTool(`Search failed: ${err.message}`);
             }
             continue;
           }
 
-          if (block.name !== 'fetch_worldmonitor_data') continue;
+          if (block.name !== 'fetch_worldmonitor_data') {
+            rejectTool('Unknown tool.');
+            continue;
+          }
           const { endpoint, params = {} } = block.input;
           sendWidgetSSE(res, 'tool_call', { endpoint });
 
-          if (!isWidgetEndpointAllowed(endpoint)) {
-            toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Endpoint not allowed.' });
+          if (typeof endpoint !== 'string' || !isWidgetEndpointAllowed(endpoint)) {
+            rejectTool('Endpoint not allowed.');
             continue;
           }
 
@@ -13777,6 +13918,7 @@ async function handleWidgetAgentRequest(req, res) {
             for (const [k, v] of Object.entries(params)) {
               url.searchParams.set(k, String(v));
             }
+            toolExecutionCount++;
             const dataRes = await fetch(url.toString(), {
               headers: { 'User-Agent': 'WorldMonitor-WidgetAgent/1.0' },
               signal: AbortSignal.timeout(15_000),
@@ -13784,30 +13926,51 @@ async function handleWidgetAgentRequest(req, res) {
             const data = await dataRes.text();
             const trimmed = data.trimStart();
             if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
-              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Error: endpoint returned HTML instead of JSON. No data available.' });
+              rejectTool('Error: endpoint returned HTML instead of JSON. No data available.');
             } else {
               toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: sanitizeToolContent(data) });
             }
           } catch (err) {
-            toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: `Fetch failed: ${err.message}` });
+            rejectTool(`Fetch failed: ${err.message}`);
           }
         }
         messages.push({ role: 'assistant', content: response.content });
         messages.push({ role: 'user', content: toolResults });
-        toolCallCount++;
+        if (response.stop_reason === 'tool_use') recoveryCandidates.push(response.content);
+      } else {
+        messages.push({ role: 'assistant', content: response.content });
+      }
+      if (cancelled) break;
+
+      // The installed SDK also exposes pause_turn, refusal and stop_sequence.
+      // Keep partial content in history, but never promote it to success.
+      switch (response.stop_reason) {
+        case 'tool_use':
+          if (!hasToolRequests) throw new Error('Widget generation incomplete: tool stop without tool requests');
+          break;
+        case 'max_tokens':
+          finalizing = true;
+          if (++truncatedResponses > 1) throw new Error('Widget generation incomplete: response truncated twice at the token limit');
+          messages.push({ role: 'user', content: 'The previous response was truncated. Generate the entire completed widget again, more concisely, using existing data. Do not continue the partial HTML.' });
+          break;
+        case 'pause_turn':
+          finalizing = true;
+          break;
+        case 'refusal':
+          throw new Error('Widget generation refused by the AI backend');
+        case 'stop_sequence':
+          throw new Error('Widget generation incomplete: unexpected stop sequence');
+        default:
+          throw new Error('Widget generation incomplete: unexpected stop reason');
       }
     }
     if (!completed && !cancelled) {
-      // Partial recovery: scan all assistant messages for any widget-html markers
-      // emitted mid-loop (e.g. model tried to output but was truncated).
+      // Recover the newest complete tool-turn output from this request only.
       let recovered = false;
-      for (const msg of messages) {
-        if (msg.role !== 'assistant') continue;
-        const text = Array.isArray(msg.content)
-          ? msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
-          : String(msg.content ?? '');
+      for (let i = recoveryCandidates.length - 1; i >= 0; i--) {
+        const text = recoveryCandidates[i].filter(b => b.type === 'text').map(b => b.text).join('');
         const parsed = parseWidgetAgentResponse(text, maxHtml);
-        if (parsed.hasHtmlMarkers && parsed.html.trim()) {
+        if (parsed.isComplete) {
           sendWidgetSSE(res, 'html_complete', { html: parsed.html });
           sendWidgetSSE(res, 'done', { title: parsed.title });
           recovered = true;
@@ -13815,7 +13978,7 @@ async function handleWidgetAgentRequest(req, res) {
         }
       }
       if (!recovered) {
-        sendWidgetSSE(res, 'error', { message: `Widget generation incomplete: tool loop exhausted (${maxTurns} turns)` });
+        sendWidgetSSE(res, 'error', { message: incompleteMessage });
       }
     }
   } catch (err) {
@@ -13827,24 +13990,22 @@ async function handleWidgetAgentRequest(req, res) {
     if (!cancelled) {
       sendWidgetSSE(res, 'error', { message: classifyWidgetAgentError(err, model) });
     }
-    // Verbose structured log so Railway operators can diagnose without
-    // server-side reproduction. Includes status + type + request shape;
-    // omits headers/body to avoid leaking the prompt or auth headers.
+    // Log metadata only: SDK error messages and stacks can contain request
+    // or response bodies, including prompts and credentials.
     try {
       console.error('[widget-agent] Error:', JSON.stringify({
-        message: err && err.message ? String(err.message).slice(0, 500) : String(err).slice(0, 500),
         status: err && typeof err.status === 'number' ? err.status : null,
         type: (err && err.error && err.error.type) || (err && err.type) || null,
         name: err && err.name ? String(err.name) : null,
         isPro,
         model,
         toolCallCount,
+        toolExecutionCount,
         promptLen: typeof prompt === 'string' ? prompt.length : 0,
         historyLen: Array.isArray(conversationHistory) ? conversationHistory.length : 0,
       }));
-      if (err && err.stack) console.error('[widget-agent] Stack:', err.stack);
     } catch (logErr) {
-      console.error('[widget-agent] Error (log-failed):', err && err.message);
+      console.error('[widget-agent] Error (log-failed)');
     }
   } finally {
     clearTimeout(timeout);

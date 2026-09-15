@@ -445,6 +445,13 @@ const MASKED_URL_FRAME = /^webkit-masked-url:/;
  */
 const CSP_EVAL_BLOCK = /unsafe-eval.*Content Security Policy|Content Security Policy.*unsafe-eval/;
 /**
+ * Chrome's wording for a `<script>` whose inline source failed to parse when it
+ * was inserted: the DOM call is prefixed onto the parse error. Deliberately NOT
+ * in `MARKETING_IGNORE_ERRORS`: this bundle appends scripts too (turnstile.ts,
+ * debugbear-rum.ts), so only a frame gate can tell an injected script from ours.
+ */
+const APPEND_CHILD_PARSE_FAILURE = /^Failed to execute 'appendChild' on 'Node': /;
+/**
  * A script the browser fetched but could not PARSE. Deliberately NOT in
  * `MARKETING_IGNORE_ERRORS`: a `SyntaxError` message is generic enough that our
  * own bundle could in principle produce one (a `JSON.parse` on a malformed API
@@ -482,6 +489,12 @@ const PLAIN_OBJECT_REJECTION = /^Object captured as promise rejection with keys:
  */
 const JSON_RPC_RESERVED_MIN = -32768;
 const JSON_RPC_RESERVED_MAX = -32000;
+/**
+ * EIP-1193 provider error codes: 4001 user rejected, 4100 unauthorized, 4200
+ * unsupported method, 4900 disconnected, 4901 chain disconnected. Exact values,
+ * not a range — the protocol defines these five and nothing between them.
+ */
+const EIP1193_PROVIDER_CODES: ReadonlySet<number> = new Set([4001, 4100, 4200, 4900, 4901]);
 
 /**
  * Stack-gated suppressors for messages that our own minified bundle COULD
@@ -645,6 +658,28 @@ export function marketingBeforeSend<T extends PolicyEvent>(event: T): T | null {
       && CSP_EVAL_BLOCK.test(msg)
       && frames.some((f) => f.filename === '<anonymous>')) return null;
 
+  // An injected script inserting a `<script>` whose inline source fails to
+  // parse. WORLDMONITOR-12D is the shape: `SyntaxError: Failed to execute
+  // 'appendChild' on 'Node': Invalid regular expression: missing /` on Chrome
+  // 152 / Windows at `/`, an `onerror` capture whose eight frames are all
+  // `<anonymous>`, beside breadcrumbs from a third-party RUM beacon this surface
+  // never loads. The dashboard drops the same class through its
+  // `/Invalid regular expression: missing/` entry and `appendChild.*Unexpected`
+  // gate; the two surfaces run separate Sentry clients.
+  //
+  // Gated like the eval rule above, on the WHOLE stack being `<anonymous>` or
+  // infra: a parse failure attributable to this bundle's own script loaders
+  // would ride a `/pro/assets/*.js` frame, and one from an inline first-party
+  // script would put the document URL on the stack. A frame with no filename
+  // is dropped from `nonInfraFrames` yet could be that attributing frame, so
+  // it keeps the event reporting (PR #8174 review). The `SyntaxError` type
+  // keeps a script that parsed and then threw reporting.
+  if (nonInfraFrames.length === 0
+      && frames.every((f) => Boolean(f.filename?.trim()))
+      && exceptionType === 'SyntaxError'
+      && APPEND_CHILD_PARSE_FAILURE.test(msg)
+      && frames.some((f) => f.filename === '<anonymous>')) return null;
+
   // A module the browser fetched but could not parse. WORLDMONITOR-TS is the
   // shape: `action: load-clerk` on Chrome Mobile 80 / Android 10 (a 2020
   // browser on a TECNO KE5k), where `import()`-ing Clerk's SDK throws
@@ -693,9 +728,22 @@ export function marketingBeforeSend<T extends PolicyEvent>(event: T): T | null {
   // `tests/pro-sentry-filter-policy.test.mts` fails if a JSON-RPC client is
   // ever added to this surface, rather than letting the rule silently widen.
   //
-  // Deliberately narrow on the CODE: EIP-1193's own `4001` (user rejected the
-  // request) is outside the reserved range and keeps reporting, as does any
-  // non-integer, string, or absent code.
+  // EIP-1193's own provider codes (4001, 4100, 4200, 4900, 4901) are dropped
+  // on the same argument. They were first left reporting in case our bundle
+  // ever minted one, but no first-party code here talks to a wallet provider,
+  // and 8 of the issue's 9 events were a wallet extension's `{code: 4001,
+  // message}` — the rule had matched only the minority -32603 event.
+  // `tests/pro-sentry-filter-policy.test.mts` pins the bundle as wallet-free so
+  // the codes stay proof of origin. Any other number, a non-integer, a string,
+  // or an absent code keeps reporting.
+  //
+  // One dependency no test can pin: `@clerk/clerk-js` bundles wallet SDKs, and
+  // its Web3 sign-in helpers rethrow provider errors. They are unreachable
+  // while this bundle never calls them (scanned) and Web3 sign-in stays
+  // disabled on the Clerk instance (disabled as of 2026-09-14). Enabling it
+  // there makes a wallet code possible from our own sign-in path, so BOTH
+  // halves of this rule — the reserved range and these codes — must be
+  // re-derived first.
   //
   // The payload's own `message` is deliberately NOT consulted, so
   // `{code: -32603, message: 'checkout failed'}` is dropped too (raised in
@@ -712,8 +760,8 @@ export function marketingBeforeSend<T extends PolicyEvent>(event: T): T | null {
   if (PLAIN_OBJECT_REJECTION.test(msg)
       && typeof rejectedCode === 'number'
       && Number.isInteger(rejectedCode)
-      && rejectedCode >= JSON_RPC_RESERVED_MIN
-      && rejectedCode <= JSON_RPC_RESERVED_MAX) return null;
+      && ((rejectedCode >= JSON_RPC_RESERVED_MIN && rejectedCode <= JSON_RPC_RESERVED_MAX)
+        || EIP1193_PROVIDER_CODES.has(rejectedCode))) return null;
 
   // An injected script attributed to the document URL, dereferencing an iframe
   // this bundle does not have. Instagram's in-app browser was the observed case

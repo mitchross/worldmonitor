@@ -72,7 +72,7 @@ import type { ParsedMapUrlState } from '@/utils';
 import { BreakingNewsBanner } from '@/components/BreakingNewsBanner';
 import { initBreakingNewsAlerts, destroyBreakingNewsAlerts } from '@/services/breaking-news-alerts';
 import { markLcpDebug } from '@/utils/lcp-debug';
-import { safeStorageGet } from '@/utils/safe-storage';
+import { safeStorageGet, safeStorageSet } from '@/utils/safe-storage';
 import type { ServiceStatusPanel } from '@/components/ServiceStatusPanel';
 import type { MonitorPanel } from '@/components/MonitorPanel';
 import type { StablecoinPanel } from '@/components/StablecoinPanel';
@@ -124,6 +124,7 @@ import {
   CANADA_ARCTIC_OPT_IN_SOURCES,
   CANADA_DEPTH_OPT_IN_SOURCES,
   CRISIS_FLOOR_OPT_IN_SOURCES,
+  CURATED_REGIONAL_OPT_IN_SOURCES,
   computeDefaultDisabledSources,
   computeLegacyDefaultDisabledSources,
   FEEDS,
@@ -169,8 +170,8 @@ import {
   DashboardBindingError,
   isWebMcpAbortError,
   raceWebMcpAbort,
-  registerWebMcpTools,
   throwIfWebMcpAborted,
+  type WebMcpAppBindings,
   type WebMcpExecutionOptions,
 } from '@/services/webmcp';
 import {
@@ -228,6 +229,7 @@ import {
   migrateCanadaArcticOptInsV6,
   migrateCanadaDepthOptInsV7,
   migrateCrisisDeskOptInsV8,
+  migrateCuratedRegionalOptInsV9,
 } from '@/utils/cloud-prefs-migrations';
 import {
   getConvexClient,
@@ -283,6 +285,7 @@ const DEFAULT_VIEWPORT_MARGIN_PX = 400;
 // run site (#4486) so the engine bytes stay off the eager boot graph. The TYPE is
 // referenced via the inline `import(...)` type in app-context.ts (erased at build).
 import type { CorrelationPanel } from '@/components/CorrelationPanel';
+import { CORRELATION_DOMAINS } from '@/types/correlation';
 
 const CYBER_LAYER_ENABLED = import.meta.env.VITE_ENABLE_CYBER_LAYER === 'true';
 const FREE_MAP_PANEL_ACCESS_KEY = 'worldmonitor-free-map-panel-access-v1';
@@ -1460,6 +1463,27 @@ export class App {
         }
         localStorage.setItem(crisisDeskOptInKey, 'done');
       }
+      const curatedRegionalOptInKey = 'worldmonitor-curated-regional-optin-v1';
+      if (!safeStorageGet(curatedRegionalOptInKey)) {
+        const current = loadFromStorage<string[]>(STORAGE_KEYS.disabledFeeds, []);
+        const migrated = migrateCuratedRegionalOptInsV9({
+          [STORAGE_KEYS.disabledFeeds]: JSON.stringify(current),
+        }, CURATED_REGIONAL_OPT_IN_SOURCES);
+        const rawUpdated = migrated[STORAGE_KEYS.disabledFeeds];
+        let persisted = true;
+        if (typeof rawUpdated === 'string') {
+          let updated: unknown;
+          try { updated = JSON.parse(rawUpdated); } catch { updated = null; }
+          if (
+            Array.isArray(updated)
+            && updated.every((name): name is string => typeof name === 'string')
+            && JSON.stringify(updated) !== JSON.stringify(current)
+          ) {
+            persisted = saveToStorage(STORAGE_KEYS.disabledFeeds, updated);
+          }
+        }
+        if (persisted) safeStorageSet(curatedRegionalOptInKey, 'done');
+      }
       // Locale boost: additively enable locale-matched sources (runs once per locale).
       // Reads the explicit-choice key (`wm-locale-explicit`, written by Settings →
       // Language) before falling back to navigator. Mirrors the i18n.ts:99
@@ -1917,10 +1941,20 @@ export class App {
       engine.registerAdapter(economicAdapter);
       engine.registerAdapter(disasterAdapter);
       this.state.correlationEngine = engine;
+      this.connectCorrelationAssessments();
 
       await this.runCorrelationEngine();
     } catch (error) {
       console.warn('[CorrelationEngine] Initial lazy load/run failed:', error);
+    }
+  }
+
+  private connectCorrelationAssessments(): void {
+    const engine = this.state.correlationEngine;
+    if (!engine) return;
+    for (const domain of CORRELATION_DOMAINS) {
+      const panel = this.state.panels[`${domain}-correlation`] as CorrelationPanel | undefined;
+      panel?.setAssessmentHandler(cards => engine.assessCards(domain, cards));
     }
   }
 
@@ -1938,25 +1972,14 @@ export class App {
     // which on a first-run overlap would write empty cards into live panels.
     const didRun = await engine.run(this.state, runtimeMode);
     if (!didRun || this.state.isDestroyed) return;
-    for (const domain of ['military', 'escalation', 'economic', 'disaster'] as const) {
+    for (const domain of CORRELATION_DOMAINS) {
       const panel = this.state.panels[`${domain}-correlation`] as CorrelationPanel | undefined;
       panel?.updateCards(engine.getCards(domain));
     }
   }
 
-  public async init(): Promise<void> {
-    const initStart = performance.now();
-    markLcpDebug('wm:boot:app-init-start');
-
-    // WebMCP — register synchronously before any init awaits so agent
-    // scanners (isitagentready.com, in-browser agents) find the tools on
-    // their first probe. No-op in browsers without document.modelContext.
-    // Bindings await `this.uiReady` (resolves after Phase-4 UI init) so a tool
-    // invoked during startup waits for managers that can lazily create their
-    // targets. A bounded startup timeout keeps a genuinely broken state from
-    // hanging the caller. Store the returned controller
-    // so destroy() can unregister every tool on teardown.
-    this.webMcpController = registerWebMcpTools({
+  public getWebMcpBindings(): WebMcpAppBindings {
+    return {
       openCountryBriefByCode: (code, country, execution) => (
         this.openWebMcpCountryBrief(code, country, execution)
       ),
@@ -2334,7 +2357,16 @@ export class App {
         }
         return openWebMcpSignIn(execution?.signal);
       },
-    });
+    };
+  }
+
+  public async init(webMcpController: AbortController | null): Promise<void> {
+    const initStart = performance.now();
+    markLcpDebug('wm:boot:app-init-start');
+
+    // src/main.ts registers WebMCP before loading App. Own its controller before
+    // the first await so a failed init unregisters those tools through destroy().
+    this.webMcpController = webMcpController;
 
     window.addEventListener(I18N_RESOURCES_LOADED_EVENT, this.handleI18nResourcesLoaded);
 
@@ -2586,12 +2618,14 @@ export class App {
         void this.dataLoader.loadWsbTickers();
         void this.dataLoader.loadResilienceRanking();
         void this.dataLoader.loadGlobalTenders();
+        this.connectCorrelationAssessments();
       } else if (!nowPremium && hadPremium) {
         // Pro data must not remain visible or available from the client cache
         // after sign-out, expiry, or downgrade.
         this.dataLoader.clearPhysicalPremiumComparison();
         this.dataLoader.clearMineralProduction();
         void this.dataLoader.clearGlobalTenders();
+        this.state.correlationEngine?.clearAssessments();
       }
       _prevHadPremium = nowPremium;
     };

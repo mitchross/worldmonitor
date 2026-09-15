@@ -518,9 +518,6 @@
         },
         {
           "path": "scripts/seed-aviation.mjs"
-        },
-        {
-          "path": "server/worldmonitor/aviation/v1/_shared.ts"
         }
       ]
     },
@@ -6045,6 +6042,9 @@
       "attribution": "Credit mexiconewsdaily.com and link to the original feed publisher.",
       "status": "terms-review",
       "references": [
+        {
+          "path": "server/worldmonitor/news/v1/_feeds.ts"
+        },
         {
           "path": "src/config/feeds.ts"
         }
