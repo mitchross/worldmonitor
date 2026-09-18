@@ -16,13 +16,14 @@
 // This script does what a strict anonymous MCP client does, against LIVE
 // production, on BOTH hosts (the apex serves /mcp too, and apex-vs-www split
 // is exactly where #4938 lived):
-//   1. initialize → notifications/initialized → ping (the connect sequence)
-//   2. a capability walk DERIVED from the initialize response — every
+//   1. the connect sequence — #8321: anonymous transport `initialize` must be a
+//      correlated 401 sign-in challenge; the anonymous handshake runs on the
+//      /.well-known/mcp alias
+//   2. a capability walk DERIVED from the alias initialize response — every
 //      advertised capability's methods must answer 200 with the id echoed
 //   3. the auth wall — anonymous tools/call must answer 401 carrying the
-//      origin's WWW-Authenticate challenge (fast, never a hang; the body is
-//      deliberately NOT parsed — the wire contract a strict client acts on is
-//      status + challenge header, and a CDN-fabricated 401 would lack it)
+//      origin's WWW-Authenticate challenge (challenge + resource_metadata;
+//      the body is parsed only to confirm the id echo)
 //   4. OAuth routing — the endpoints declared by
 //      /.well-known/oauth-authorization-server must be reachable by POST
 //      (no 3xx redirect, no 405 — the #4938 fingerprints). Probes use a
@@ -52,8 +53,9 @@
 // Request budget: the anonymous /mcp limiter is 60/min shared per client IP
 // and both hosts see the same runner IP, so the walk caps its fan-out
 // (MAX_PROMPT_GETS / MAX_RESOURCE_READS) and reuses each catalog listing
-// instead of re-fetching it per sub-walk. Current shape: ≤16 /mcp POSTs per
-// host (≤32 total) + 3 non-/mcp OAuth probes per host + 2 non-/mcp
+// instead of re-fetching it per sub-walk. Current shape: ≤17 /mcp POSTs per
+// host (≤34 total — the challenge 401 is pre-limiter, the alias handshake is
+// the +1) + 3 non-/mcp OAuth probes per host + 2 non-/mcp
 // /api/mcp-proxy probes per host (1 on the apex, which 301s) — headroom
 // under the bucket even as the prompt/resource catalogs grow. The discovery
 // probes (5) add 6 GET/HEAD requests per host that cost NOTHING against the bucket: both
@@ -128,11 +130,9 @@ async function timedFetch(url, init = {}) {
 }
 
 let nextId = 1;
-// One JSON-RPC call. Returns the parsed result on success; records a failure
-// and returns null otherwise. `expectStatus: 401` is the auth-wall probe: it
-// asserts the origin's WWW-Authenticate challenge and deliberately skips body
-// parsing (see header comment).
-async function rpc(host, method, params, { expectStatus = 200, label } = {}) {
+// One JSON-RPC call against `path` (default /mcp). The 401 probe asserts the
+// Bearer challenge + resource_metadata hint and the echoed JSON-RPC id (#8321).
+async function rpc(host, method, params, { expectStatus = 200, label, path = '/mcp' } = {}) {
   const check = label ?? method;
   checks += 1;
   const id = method.startsWith('notifications/') ? undefined : nextId++;
@@ -140,7 +140,7 @@ async function rpc(host, method, params, { expectStatus = 200, label } = {}) {
   if (id !== undefined) payload.id = id;
   let res, text, ms;
   try {
-    ({ res, text, ms } = await timedFetch(`${host}/mcp`, {
+    ({ res, text, ms } = await timedFetch(`${host}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(payload),
@@ -154,9 +154,27 @@ async function rpc(host, method, params, { expectStatus = 200, label } = {}) {
     return null;
   }
   if (expectStatus === 202) { ok(host, check, `${ms}ms`); return {}; }
+  // #8321: the refusal must stay correlatable — id echo plus Bearer challenge
+  // with the resource_metadata hint, or strict SDK transports hang (#4937).
   if (expectStatus === 401) {
-    if (!(res.headers.get('www-authenticate') ?? '').includes('Bearer')) {
+    const challenge = res.headers.get('www-authenticate') ?? '';
+    if (!challenge.includes('Bearer')) {
       fail(host, check, '401 lacks the WWW-Authenticate Bearer challenge — not the origin MCP auth wall (CDN-fabricated 401?)');
+      return null;
+    }
+    if (!challenge.includes('resource_metadata=')) {
+      fail(host, check, '401 challenge lacks the resource_metadata hint — SDK clients cannot start OAuth dynamic client registration (#4938)');
+      return null;
+    }
+    let denied;
+    try {
+      denied = JSON.parse(text);
+    } catch {
+      fail(host, check, '401 body is not JSON-RPC — an SDK transport cannot read the refusal');
+      return null;
+    }
+    if (id !== undefined && denied.id !== id) {
+      fail(host, check, `401 response id ${JSON.stringify(denied.id)} does not echo request id ${id} — uncorrelatable, hangs strict SDK clients (#4937)`);
       return null;
     }
     ok(host, check, `${ms}ms`);
@@ -184,11 +202,21 @@ async function rpc(host, method, params, { expectStatus = 200, label } = {}) {
 async function walkHost(host) {
   console.log(`\n── ${host} ──`);
 
-  // 1. Connect sequence.
-  const init = await rpc(host, 'initialize', {
+  // 1. Connect sequence. #8321: transport `initialize` is a correlated 401
+  //    sign-in challenge; the anonymous handshake runs on the discovery alias.
+  const initParams = {
     protocolVersion: '2025-03-26',
     capabilities: {},
     clientInfo: { name: 'wm-mcp-live-smoke', version: '1.0' },
+  };
+  const challenged = await rpc(host, 'initialize', initParams, {
+    expectStatus: 401,
+    label: 'initialize (anon transport → 401 sign-in challenge)',
+  });
+  if (!challenged) return; // a broken challenge is the most severe failure: stop
+  const init = await rpc(host, 'initialize', initParams, {
+    path: '/.well-known/mcp',
+    label: 'initialize (anon, discovery alias)',
   });
   if (!init) return; // nothing else is meaningful if the handshake fails
   await rpc(host, 'notifications/initialized', undefined, { expectStatus: 202 });
