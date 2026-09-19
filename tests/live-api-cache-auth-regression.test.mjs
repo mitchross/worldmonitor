@@ -500,9 +500,10 @@ describe(`live API cache/auth regression sweep (${LIVE ? 'ENABLED' : 'SKIPPED - 
     assert.equal(bareGet.resp.status, 405, 'unauthenticated standalone SSE-stream open must be 405, never 401');
     assert.match(bareGet.resp.headers.get('allow') || '', /\bPOST\b/, '405 must advertise Allow (RFC 9110 §15.5.6)');
 
-    // Discovery is public: unauthenticated `initialize` succeeds (200) and must
-    // still be no-store (the #4497 cached-200 hazard applies to any 200).
-    const discover = await fetchText(`${WEB_BASE}/mcp`, {
+    // #8321: anonymous transport `initialize` is a correlated 401 sign-in
+    // challenge — must stay spec-clean (id echoed, Bearer + resource_metadata,
+    // no-store, never a shared-cache HIT).
+    const challenge = await fetchText(`${WEB_BASE}/mcp`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -519,9 +520,36 @@ describe(`live API cache/auth regression sweep (${LIVE ? 'ENABLED' : 'SKIPPED - 
         },
       }),
     });
-    assert.equal(discover.resp.status, 200, 'unauthenticated initialize is public discovery');
-    assertNoStore(discover.resp, 'MCP anonymous initialize');
-    assert.notEqual(cfCacheStatus(discover.resp).toUpperCase(), 'HIT', 'anonymous discovery 200 must not be a shared-cache HIT');
+    assert.equal(challenge.resp.status, 401, 'unauthenticated transport initialize is the #8321 sign-in challenge');
+    assertNoStore(challenge.resp, 'MCP anonymous initialize challenge');
+    assert.notEqual(cfCacheStatus(challenge.resp).toUpperCase(), 'HIT', 'the initialize challenge must not be a shared-cache HIT');
+    assert.match(challenge.resp.headers.get('www-authenticate') || '', /\bBearer\b/, 'the challenge must carry a Bearer scheme');
+    assert.match(challenge.resp.headers.get('www-authenticate') || '', /resource_metadata=/, 'the challenge must carry the OAuth resource_metadata hint');
+    const challengeBody = JSON.parse(challenge.bodyText);
+    assert.equal(challengeBody.id, 1, 'the 401 must echo the JSON-RPC id or strict SDK clients cannot correlate the refusal (#4937)');
+    assert.equal(challengeBody.error?.code, -32001, 'the refusal must be the structured auth-required JSON-RPC error');
+
+    // The anonymous full handshake remains public on the machine-discovery alias.
+    const discover = await fetchText(`${WEB_BASE}/.well-known/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'worldmonitor-live-sweep', version: '1.0' },
+        },
+      }),
+    });
+    assert.equal(discover.resp.status, 200, 'unauthenticated initialize on the discovery alias is public discovery');
+    assertNoStore(discover.resp, 'MCP alias anonymous initialize');
+    assert.notEqual(cfCacheStatus(discover.resp).toUpperCase(), 'HIT', 'alias discovery 200 must not be a shared-cache HIT');
 
     // resources/list is catalog-enumeration discovery (like tools/list): the
     // `initialize` handshake advertises the `resources` capability, so an

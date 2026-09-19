@@ -10,11 +10,12 @@ name: MCP Live Smoke
 #           OAuth dynamic client registration died (POST→GET on redirect →
 #           405). No in-process test can see a CDN redirect rule.
 #
-# The script (scripts/mcp-live-smoke.mjs) initializes anonymously, walks every
-# capability the handshake advertises (200 + id echo required on each hop),
-# asserts the tools/call auth wall answers 401 fast, and probes the declared
-# OAuth endpoints for the #4938 redirect fingerprints with side-effect-free
-# malformed POSTs. Dependency-free — no npm ci.
+# The script (scripts/mcp-live-smoke.mjs) asserts the #8321 transport
+# initialize challenge (correlated 401), runs the anonymous handshake on the
+# /.well-known/mcp alias and walks every capability it advertises (200 + id
+# echo on each hop), asserts the tools/call auth wall answers 401 fast, and
+# probes the declared OAuth endpoints for #4938 redirect fingerprints with
+# side-effect-free malformed POSTs. Dependency-free — no npm ci.
 #
 # It also probes /api/mcp-proxy (#7663). That is a SEPARATE Vercel function
 # from /mcp with its own runtime config, and the walk above never touches it —
