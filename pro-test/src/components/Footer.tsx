@@ -13,7 +13,7 @@ export const Footer = () => (
       <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
         <a href={DASHBOARD_PATH} className="hover:text-wm-text transition-colors">Dashboard</a>
         <a href={ABOUT_DOCS_PATH} className="hover:text-wm-text transition-colors">About</a>
-        <a href="/sources/?utm_source=welcome-footer" className="hover:text-wm-text transition-colors">Sources</a>
+        <a href="/sources/" className="hover:text-wm-text transition-colors">Sources</a>
         <a href="/countries/" className="hover:text-wm-text transition-colors">Countries</a>
         <a href="/chokepoints/" className="hover:text-wm-text transition-colors">Chokepoints</a>
         <a href="/crises/" className="hover:text-wm-text transition-colors">Crises</a>
@@ -22,7 +22,6 @@ export const Footer = () => (
         <a href="https://www.worldmonitor.app/docs/documentation" className="hover:text-wm-text transition-colors">Docs</a>
         <a href="https://status.worldmonitor.app/" target="_blank" rel="noreferrer" className="hover:text-wm-text transition-colors">Status</a>
         <a href="https://github.com/koala73/worldmonitor" target="_blank" rel="noreferrer" className="hover:text-wm-text transition-colors">GitHub</a>
-        <a href="https://discord.gg/re63kWKxaz" target="_blank" rel="noreferrer" className="hover:text-wm-text transition-colors">Discord</a>
         <a href="https://x.com/worldmonitorai" target="_blank" rel="noreferrer" className="hover:text-wm-text transition-colors">X</a>
       </div>
       <span className="text-[10px] text-wm-muted mt-4 md:mt-0" suppressHydrationWarning>&copy; {new Date().getFullYear()} WorldMonitor</span>

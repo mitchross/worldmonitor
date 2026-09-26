@@ -42,6 +42,28 @@ Merge, auto-merge, and deployment require explicit authorization in the current 
 | Desktop and sidecar | `src-tauri/`; [architecture](ARCHITECTURE.md) | Focused Rust checks or `npm run test:sidecar` |
 | Tests and documentation | `tests/`, `e2e/`, `docs/`; [verification guide](CONTRIBUTING.md#verify-the-changed-path) | Relevant existing test or docs check, `git diff --check` |
 
+## Landmarks
+
+Grep the named symbol. Do not scan these files top to bottom.
+
+| Looking for | Where it is defined |
+|---|---|
+| Health keys and seed staleness | `api/health.js`: `BOOTSTRAP_KEYS`, `STANDALONE_KEYS`, `SEED_META`, `ON_DEMAND_KEYS`, `readSeedMeta`, `classifyKey` |
+| Shared seeder helpers | `scripts/_seed-utils.mjs`: `loadEnvFile`, `resolveSeedMetaKey`, `writeSeedMeta`, `writeExtraKeyWithMetaAtomically`, `withRetry` |
+| RPC access control | Split by design: `PREMIUM_RPC_PATHS` in `src/shared/premium-paths.ts`, `PUBLIC_NO_AUTH_RPC_PATHS` in `server/gateway.ts`, `validateApiKey` in `api/_api-key.js`, `isPublicSharedRpcRequest` in `src/shared/public-rpc-cache.ts` |
+| A shared term | `CONCEPTS.md`, one `###` heading per term; grep the term itself |
+
+Test path, command, and owning CI job. Read this instead of `.github/workflows/test.yml`.
+
+| Test path | Command | CI job |
+|---|---|---|
+| `tests/*.test.mjs`, `tests/*.test.mts`, `cli/test/`, `api/security/report.test.mjs` | `npm run test:data` | `unit-shards` |
+| `tests/dom/` | `npm run test:dom` | `dom-tests` |
+| `convex/__tests__/`, `server/__tests__/`, `src/services/correlation-engine/` | `npm run test:convex` | `convex-tests` |
+| `api/` node suites except `api/security/report.test.mjs`, and `src-tauri/` | `npm run test:sidecar` | `sidecar` |
+
+Find a suite by subject with `ls tests/ | grep <subject>` before searching the tree.
+
 ## Critical boundaries
 
 The browser import direction is `types -> config -> services -> components -> app -> App.ts`. [lint-boundaries.mjs](scripts/lint-boundaries.mjs) enforces import boundaries.
@@ -60,6 +82,6 @@ The browser import direction is `types -> config -> services -> components -> ap
 - For browser behavior, load [verify-worldmonitor](.agents/skills/verify-worldmonitor/SKILL.md). Start with an existing strict feature test. Use manual driving for the interaction being changed.
 - For Sentry events, load [sentry-triage](.agents/skills/sentry-triage/SKILL.md). Its default is read-only triage.
 - `.agents/skills/` contains repository engineering skills. `skills/` contains published product recipes for API and MCP consumers. They serve different users.
-- Read [documented solutions](docs/solutions/) when the affected area has a prior fix. Use [CONCEPTS.md](CONCEPTS.md) for shared terms and [design philosophy](docs/architecture.mdx) for design decisions.
+- Read [documented solutions](docs/solutions/) when the affected area has a prior fix — organized by category directory (`security-issues/`, `logic-errors/`, `conventions/`, …) with YAML frontmatter (`module`, `component`, `problem_type`, `tags`) to grep. Use [CONCEPTS.md](CONCEPTS.md) for shared terms and [design philosophy](docs/architecture.mdx) for design decisions.
 
 Run the smallest meaningful proof first. Preserve useful regression coverage. Run heavy checks sequentially. Report failures honestly. Keep locally verified, PR ready, merged, deployed, observed in production, and acceptance complete as separate claims.

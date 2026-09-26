@@ -29,6 +29,8 @@ const NEW_TRANSLATED_KEYS = [
   'popups.militaryCluster.showLess',
   'preferences.panelFontScale',
   'preferences.followGlobalFontScale',
+  ...['waiting', 'offline', 'updated', 'saved', 'savedOffline', 'emptySaved', 'localSignals']
+    .map(key => `components.correlation.${key}`),
 ];
 
 // Current English-identity counts plus three values of reviewable headroom.
@@ -36,7 +38,9 @@ const NEW_TRANSLATED_KEYS = [
 // English product term may raise one explicitly, but bulk placeholder copies
 // must not pass only because their keys exist.
 const ENGLISH_CEILING = {
-  ar: 359, bg: 250, cs: 292, de: 276, el: 359, es: 433,
+  // de 276 -> 277: the publisher roster's tier chip codes ("T{{tier}}", "T?")
+  // are the same in German, which keeps the "Tier" term the catalogue uses.
+  ar: 359, bg: 250, cs: 292, de: 277, el: 359, es: 433,
   // fr 425 -> 426: "Concentration" (supply vulnerability) and "Normal"
   // (divergence regime) are spelled identically in French. Both are correct
   // translations, not placeholder copies.
@@ -92,7 +96,7 @@ describe('app locale freshness', () => {
     assert.deepEqual(problems, [], REFRESH_HINT);
   });
 
-  it('does not persist the seven new labels as English placeholders', () => {
+  it('does not persist new labels as English placeholders', () => {
     const en = readJson(`${LOCALES_DIR}/en.json`);
     const placeholders = [];
     for (const locale of LOCALES) {
