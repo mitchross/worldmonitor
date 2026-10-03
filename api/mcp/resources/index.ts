@@ -62,6 +62,7 @@ import {
   freeAccountRequestsKey,
 } from '../free-account-allowance';
 import { CHOKEPOINT_SLUGS } from './slugs';
+import { READ_FREE_ACCOUNT_ALLOWANCE_SCRIPT } from '../../../shared/free-account-allowance-scripts.mjs';
 
 // ---------------------------------------------------------------------------
 // Public resource freshness reader
@@ -106,7 +107,7 @@ export const MCP_ALLOWANCE_RESOURCE_URI = 'worldmonitor://account/mcp-allowance'
 export const ACCOUNT_RESOURCE_LIST_RESPONSE = [{
   uri: MCP_ALLOWANCE_RESOURCE_URI,
   name: 'MCP Allowance Status',
-  description: 'Current authenticated account MCP usage, remaining daily calls, UTC reset time, and free-account request-window status when applicable. Reading this resource consumes no allowance.',
+  description: 'Current authenticated account MCP usage, remaining daily units, UTC reset time, and free-account request-window status when applicable. Reading this resource consumes no allowance.',
   mimeType: 'application/json',
   _meta: { 'worldmonitor/access': 'free-account' as const },
 }];
@@ -117,13 +118,9 @@ export function isAccountResourceUri(uri: unknown): boolean {
 
 // A pipeline is not a Redis transaction. Read all three free-account keys in
 // one read-only Lua command so the resource cannot expose an impossible
-// snapshot while a concurrent allowance reservation is committing.
-const READ_FREE_ACCOUNT_ALLOWANCE_SCRIPT = `
-local calls = redis.call('GET', KEYS[1])
-local requests = redis.call('GET', KEYS[2])
-local activityPttl = redis.call('PTTL', KEYS[3])
-return {calls or false, requests or false, activityPttl}
-`;
+// snapshot while a concurrent allowance reservation is committing. The script
+// is pinned in shared/free-account-allowance-scripts.mjs (and the redis-rest
+// proxy allowlist) so this read cannot drift into a writer.
 
 function redisInteger(raw: unknown, missingValue?: number): number | null {
   if (raw === null || raw === undefined) return missingValue ?? null;
