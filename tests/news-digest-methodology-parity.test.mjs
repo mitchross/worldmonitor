@@ -11,11 +11,11 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 import {
-  GROQ_DEFAULT_MODEL,
   OPENROUTER_FREE_BACKUP_MODEL,
   OPENROUTER_FREE_PRIMARY_MODEL,
 } from '../scripts/_llm-model-timeouts.mjs';
 import { extractDelimitedBlock } from '../scripts/lib/js-source-structure.mjs';
+import { ACCUMULATOR_RETENTION_MS } from '../scripts/_forecast-evidence-archive.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..');
@@ -54,6 +54,14 @@ const panelIndicatorsText = readFileSync(
 );
 const digestSrc = readFileSync(
   resolve(repoRoot, 'server/worldmonitor/news/v1/list-feed-digest.ts'),
+  'utf8',
+);
+const briefLlmSrc = readFileSync(
+  resolve(repoRoot, 'scripts/lib/brief-llm.mjs'),
+  'utf8',
+);
+const rssCacheSrc = readFileSync(
+  resolve(repoRoot, 'server/worldmonitor/news/v1/_rss-cache.ts'),
   'utf8',
 );
 const classifierSrc = readFileSync(
@@ -582,8 +590,9 @@ describe('news digest methodology parity', () => {
 
   it('documents the ingest freshness floor default', () => {
     assert.ok(
-      digestSrc.includes('process.env.NEWS_MAX_AGE_HOURS') &&
-        /const\s+hours\s*=.*\?\s*raw\s*:\s*96\s*;/s.test(digestSrc),
+      rssCacheSrc.includes('process.env.NEWS_MAX_AGE_HOURS') &&
+        /const\s+hours\s*=.*\?\s*raw\s*:\s*96\s*;/s.test(rssCacheSrc) &&
+        digestSrc.includes('const maxAgeMs = resolveMaxAgeMs();'),
       'resolveMaxAgeMs must still default NEWS_MAX_AGE_HOURS to 96h',
     );
     assertDocIncludes('NEWS_MAX_AGE_HOURS', 'freshness env var');
@@ -842,6 +851,14 @@ describe('news digest methodology parity', () => {
     assertDocIncludes('`story:track:v1:{titleHash}`', 'story track key');
     assertDocIncludes('7 days', 'story tracking TTL');
     assertDocIncludes('48 hours', 'digest accumulator TTL');
+    assertDocIncludes(
+      `members last seen more than ${ACCUMULATOR_RETENTION_MS / 86_400_000} days ago`,
+      'digest accumulator member retention (ACCUMULATOR_RETENTION_MS)',
+    );
+    assertDocIncludes(
+      'In production, `full:en` is pruned only once `FORECAST_EVIDENCE_CUTOVER_ENABLED` is enabled',
+      'full:en prune gate (#7082)',
+    );
   });
 
   it('documents reserved feed fading phase and digest read-path fading behavior', () => {
@@ -881,7 +898,6 @@ describe('news digest methodology parity', () => {
     const providerNames = [...weeklyBriefSrc.matchAll(/name:\s*'([^']+)'/g)]
       .map((m) => m[1]);
     const sharedModels = {
-      GROQ_DEFAULT_MODEL,
       OPENROUTER_FREE_BACKUP_MODEL,
       OPENROUTER_FREE_PRIMARY_MODEL,
     };
@@ -889,25 +905,26 @@ describe('news digest methodology parity', () => {
       .map((m) => m[1] || sharedModels[m[2]]);
     const weeklyTemperature = extractNumericConst(weeklyBriefSrc, 'BRIEF_TEMPERATURE');
 
-    assert.deepEqual(providerNames, ['openrouter', 'openrouter-free', 'openrouter-free-backup', 'groq']);
+    assert.deepEqual(providerNames, ['openrouter', 'openrouter-free', 'openrouter-free-backup']);
     assert.deepEqual(providerModels, [
       'deepseek/deepseek-v4-flash',
       'google/gemma-4-26b-a4b-it:free',
-      'minimax/minimax-m3:free',
-      'openai/gpt-oss-20b',
+      'nvidia/nemotron-3-super-120b-a12b:free',
     ]);
     assert.equal(weeklyTemperature, 0.3);
 
     assertDocMatches(
-      /Regional weekly briefs[\s\S]*tr(?:y|ies) OpenRouter first[\s\S]*`deepseek\/deepseek-v4-flash`[\s\S]*`google\/gemma-4-26b-a4b-it:free`[\s\S]*`minimax\/minimax-m3:free`[\s\S]*Groq `openai\/gpt-oss-20b`[\s\S]*temperature\s+`0\.3`/, // pragma: allowlist secret
+      /Regional weekly briefs[\s\S]*tr(?:y|ies) OpenRouter first[\s\S]*`deepseek\/deepseek-v4-flash`[\s\S]*`google\/gemma-4-26b-a4b-it:free`[\s\S]*`nvidia\/nemotron-3-super-120b-a12b:free`[\s\S]*temperature\s+`0\.3`/, // pragma: allowlist secret
       'regional weekly brief provider order, models, and temperature',
     );
     assertDocMatches(
       /intentionally differ[\s\S]*digest prose and `whyMatters` surfaces/,
       'regional weekly brief chain differs from digest prose and whyMatters',
     );
+    const briefModel = briefLlmSrc.match(/BRIEF_LLM_OPENROUTER_MODEL = process\.env\.BRIEF_LLM_OPENROUTER_MODEL \|\| '([^']+)'/)?.[1];
+    assert.ok(briefModel, 'BRIEF_LLM_OPENROUTER_MODEL must default to a string literal');
     assertDocMatches(
-      /provider chain to OpenRouter by skipping Ollama and Groq[\s\S]*`google\/gemini-2\.5-flash`/,
+      new RegExp(`provider chain to OpenRouter by skipping Ollama[\\s\\S]*\`${briefModel.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}\``),
       'digest prose and whyMatters OpenRouter-only posture',
     );
   });

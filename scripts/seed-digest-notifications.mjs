@@ -58,8 +58,11 @@ import {
   shouldExitNonZero as shouldExitOnBriefFailures,
 } from './lib/brief-compose.mjs';
 import {
+  applyDigestScoreFloor,
   carouselUrlsFrom,
   digestWindowStartMs,
+  getDigestScoreMin,
+  isDigestDeliveryTier,
   pickWinningCandidateWithPool,
   readTimeAgeCutoffMs,
   runSynthesisWithFallback,
@@ -124,7 +127,8 @@ const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? '';
 const CONVEX_SITE_URL =
   process.env.CONVEX_SITE_URL ??
   (process.env.CONVEX_URL ?? '').replace('.convex.cloud', '.convex.site');
-const RELAY_SECRET = process.env.RELAY_SHARED_SECRET ?? '';
+const RELAY_SECRET = process.env.CONVEX_NOTIFICATION_RELAY_SECRET ?? '';
+const ANALYST_RELAY_SECRET = process.env.RELAY_SHARED_SECRET ?? '';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
 // Brief/digest is an editorial daily read, not an incident alarm — route it
@@ -153,7 +157,7 @@ if (!UPSTASH_URL || !UPSTASH_TOKEN) {
   process.exit(1);
 }
 if (!CONVEX_SITE_URL || !RELAY_SECRET) {
-  console.error('[digest] CONVEX_SITE_URL / RELAY_SHARED_SECRET not set');
+  console.error('[digest] CONVEX_SITE_URL / CONVEX_NOTIFICATION_RELAY_SECRET not set');
   process.exit(1);
 }
 
@@ -166,19 +170,6 @@ const DIGEST_HIGH_LIMIT = 15;
 const DIGEST_MEDIUM_LIMIT = 10;
 const AI_DIGEST_ENABLED = process.env.AI_DIGEST_ENABLED !== '0';
 const ENTITLEMENT_CACHE_TTL = 900; // 15 min
-
-// Absolute importance-score floor applied to the digest AFTER dedup.
-// Mirrors the realtime notification-relay gate (IMPORTANCE_SCORE_MIN)
-// but lives on the brief/digest side so operators can tune them
-// independently — e.g. let realtime page at score>=63 while the brief
-// digest drops anything <50. Default 0 = no filtering; ship disabled
-// so this PR is a no-op until Railway flips the env. Setting the var
-// to any positive integer drops every cluster whose representative
-// currentScore is below it.
-function getDigestScoreMin() {
-  const raw = Number.parseInt(process.env.DIGEST_SCORE_MIN ?? '0', 10);
-  return Number.isInteger(raw) && raw >= 0 ? raw : 0;
-}
 
 // ── Brief composer (consolidation of the retired seed-brief-composer) ──────
 
@@ -265,7 +256,7 @@ function normalizeForDescriptionEquality(s) {
  * (See feedback_gate_on_ground_truth_not_configured_state.md.)
  */
 async function callAnalystWhyMatters(story) {
-  if (!RELAY_SECRET) return null;
+  if (!ANALYST_RELAY_SECRET) return null;
   // Forward a trimmed story payload so the endpoint only sees the
   // fields it validates. `description` is NEW for prompt-v2 — when
   // upstream has a real one (falls back to headline via
@@ -294,7 +285,7 @@ async function callAnalystWhyMatters(story) {
     const resp = await fetch(BRIEF_WHY_MATTERS_ENDPOINT_URL, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${RELAY_SECRET}`,
+        Authorization: `Bearer ${ANALYST_RELAY_SECRET}`,
         'Content-Type': 'application/json',
         // Explicit UA — Node undici's default is short/empty enough to
         // trip middleware.ts's "No user-agent or suspiciously short"
@@ -946,9 +937,7 @@ async function buildDigest(rule, windowStartMs) {
   // score field; the rep is the highest-scoring member of its
   // cluster). At DIGEST_SCORE_MIN=0 this is a no-op.
   const scoreFloor = getDigestScoreMin();
-  const deduped = scoreFloor > 0
-    ? dedupedAll.filter((s) => Number(s.currentScore ?? 0) >= scoreFloor)
-    : dedupedAll;
+  const deduped = applyDigestScoreFloor(dedupedAll, scoreFloor);
   if (scoreFloor > 0 && dedupedAll.length !== deduped.length) {
     console.log(
       `[digest] score floor dropped ${dedupedAll.length - deduped.length} ` +
@@ -1181,7 +1170,6 @@ function formatDigestHtml(stories, nowMs) {
       <div style="margin-bottom: 12px;">
         <a href="https://x.com/worldmonitorapp" style="color: #555; text-decoration: none; font-size: 11px; margin: 0 10px;">X / Twitter</a>
         <a href="https://github.com/koala73/worldmonitor" style="color: #555; text-decoration: none; font-size: 11px; margin: 0 10px;">GitHub</a>
-        <a href="https://discord.gg/re63kWKxaz" style="color: #555; text-decoration: none; font-size: 11px; margin: 0 10px;">Discord</a>
       </div>
       <p style="font-size: 10px; color: #444; margin: 0; line-height: 1.5;">
         <a href="https://worldmonitor.app" style="color: #4ade80; text-decoration: none;">worldmonitor.app</a>
@@ -1480,10 +1468,11 @@ async function sendWebhook(userId, webhookEnvelope, stories, aiSummary) {
  * usable number. Callers MUST treat null as "unknown" — never "free"
  * — so a transient relay outage doesn't accidentally clamp legitimate
  * paying users out of paywalled affordances. The digest cron's
- * `isUserPro` uses null → fail-open (true); the followed-country
- * composer clamp uses null → "skip clamp" (treat as Pro for the
- * duration of the outage). Same fail-open polarity in both call
- * sites, but explicit so future readers can audit the choice.
+ * `isUserPro` treats null as not-Pro and skips the rule until a later
+ * run can resolve the tier (fail-closed, see isDigestDeliveryTier).
+ * The followed-country composer clamp uses null → "skip clamp": it only
+ * widens a ranking bias, so a transient outage must not demote a
+ * paying user's brief.
  */
 async function getUserTier(userId) {
   const cacheKey = `relay:entitlement:${userId}`;
@@ -1512,9 +1501,7 @@ async function getUserTier(userId) {
 }
 
 async function isUserPro(userId) {
-  const tier = await getUserTier(userId);
-  if (tier === null) return true; // fail-open — preserve historic polarity
-  return tier >= 1;
+  return isDigestDeliveryTier(await getUserTier(userId));
 }
 
 // ── Per-channel body composition ─────────────────────────────────────────────

@@ -13,6 +13,9 @@ import {
 } from './helpers/mcp-pro-deps.mjs';
 import { buildOfficialChinaMacroFixture } from './helpers/china-macro-fixture.mjs';
 import { TOOL_REGISTRY } from '../api/mcp/registry/index.ts';
+import Ajv2020 from 'ajv/dist/2020.js';
+import { documentedOutputSchema } from './helpers/mcp-output-schema.mjs';
+import { buildTariffDatapoints } from '../scripts/seed-supply-chain-trade.mjs';
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -98,14 +101,17 @@ describe('api/mcp.ts — PRO MCP Server', () => {
 
   // --- Public discovery (initialize + tools/list + resources/list servable without creds) ---
 
-  it('initialize succeeds WITHOUT credentials (public discovery)', async () => {
-    const req = new Request(BASE_URL, {
+  // The transport challenges an unauthenticated handshake
+  // (tests/mcp-transport-challenge.test.mjs); the anonymous handshake lives on
+  // the machine-discovery alias, where agent-readiness scanners POST theirs.
+  it('initialize succeeds WITHOUT credentials on the discovery alias (public discovery)', async () => {
+    const req = new Request('https://worldmonitor.app/.well-known/mcp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(initBody(1)),
     });
     const res = await handler(req);
-    assert.equal(res.status, 200, 'unauthenticated initialize must be public');
+    assert.equal(res.status, 200, 'unauthenticated initialize must be public on the discovery alias');
     const body = await res.json();
     assert.equal(body.result?.protocolVersion, '2025-03-26');
     assert.equal(body.result?.serverInfo?.name, 'worldmonitor');
@@ -879,7 +885,7 @@ describe('api/mcp.ts — PRO MCP Server', () => {
     assert.ok(body.error?.code === -32029 || body.result?.protocolVersion, 'Handler must return valid JSON-RPC (either rate limited or initialized)');
   });
 
-  it('tools/call returns JSON-RPC -32603 when Redis fetch throws (P1 fix)', async () => {
+  it('tools/call returns a retryable JSON-RPC error when Redis fetch throws (P1 fix)', async () => {
     process.env.UPSTASH_REDIS_REST_URL = 'https://fake.upstash.io';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'fake_token';
 
@@ -895,7 +901,11 @@ describe('api/mcp.ts — PRO MCP Server', () => {
     }));
     assert.equal(res.status, 200, 'Must return HTTP 200, not 500');
     const body = await res.json();
-    assert.equal(body.error?.code, -32603, 'Must return JSON-RPC -32603, not throw');
+    // Every cache read failed, so this is Redis being unreachable, not an empty
+    // dataset or a code fault: the source-unavailable error, marked retryable.
+    assert.equal(body.error?.code, -32003, 'Must return the source-unavailable JSON-RPC error, not throw');
+    assert.equal(body.error?.data?.retryable, true);
+    assert.ok(body.error?.data?.failed_inputs?.length > 0, 'must name the inputs whose read failed');
   });
 
   // --- inputSchema completion + cache-tool _postFilter narrowing (issue #3677) ---
@@ -990,7 +1000,9 @@ describe('api/mcp.ts — PRO MCP Server', () => {
       riskReviewed: true,
       typeReviewed: true,
       stateAffiliated: 'China',
+      knownBiases: [],
       note: 'Chinese Ministry of Industry and Information Technology official feed',
+      summary: 'Official government source: China. Perspective: none recorded. Chinese Ministry of Industry and Information Technology official feed.',
     });
     assert.deepEqual(unreviewed.sourceProvenance, {
       risk: 'unknown',
@@ -999,7 +1011,9 @@ describe('api/mcp.ts — PRO MCP Server', () => {
       typeDeclared: true,
       riskReviewed: false,
       typeReviewed: false,
+      knownBiases: [],
       note: 'Provenance not yet reviewed — do not treat as independent journalism',
+      summary: 'Provenance not yet reviewed — do not treat as independent journalism. Perspective: none recorded.',
     });
     assert.deepEqual(wire.sourceProvenance, {
       risk: 'low',
@@ -1008,7 +1022,9 @@ describe('api/mcp.ts — PRO MCP Server', () => {
       typeDeclared: true,
       riskReviewed: true,
       typeReviewed: true,
+      knownBiases: [],
       note: 'Wire service, strict editorial standards',
+      summary: 'Reviewed. Perspective: none recorded. Wire service, strict editorial standards.',
     });
   });
 
@@ -1050,9 +1066,11 @@ describe('api/mcp.ts — PRO MCP Server', () => {
     process.env.MCP_TELEMETRY = 'true';
     process.env.UPSTASH_REDIS_REST_URL = 'https://fake.upstash.io';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'fake_token';
-    // Force the cache-tool fetch path to throw — dispatchToolsCall's outer
-    // catch fires and one mcp.toolcall line with ok:false must land.
-    globalThis.fetch = async () => { throw new TypeError('fetch failed'); };
+    // Force the cache-tool path to throw — dispatchToolsCall's outer catch
+    // fires and one mcp.toolcall line with ok:false must land. Every key reads
+    // back absent, so the throw is `cache_all_null`, a server_error. (A Redis
+    // read that FAILS is a source outage instead; the P1 test above covers it.)
+    mockCacheKeys({});
 
     const captured = [];
     const origLog = console.log;
@@ -1408,7 +1426,7 @@ describe('api/mcp.ts — PRO MCP Server', () => {
     assert.match(economic.description, /no proxies/i);
     assert.match(economic.description, /launchReady/i);
     assert.doesNotMatch(economic.description, /NBS\/SAFE live/i);
-    const chinaSchema = economic.outputSchema.properties.data.properties['china-macro'];
+    const chinaSchema = documentedOutputSchema(economic).properties.data.properties['china-macro'];
     assert.ok(chinaSchema.properties.indicators);
     assert.ok(!chinaSchema.properties.observations);
     const indicatorSchema = chinaSchema.properties.indicators.items.properties;
@@ -1483,11 +1501,6 @@ describe('api/mcp.ts — PRO MCP Server', () => {
   });
 
   it('get_country_macro: a country NAME narrows, rather than falling open to all', async () => {
-    // `pickMapKeys` FAILS OPEN — a filter matching nothing returns the whole
-    // map (api/mcp/filters.ts:100). The country-briefing prompt fans one
-    // argument out to three tools, and once the other two accepted names, an
-    // un-normalized name reaching this one spliced EVERY country's macro
-    // indicators into a single-country brief.
     const macro = { countries: { US: { inflationPct: 3 }, DE: { inflationPct: 2 }, CN: { inflationPct: 1 } }, seededAt: 1 };
     const meta = {
       'seed-meta:economic:imf-macro': { fetchedAt: Date.now() - 60_000, recordCount: 3 },
@@ -1528,6 +1541,59 @@ describe('api/mcp.ts — PRO MCP Server', () => {
     const out = await callTool('get_tariff_trends', { dataset: ['national-debt'], country: 'US' });
     assert.equal(out.data['national-debt'].entries.length, 1, 'alpha-2 "US" must match iso3 "USA"');
     assert.equal(out.data['national-debt'].entries[0].iso3, 'USA');
+  });
+
+  it('get_tariff_trends: outputSchema documents the seeded datapoint shape and limit keeps the newest years', async () => {
+    // The seeder stores datapoints oldest-first over a 30-year window. A head
+    // cap would hand `limit: 5` callers 1991-1995 and let the default cap drop
+    // the latest year once the window fills.
+    const rows = Array.from({ length: 35 }, (_, i) => ({ Year: String(1991 + i), Value: String(3 + i / 100) }));
+    const datapoints = buildTariffDatapoints('United States of America', rows);
+    const effectiveTariffRate = {
+      sourceName: 'FRED (BEA)', sourceUrl: 'https://fred.stlouisfed.org/series/B235RC1Q027SBEA',
+      observationPeriod: '2026-04-01', updatedAt: '2026-04-01', tariffRate: 8.22,
+    };
+    const seeded = () => mockCacheKeys(
+      { 'trade:tariffs:v2:840': { datapoints, effectiveTariffRate, coverageStartYear: 1991, coverageEndYear: 2025 } },
+      { 'seed-meta:trade:tariffs': { fetchedAt: Date.now() - 60_000, recordCount: 1 } },
+    );
+
+    const tool = TOOL_REGISTRY.find((t) => t.name === 'get_tariff_trends');
+    const allSchema = tool.outputSchema.properties.data.properties.all;
+    assert.deepEqual(
+      Object.keys(allSchema.properties.datapoints.items.properties).sort(),
+      Object.keys(datapoints[0]).sort(),
+      'datapoint schema must list exactly the fields buildTariffDatapoints writes',
+    );
+    assert.deepEqual(
+      Object.keys(allSchema.properties.effectiveTariffRate.properties).sort(),
+      Object.keys(effectiveTariffRate).sort(),
+    );
+
+    seeded();
+    const limited = await callTool('get_tariff_trends', { dataset: ['tariffs'], limit: 5 });
+    assert.deepEqual(limited.data.all.datapoints.map((d) => d.year), [2021, 2022, 2023, 2024, 2025]);
+    assert.deepEqual(limited.data.all.effectiveTariffRate, effectiveTariffRate);
+    assert.equal(limited.data.all.coverageStartYear, 1991, 'coverage describes the full seeded window, not the capped rows');
+    assert.equal(limited.data.all.coverageEndYear, 2025);
+
+    seeded();
+    const byDefault = await callTool('get_tariff_trends', { dataset: ['tariffs'] });
+    assert.equal(byDefault.data.all.datapoints.length, 30);
+    assert.equal(byDefault.data.all.datapoints.at(-1).year, 2025, 'default cap must keep the latest year');
+
+    seeded();
+    const uncapped = await callTool('get_tariff_trends', { dataset: ['tariffs'], limit: 0 });
+    assert.equal(uncapped.data.all.datapoints.length, 35);
+
+    // Fractional limits truncate like the head-capped lists (slice(0, 0.5) is
+    // empty); slice(-0.5) would return the whole history.
+    seeded();
+    const belowOne = await callTool('get_tariff_trends', { dataset: ['tariffs', 'bigmac'], limit: 0.5 });
+    assert.deepEqual(belowOne.data.all.datapoints, []);
+    seeded();
+    const fractional = await callTool('get_tariff_trends', { dataset: ['tariffs'], limit: 2.7 });
+    assert.deepEqual(fractional.data.all.datapoints.map((d) => d.year), [2024, 2025]);
   });
 
   it('executeTool: a throwing _postFilter falls back to the PRISTINE unfiltered data', async () => {
@@ -1904,6 +1970,109 @@ describe('api/mcp.ts — PRO MCP Server', () => {
     const full = await callTool('get_displacement_data', { limit: 0 });
     assert.equal(full.data.summary.countries.length, 60, 'limit: 0 → full countries array');
     assert.equal(full.data.summary.topFlows.length, 60, 'limit: 0 → full topFlows array');
+  });
+
+  // The seeder writes `{ summary: { year, globalTotals, countries, topFlows } }`
+  // and executeTool files that value under the cache-key label `summary`, so
+  // the wire shape is `data.summary.summary.*` until the tool hoists it.
+  // Issue #8489: caps, country filters, and summary:true all look one level
+  // too high, so a default call returns `_budget_exceeded` (~730 KB).
+  it('get_displacement_data hoists the seeder summary wrapper (#8489)', async () => {
+    const currentYear = new Date().getUTCFullYear();
+    const dataKey = `displacement:summary:v1:${currentYear}`;
+    const meta = { 'seed-meta:displacement:summary': { fetchedAt: Date.now() - 60_000, recordCount: 212 } };
+    const seeded = (countries, topFlows) => ({
+      summary: {
+        year: currentYear,
+        globalTotals: { refugees: 1, asylumSeekers: 2, idps: 3, stateless: 4, total: 10 },
+        countries,
+        topFlows,
+      },
+    });
+
+    const manyCountries = Array.from({ length: 212 }, (_, i) => ({
+      code: `C${String(i).padStart(2, '0')}`,
+      name: `Country ${i}`,
+      refugees: i,
+      totalDisplaced: i * 10,
+    }));
+    const manyFlows = Array.from({ length: 4837 }, (_, i) => ({
+      originCode: `O${i}`,
+      originName: `Origin ${i}`,
+      asylumCode: `A${i}`,
+      asylumName: `Asylum ${i}`,
+      refugees: 1_000_000 - i,
+    }));
+
+    async function callDisplacement(args, cacheValue) {
+      mockCacheKeys({ [dataKey]: cacheValue }, meta);
+      process.env.UPSTASH_REDIS_REST_URL = 'https://fake.upstash.io';
+      process.env.UPSTASH_REDIS_REST_TOKEN = 'fake_token';
+      const freshMod = await import(`../api/mcp.ts?t=${Date.now()}-${Math.random()}`);
+      const res = await freshMod.default(makeReq('POST', {
+        jsonrpc: '2.0', id: 8489, method: 'tools/call',
+        params: { name: 'get_displacement_data', arguments: args },
+      }));
+      const body = await res.json();
+      assert.ok(body.result?.content?.[0]?.text, `${JSON.stringify(body.error)}`);
+      const text = JSON.parse(body.result.content[0].text);
+      return { text, structuredContent: body.result.structuredContent, mod: freshMod };
+    }
+
+    const plain = await callDisplacement({}, seeded(manyCountries, manyFlows));
+    assert.equal(plain.text._budget_exceeded, undefined, 'default args must return data, not _budget_exceeded');
+    assert.deepEqual(plain.structuredContent, plain.text, 'a plain call sends the documented document as structuredContent');
+    assert.equal(plain.text.data.summary.summary, undefined, 'seeder wrapper must be hoisted off data.summary');
+    assert.equal(plain.text.data.summary.year, currentYear);
+    assert.equal(plain.text.data.summary.globalTotals.total, 10);
+    assert.equal(plain.text.data.summary.countries.length, 30, 'default limit caps countries');
+    assert.equal(plain.text.data.summary.topFlows.length, 30, 'default limit caps topFlows');
+    const cappedCountry = plain.text.data.summary.countries[0];
+    const cappedFlow = plain.text.data.summary.topFlows[0];
+    assert.equal(cappedCountry.totalDisplaced, 0, 'country rows expose the seeder totalDisplaced count');
+    assert.equal(Object.hasOwn(cappedCountry, 'total'), false, 'country rows do not use a total field');
+    assert.equal(cappedFlow.refugees, 1_000_000, 'flows expose the seeder refugees count');
+    assert.equal(Object.hasOwn(cappedFlow, 'value'), false, 'flows do not use a value field');
+    assert.ok(Buffer.byteLength(JSON.stringify(plain.text)) <= 131072, 'default payload must fit the 128 KiB budget');
+    const publicTool = plain.mod.TOOL_LIST_RESPONSE.find((tool) => tool.name === 'get_displacement_data');
+    const validateDocumented = new Ajv2020({
+      allErrors: true, allowUnionTypes: true, strict: true, strictRequired: false, validateFormats: false,
+    }).compile(documentedOutputSchema(publicTool));
+    assert.equal(validateDocumented(plain.structuredContent), true,
+      `structuredContent must match the documented outputSchema: ${JSON.stringify(validateDocumented.errors)}`);
+
+    const limited = await callDisplacement({ limit: 3 }, seeded(manyCountries, manyFlows));
+    assert.equal(limited.text.data.summary.countries.length, 3);
+    assert.equal(limited.text.data.summary.topFlows.length, 3);
+
+    const optedOut = await callDisplacement({ limit: 0 }, seeded(
+      manyCountries.slice(0, 4),
+      manyFlows.slice(0, 4),
+    ));
+    assert.equal(optedOut.text.data.summary.countries.length, 4, 'limit: 0 keeps the hoisted lists whole');
+    assert.equal(optedOut.text.data.summary.topFlows.length, 4);
+
+    const filtered = await callDisplacement({ countries: ['Iraq'] }, seeded(
+      [{ code: 'IRQ', refugees: 1 }, { code: 'SYR', refugees: 2 }],
+      [
+        { originCode: 'IRQ', asylumCode: 'DEU', refugees: 9 },
+        { originCode: 'SYR', asylumCode: 'TUR', refugees: 8 },
+        { originCode: 'AFG', asylumCode: 'IRQ', refugees: 7 },
+      ],
+    ));
+    assert.deepEqual(filtered.text.data.summary.countries.map((row) => row.code), ['IRQ']);
+    assert.deepEqual(
+      filtered.text.data.summary.topFlows.map((row) => `${row.originCode}->${row.asylumCode}`),
+      ['IRQ->DEU', 'AFG->IRQ'],
+    );
+
+    const summarized = await callDisplacement({ summary: true }, seeded(manyCountries, manyFlows));
+    assert.equal(summarized.text.data.summary.countries.count, 30, 'summary count is the post-cap list');
+    assert.equal(summarized.text.data.summary.countries.sample.length, 3);
+    assert.equal(summarized.text.data.summary.topFlows.count, 30);
+    assert.equal(summarized.text.data.summary.topFlows.sample.length, 3);
+    assert.equal(summarized.text.data.summary.year, currentYear, 'scalars survive summary mode');
+    assert.deepEqual(summarized.structuredContent, { projection: summarized.text });
   });
 
   it('summary mode: collapses arrays to {count, sample} and large entity maps to {count, sample_keys}', async () => {
@@ -2347,7 +2516,7 @@ describe('api/mcp.ts — PRO MCP Server', () => {
     process.env.UPSTASH_REDIS_REST_URL = 'https://fake.upstash.io';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'fake_token';
 
-    const tariffsPayload = { items: [{ hts: '8501.10.40', ratePct: 25 }] };
+    const tariffsPayload = { datapoints: [{ reportingCountry: 'United States of America', partnerCountry: 'World', productSector: 'All products', year: 2025, tariffRate: 3.3, boundRate: 0, indicatorCode: 'TP_A_0010' }] };
     const bigmacPayload = { countries: [{ iso: 'CHE', priceUsd: 7.04 }] };
     const faoPayload = { months: [{ month: '2026-04', index: 119.2 }] };
     const debtPayload = { countries: [{ iso: 'JPN', debtPctGdp: 263.1 }] };
@@ -2415,7 +2584,7 @@ describe('api/mcp.ts — PRO MCP Server', () => {
     process.env.UPSTASH_REDIS_REST_URL = 'https://fake.upstash.io';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'fake_token';
 
-    const tariffsPayload = { items: [{ hts: '8501.10.40' }] };
+    const tariffsPayload = { datapoints: [{ reportingCountry: 'United States of America', partnerCountry: 'World', productSector: 'All products', year: 2025, tariffRate: 3.3, boundRate: 0, indicatorCode: 'TP_A_0010' }] };
     const bigmacPayload = { countries: [{ iso: 'CHE' }] };
     const faoPayload = { months: [{ month: '2025-12' }] };
     const debtPayload = { countries: [{ iso: 'JPN' }] };
@@ -2478,7 +2647,7 @@ describe('api/mcp.ts — PRO MCP Server', () => {
     process.env.UPSTASH_REDIS_REST_URL = 'https://fake.upstash.io';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'fake_token';
 
-    const tariffsPayload = { items: [{ hts: '8501.10.40' }] };
+    const tariffsPayload = { datapoints: [{ reportingCountry: 'United States of America', partnerCountry: 'World', productSector: 'All products', year: 2025, tariffRate: 3.3, boundRate: 0, indicatorCode: 'TP_A_0010' }] };
     const tariffsFetchedAt = Date.now() - 60 * 60_000;
 
     globalThis.fetch = async (url) => {
@@ -3005,10 +3174,10 @@ describe('api/mcp.ts — PRO MCP Server', () => {
       if (u.includes('/api/aviation/v1/track-aircraft')) {
         return new Response(JSON.stringify({
           positions: [
-            { callsign: 'UAE123', icao24: 'abc123', lat: 24.5, lon: 54.3, altitude_m: 11000, ground_speed_kts: 480, track_deg: 270, on_ground: false },
+            { callsign: 'UAE123', icao24: 'abc123', lat: 24.5, lon: 54.3, altitudeM: 11000, groundSpeedKts: 480, trackDeg: 270, onGround: false },
           ],
           source: 'wingbits',
-          updated_at: 1711620000000,
+          updatedAt: 1711620000000,
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       if (u.includes('/api/military/v1/list-military-flights')) {
@@ -3033,6 +3202,26 @@ describe('api/mcp.ts — PRO MCP Server', () => {
     assert.ok(data.bounding_box?.sw_lat !== undefined, 'bounding_box must be present');
     assert.equal(data.partial, undefined, 'no partial flag when both sources succeed');
     assert.equal(data.source, 'wingbits');
+    assert.deepEqual(data.civilian_flights, [{
+      callsign: 'UAE123', icao24: 'abc123', lat: 24.5, lon: 54.3,
+      altitude_m: 11000, speed_kts: 480, heading_deg: 270, on_ground: false,
+    }]);
+    assert.equal(data.updated_at, new Date(1711620000000).toISOString());
+  });
+
+  it('get_airspace retains multiple camelCase military records and their fields for an ordinary country', async () => {
+    globalThis.fetch = async () => Response.json({ flights: [
+      { callsign: 'FIRST', hexCode: 'abc123', aircraftType: 'MILITARY_AIRCRAFT_TYPE_TRANSPORT', aircraftModel: 'C-17', operatorCountry: 'US', isInteresting: true, source: 'wingbits' },
+      { callsign: 'SECOND', hexCode: 'def456', aircraftType: 'MILITARY_AIRCRAFT_TYPE_TANKER', aircraftModel: 'KC-135', operatorCountry: 'GB', isInteresting: false, source: 'wingbits' },
+    ] });
+    const res = await handler(makeReq('POST', callBody('get_airspace', { country_code: 'AE', type: 'military' })));
+    const body = await res.json();
+    const data = JSON.parse(body.result.content[0].text);
+    assert.equal(data.military_count, 2);
+    assert.deepEqual(data.military_flights.map(f => [f.hex_code, f.aircraft_type, f.aircraft_model, f.operator_country, f.is_interesting]), [
+      ['abc123', 'MILITARY_AIRCRAFT_TYPE_TRANSPORT', 'C-17', 'US', true],
+      ['def456', 'MILITARY_AIRCRAFT_TYPE_TANKER', 'KC-135', 'GB', false],
+    ]);
   });
 
   it('get_airspace excludes OpenSky observations even if a downstream response regresses', async () => {
@@ -3041,7 +3230,7 @@ describe('api/mcp.ts — PRO MCP Server', () => {
       if (u.includes('/api/aviation/v1/track-aircraft')) {
         return new Response(JSON.stringify({
           positions: [
-            { callsign: 'OSKY1', icao24: 'abc123', lat: 24.5, lon: 54.3, altitude_m: 11000, ground_speed_kts: 480, track_deg: 270, on_ground: false },
+            { callsign: 'OSKY1', icao24: 'abc123', lat: 24.5, lon: 54.3, altitudeM: 11000, groundSpeedKts: 480, trackDeg: 270, onGround: false },
           ],
           source: 'opensky',
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -3049,8 +3238,8 @@ describe('api/mcp.ts — PRO MCP Server', () => {
       if (u.includes('/api/military/v1/list-military-flights')) {
         return new Response(JSON.stringify({
           flights: [
-            { callsign: 'OSKY2', hex_code: 'def456', source: 'opensky-auth' },
-            { callsign: 'WING1', hex_code: 'fed654', source: 'wingbits' },
+            { callsign: 'OSKY2', hexCode: 'def456', source: 'opensky-auth' },
+            { callsign: 'WING1', hexCode: 'fed654', source: 'wingbits' },
           ],
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
@@ -3068,6 +3257,76 @@ describe('api/mcp.ts — PRO MCP Server', () => {
     assert.deepEqual(data.military_flights.map((flight) => flight.callsign), ['WING1']);
     assert.equal(data.source, 'wingbits');
     assert.equal(data.partial, true);
+  });
+
+  it('get_airspace splits Russia into ordinary flight queries on both sides of the dateline', async () => {
+    const queries = [];
+    const points = [
+      { callsign: 'MOSCOW', icao24: 'a', lat: 55.75, lon: 37.62 },
+      { callsign: 'CHUKOTKA', icao24: 'b', lat: 65, lon: -175 },
+      { callsign: 'BERLIN', icao24: 'c', lat: 52.52, lon: 13.4 },
+    ];
+    globalThis.fetch = async url => {
+      const parsed = new URL(url);
+      if (!/\/api\/(aviation|military)\//.test(parsed.pathname)) return Response.json({});
+      const west = Number(parsed.searchParams.get('sw_lon'));
+      const east = Number(parsed.searchParams.get('ne_lon'));
+      queries.push([parsed.pathname, west, east]);
+      assert.ok(west <= east && east - west < 360);
+      const positions = points.filter(p => p.lon >= west && p.lon <= east);
+      return Response.json(parsed.pathname.includes('/military/')
+        ? { flights: positions.map(p => ({ callsign: p.callsign, hexCode: p.icao24, source: 'wingbits', location: { latitude: p.lat, longitude: p.lon } })) }
+        : { positions, source: 'wingbits', updatedAt: 1711620000000 });
+    };
+    const res = await handler(makeReq('POST', callBody('get_airspace', { country_code: 'RU' })));
+    const body = await res.json();
+    const data = JSON.parse(body.result.content[0].text);
+    assert.deepEqual(data.civilian_flights.map(f => f.callsign), ['MOSCOW', 'CHUKOTKA']);
+    assert.deepEqual(data.military_flights.map(f => f.callsign), ['MOSCOW', 'CHUKOTKA']);
+    assert.equal(queries.length, 4);
+    assert.deepEqual(queries.map(q => q.slice(1)).sort(), [[-180, -169.7], [-180, -169.7], [19.6, 180], [19.6, 180]].sort());
+    assert.equal(data.updated_at, new Date(1711620000000).toISOString());
+  });
+
+  it('get_airspace rejects full-longitude country queries before fetching', async () => {
+    let calls = 0;
+    globalThis.fetch = async url => {
+      if (/\/api\/(aviation|military)\//.test(new URL(url).pathname)) calls++;
+      return Response.json({});
+    };
+    const res = await handler(makeReq('POST', callBody('get_airspace', { country_code: 'AQ' })));
+    const body = await res.json();
+    assert.match(JSON.parse(body.result.content[0].text).error, /full-longitude/);
+    assert.equal(calls, 0);
+  });
+
+  it('get_airspace reports a failed Russia half as unavailable military coverage', async () => {
+    globalThis.fetch = async url => {
+      const parsed = new URL(url);
+      if (!parsed.pathname.includes('/military/')) return Response.json({ positions: [], source: 'wingbits' });
+      if (Number(parsed.searchParams.get('sw_lon')) < 0) return new Response('unavailable', { status: 503 });
+      return Response.json({ flights: [{ callsign: 'MOSCOW', hexCode: 'a', source: 'wingbits' }] });
+    };
+    const res = await handler(makeReq('POST', callBody('get_airspace', { country_code: 'RU' })));
+    const body = await res.json();
+    const data = JSON.parse(body.result.content[0].text);
+    assert.equal(data.partial, true);
+    assert.match(data.warnings.join(' '), /military/);
+    assert.deepEqual(data.military_flights, [], 'one successful half must not appear to be complete coverage');
+  });
+
+  it('get_airspace preserves a billing denial when the other Russia half fails first', async () => {
+    globalThis.fetch = async url => {
+      if (Number(new URL(url).searchParams.get('sw_lon')) > 0) return new Response('unavailable', { status: 500 });
+      await Promise.resolve();
+      return Response.json({ error: 'Renewal verification pending', code: 'renewal_verification_pending' }, {
+        status: 503, headers: { 'Retry-After': '21', 'X-Billing-Verification': 'renewal_verification_pending' },
+      });
+    };
+    const res = await handler(makeReq('POST', callBody('get_airspace', { country_code: 'RU', type: 'civilian' })));
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get('Retry-After'), '21');
+    assert.equal((await res.json()).error.data.code, 'renewal_verification_pending');
   });
 
   it('get_airspace returns error for unknown country code', async () => {
@@ -3306,6 +3565,20 @@ describe('api/mcp.ts — PRO MCP Server', () => {
     assert.deepEqual(names, ['Across the dateline', 'West of Fiji in-box'], 'dateline-adjacent point must match; far-Pacific point must not');
   });
 
+  it('get_maritime_activity excludes the North Sea from Russia and keeps the dateline', async () => {
+    globalThis.fetch = async () => Response.json({ snapshot: {
+      densityZones: [
+        { name: 'North Sea', location: { latitude: 55, longitude: 5 } },
+        { name: 'Dateline east', location: { latitude: 65, longitude: 179 } },
+        { name: 'Dateline west', location: { latitude: 65, longitude: -175 } },
+      ], disruptions: [],
+    } });
+    const res = await handler(makeReq('POST', callBody('get_maritime_activity', { country_code: 'RU' })));
+    const body = await res.json();
+    const data = JSON.parse(body.result.content[0].text);
+    assert.deepEqual(data.density_zones.map(z => z.name), ['Dateline east', 'Dateline west']);
+  });
+
   it('get_maritime_activity matches every longitude for full-span bboxes (AQ stored as -180..180)', async () => {
     globalThis.fetch = async (url) => {
       if (url.toString().includes('/api/maritime/v1/get-vessel-snapshot')) {
@@ -3497,7 +3770,7 @@ describe('api/mcp.ts — U7 Pro-path', () => {
     process.env.UPSTASH_REDIS_REST_URL = 'https://stub.upstash';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'stub';
     globalThis.fetch = async () => new Response(JSON.stringify({ result: JSON.stringify({ ok: 1 }) }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    const reqs = Array.from({ length: 100 }, () => mcpHandler(proReq('POST', callBody('get_market_data')), deps));
+    const reqs = Array.from({ length: 100 }, () => mcpHandler(proReq('POST', callBody('get_country_macro')), deps));
     const results = await Promise.all(reqs);
     const ok = results.filter((r) => r.status === 200).length;
     const rejected = results.filter((r) => r.status === 429).length;
@@ -3894,7 +4167,7 @@ describe('api/mcp.ts — U7 Pro-path', () => {
 
   it('error: Redis pipeline throws on INCR → -32603 + 503 + Retry-After', async () => {
     const { deps, pipe } = makeProDeps({ pipelineOpts: { throwOnIncr: true } });
-    const res = await mcpHandler(proReq('POST', callBody('get_market_data')), deps);
+    const res = await mcpHandler(proReq('POST', callBody('get_country_macro')), deps);
     assert.equal(res.status, 503);
     assert.equal(res.headers.get('Retry-After'), '5');
     const body = await res.json();
@@ -3922,7 +4195,7 @@ describe('api/mcp.ts — U7 Pro-path', () => {
     process.env.UPSTASH_REDIS_REST_URL = 'https://stub.upstash';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'stub';
     globalThis.fetch = async () => new Response(JSON.stringify({ result: JSON.stringify({ ok: 1 }) }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    const res = await mcpHandler(proReq('POST', callBody('get_market_data')), deps);
+    const res = await mcpHandler(proReq('POST', callBody('get_country_macro')), deps);
     assert.equal(res.status, 429, 'over-cap request 429s as expected');
     // The clamp logic INCRs+DECRs to probe, then DECR-sweeps. The exact
     // resulting count depends on the probe path; the contract is "post-

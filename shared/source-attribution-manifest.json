@@ -4,7 +4,7 @@
     {
       "host": "127.0.0.1",
       "provider": "Local loopback transport",
-      "kind": "feed+structured",
+      "kind": "structured",
       "observed": true,
       "license": "Excluded: local development/desktop transport",
       "attribution": "Excluded from the provider count: local-only loopback URL.",
@@ -15,9 +15,6 @@
         },
         {
           "path": "scripts/profile-news-hybrid-clustering-7782-dashboard.mjs"
-        },
-        {
-          "path": "src/components/LiveNewsPanel.ts"
         },
         {
           "path": "src/services/runtime.ts"
@@ -51,7 +48,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -155,7 +152,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -163,20 +160,15 @@
       "host": "abplivetv.pc.cdn.bitgravity.com",
       "provider": "abplivetv.pc.cdn.bitgravity.com",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "accounts.google.com",
       "provider": "Google account sign-in",
-      "kind": "feed",
+      "kind": "structured",
       "observed": true,
       "license": "Excluded: authentication/UI link",
       "attribution": "Excluded from the provider count: user sign-in redirect, not an ingested source.",
@@ -353,7 +345,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -367,7 +359,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -518,9 +510,6 @@
         },
         {
           "path": "scripts/seed-aviation.mjs"
-        },
-        {
-          "path": "server/worldmonitor/aviation/v1/_shared.ts"
         }
       ]
     },
@@ -687,6 +676,20 @@
       ]
     },
     {
+      "host": "api.e-stat.go.jp",
+      "provider": "api.e-stat.go.jp",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit api.e-stat.go.jp and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-world-cpi-estat.mjs"
+        }
+      ]
+    },
+    {
       "host": "api.eia.gov",
       "provider": "api.eia.gov",
       "kind": "structured",
@@ -779,6 +782,9 @@
       "status": "terms-review",
       "references": [
         {
+          "path": "scripts/ais-relay.cjs"
+        },
+        {
           "path": "scripts/seed-grocery-basket.mjs"
         }
       ]
@@ -847,15 +853,10 @@
       "host": "api.groq.com",
       "provider": "api.groq.com",
       "kind": "structured",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: first-party, control-plane, UI, or rendering transport",
       "attribution": "Excluded from the external-provider count: not an ingested upstream dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "shared/llm-health-providers.js"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "api.hyperliquid.xyz",
@@ -916,6 +917,9 @@
         },
         {
           "path": "scripts/seed-gold-cb-reserves.mjs"
+        },
+        {
+          "path": "scripts/seed-world-cpi-imf.mjs"
         }
       ]
     },
@@ -1004,6 +1008,20 @@
       ]
     },
     {
+      "host": "api.publisher.jodidata.org",
+      "provider": "www.jodidata.org",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit api.publisher.jodidata.org and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-jodi-gas.mjs"
+        }
+      ]
+    },
+    {
       "host": "api.rainviewer.com",
       "provider": "api.rainviewer.com",
       "kind": "structured",
@@ -1045,6 +1063,20 @@
         },
         {
           "path": "server/worldmonitor/leads/v1/submit-contact.ts"
+        }
+      ]
+    },
+    {
+      "host": "api.riksbank.se",
+      "provider": "api.riksbank.se",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit api.riksbank.se and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-yield-curve-se.mjs"
         }
       ]
     },
@@ -1122,6 +1154,20 @@
       ]
     },
     {
+      "host": "api.statistiken.bundesbank.de",
+      "provider": "api.statistiken.bundesbank.de",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit api.statistiken.bundesbank.de and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-yield-curve-de.mjs"
+        }
+      ]
+    },
+    {
       "host": "api.stlouisfed.org",
       "provider": "api.stlouisfed.org",
       "kind": "structured",
@@ -1132,6 +1178,12 @@
       "references": [
         {
           "path": "scripts/seed-economic-calendar.mjs"
+        },
+        {
+          "path": "scripts/seed-us-cpi.mjs"
+        },
+        {
+          "path": "scripts/seed-us-interest-rates.mjs"
         }
       ]
     },
@@ -1177,6 +1229,20 @@
       "references": [
         {
           "path": "server/worldmonitor/aviation/v1/_providers/travelpayouts_data.ts"
+        }
+      ]
+    },
+    {
+      "host": "api.typesafe.ai",
+      "provider": "api.typesafe.ai",
+      "kind": "structured",
+      "observed": true,
+      "license": "Excluded: first-party, control-plane, UI, or rendering transport",
+      "attribution": "Excluded from the external-provider count: not an ingested upstream dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "scripts/lib/internal-links.mjs"
         }
       ]
     },
@@ -1360,7 +1426,7 @@
     {
       "host": "api.worldmonitor.app",
       "provider": "World Monitor hosted API",
-      "kind": "structured",
+      "kind": "feed+structured",
       "observed": true,
       "license": "Excluded: World Monitor own service/control plane",
       "attribution": "Excluded from the external-provider count: first-party API endpoint.",
@@ -1377,6 +1443,9 @@
         },
         {
           "path": "api/mcp/skill-extension/generated.ts"
+        },
+        {
+          "path": "scripts/_widget-data-policy.cjs"
         },
         {
           "path": "scripts/ais-relay.cjs"
@@ -1421,16 +1490,19 @@
           "path": "scripts/seed-service-statuses.mjs"
         },
         {
+          "path": "scripts/validate-rss-feeds.mjs"
+        },
+        {
           "path": "scripts/validate-seed-migration.mjs"
         },
         {
           "path": "scripts/verify-import-hhi-coverage.mjs"
         },
         {
-          "path": "src/app/desktop-updater.ts"
+          "path": "server/worldmonitor/news/v1/_feeds.ts"
         },
         {
-          "path": "src/components/UnifiedSettings.ts"
+          "path": "src/app/desktop-updater.ts"
         },
         {
           "path": "src/mcp-grant-main.ts"
@@ -1736,7 +1808,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -1840,15 +1912,10 @@
       "host": "bcovlive-a.akamaihd.net",
       "provider": "bcovlive-a.akamaihd.net",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "bd.usembassy.gov",
@@ -1878,6 +1945,23 @@
         },
         {
           "path": "src/config/feeds.ts"
+        }
+      ]
+    },
+    {
+      "host": "besttime.app",
+      "provider": "besttime.app",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit besttime.app and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/ais-relay.cjs"
+        },
+        {
+          "path": "src/components/PizzIntIndicator.ts"
         }
       ]
     },
@@ -1959,10 +2043,10 @@
           "path": "server/worldmonitor/news/v1/_feeds.ts"
         },
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/feeds.ts"
         },
         {
-          "path": "src/config/feeds.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -2102,15 +2186,10 @@
       "host": "cbcnewshd-f.akamaihd.net",
       "provider": "cbcnewshd-f.akamaihd.net",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "cbinsights.com",
@@ -2136,7 +2215,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -2158,15 +2237,10 @@
       "host": "cdn-ca2-na.lncnetworks.host",
       "provider": "cdn-ca2-na.lncnetworks.host",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "cdn.debugbear.com",
@@ -2203,15 +2277,10 @@
       "host": "cdnlive.presstv.ir",
       "provider": "cdnlive.presstv.ir",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "celestrak.org",
@@ -2497,21 +2566,10 @@
       "host": "collisionconf.com",
       "provider": "collisionconf.com",
       "kind": "structured",
-      "observed": true,
+      "observed": false,
       "license": "Provider terms for this upstream API/dataset; verify before redistribution",
       "attribution": "Credit collisionconf.com and link to the original upstream API/dataset.",
-      "status": "terms-review",
-      "references": [
-        {
-          "path": "scripts/ais-relay.cjs"
-        },
-        {
-          "path": "scripts/seed-research.mjs"
-        },
-        {
-          "path": "server/worldmonitor/research/v1/list-tech-events.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "commodity.worldmonitor.app",
@@ -2738,15 +2796,10 @@
       "host": "dai2.xumo.com",
       "provider": "dai2.xumo.com",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "dailytrust.com",
@@ -2775,7 +2828,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -2796,6 +2849,20 @@
         },
         {
           "path": "scripts/seed-yield-curve-eu.mjs"
+        }
+      ]
+    },
+    {
+      "host": "data.api.abs.gov.au",
+      "provider": "data.api.abs.gov.au",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit data.api.abs.gov.au and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-world-cpi-abs.mjs"
         }
       ]
     },
@@ -2848,6 +2915,20 @@
       ]
     },
     {
+      "host": "data.norges-bank.no",
+      "provider": "data.norges-bank.no",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit data.norges-bank.no and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-yield-curve-no.mjs"
+        }
+      ]
+    },
+    {
       "host": "data.sec.gov",
       "provider": "SEC EDGAR",
       "kind": "structured",
@@ -2862,6 +2943,20 @@
       ]
     },
     {
+      "host": "data.snb.ch",
+      "provider": "data.snb.ch",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit data.snb.ch and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-yield-curve-ch.mjs"
+        }
+      ]
+    },
+    {
       "host": "data.tps.ca",
       "provider": "Toronto Police Service Open Data",
       "kind": "structured",
@@ -2872,6 +2967,20 @@
       "references": [
         {
           "path": "scripts/lib/tps-open-data.mjs"
+        }
+      ]
+    },
+    {
+      "host": "data.unhcr.org",
+      "provider": "data.unhcr.org",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit data.unhcr.org and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-cross-border-arrivals.mjs"
         }
       ]
     },
@@ -3137,15 +3246,10 @@
       "host": "discord.gg",
       "provider": "discord.gg",
       "kind": "structured",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: first-party, control-plane, UI, or rendering transport",
       "attribution": "Excluded from the external-provider count: not an ingested upstream dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/CommunityWidget.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "discordstatus.com",
@@ -3221,6 +3325,20 @@
       ]
     },
     {
+      "host": "dtmapi.iom.int",
+      "provider": "dtmapi.iom.int",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit dtmapi.iom.int and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-dtm-displacement.mjs"
+        }
+      ]
+    },
+    {
       "host": "dw.com",
       "provider": "dw.com",
       "kind": "feed",
@@ -3244,7 +3362,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -3258,7 +3376,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -3596,6 +3714,20 @@
       ]
     },
     {
+      "host": "english-livebkali.cgtn.com",
+      "provider": "english-livebkali.cgtn.com",
+      "kind": "feed",
+      "observed": true,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "src/config/live-video-sources.ts"
+        }
+      ]
+    },
+    {
       "host": "english.alarabiya.net",
       "provider": "english.alarabiya.net",
       "kind": "feed",
@@ -3692,6 +3824,20 @@
       ]
     },
     {
+      "host": "ert-ucdn.broadpeak-aas.com",
+      "provider": "ert-ucdn.broadpeak-aas.com",
+      "kind": "feed",
+      "observed": true,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "src/config/live-video-sources.ts"
+        }
+      ]
+    },
+    {
       "host": "ert.gr",
       "provider": "ert.gr",
       "kind": "feed",
@@ -3712,15 +3858,10 @@
       "host": "ertflix.ascdn.broadpeak.io",
       "provider": "ertflix.ascdn.broadpeak.io",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "es.euronews.com",
@@ -4382,6 +4523,20 @@
       ]
     },
     {
+      "host": "fred.stlouisfed.org",
+      "provider": "fred.stlouisfed.org",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit fred.stlouisfed.org and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-oecd-lt-rates.mjs"
+        }
+      ]
+    },
+    {
       "host": "freeipapi.com",
       "provider": "freeipapi.com",
       "kind": "structured",
@@ -4561,6 +4716,9 @@
       "references": [
         {
           "path": "api/download.js"
+        },
+        {
+          "path": "api/health.js"
         },
         {
           "path": "scripts/build-accuracy-page.mjs"
@@ -4925,6 +5083,20 @@
       ]
     },
     {
+      "host": "home.treasury.gov",
+      "provider": "home.treasury.gov",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit home.treasury.gov and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-us-treasury-par-yield.mjs"
+        }
+      ]
+    },
+    {
       "host": "hromadske.ua",
       "provider": "hromadske.ua",
       "kind": "feed",
@@ -4938,6 +5110,26 @@
         },
         {
           "path": "src/config/feeds.ts"
+        }
+      ]
+    },
+    {
+      "host": "hts.usitc.gov",
+      "provider": "hts.usitc.gov",
+      "kind": "structured",
+      "observed": true,
+      "license": "Harmonized Tariff Schedule of the United States, published by the US International Trade Commission; a US federal government work, not subject to copyright (17 U.S.C. 105)",
+      "attribution": "Credit the USITC Harmonized Tariff Schedule and name the HTS release the rates come from.",
+      "status": "reviewed",
+      "references": [
+        {
+          "path": "api/mcp/skill-extension/generated.ts"
+        },
+        {
+          "path": "scripts/seed-supply-chain-trade.mjs"
+        },
+        {
+          "path": "server/worldmonitor/trade/v1/get-us-import-duty.ts"
         }
       ]
     },
@@ -4972,6 +5164,20 @@
         },
         {
           "path": "src/config/feeds.ts"
+        }
+      ]
+    },
+    {
+      "host": "i24newshebrew-cdn.encoders.immergo.tv",
+      "provider": "i24newshebrew-cdn.encoders.immergo.tv",
+      "kind": "feed",
+      "observed": true,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -5084,7 +5290,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -5408,13 +5614,22 @@
       "host": "kan11.media.kan.org.il",
       "provider": "kan11.media.kan.org.il",
       "kind": "feed",
+      "observed": false,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded"
+    },
+    {
+      "host": "kancdn.medonecdn.net",
+      "provider": "kancdn.medonecdn.net",
+      "kind": "feed",
       "observed": true,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -5601,7 +5816,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -5620,6 +5835,20 @@
       ]
     },
     {
+      "host": "live-cdn-stream-euw1.bfmtv.bct.nextradiotv.com",
+      "provider": "live-cdn-stream-euw1.bfmtv.bct.nextradiotv.com",
+      "kind": "feed",
+      "observed": true,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "src/config/live-video-sources.ts"
+        }
+      ]
+    },
+    {
       "host": "live-gbnews.simplestreamcdn.com",
       "provider": "live-gbnews.simplestreamcdn.com",
       "kind": "feed",
@@ -5629,7 +5858,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -5643,7 +5872,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -5657,7 +5886,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -5665,15 +5894,10 @@
       "host": "live-hls-web-ajb.getaj.net",
       "provider": "live-hls-web-ajb.getaj.net",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "live-hls-web-ajm.getaj.net",
@@ -5685,7 +5909,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -5699,7 +5923,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -5713,7 +5937,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -5735,8 +5959,8 @@
       ]
     },
     {
-      "host": "liveedge-arisenews.visioncdn.com",
-      "provider": "liveedge-arisenews.visioncdn.com",
+      "host": "live.livetvstream.co.uk",
+      "provider": "live.livetvstream.co.uk",
       "kind": "feed",
       "observed": true,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
@@ -5744,37 +5968,64 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
+    },
+    {
+      "host": "live.presstv.co.uk",
+      "provider": "live.presstv.co.uk",
+      "kind": "feed",
+      "observed": true,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "src/config/live-video-sources.ts"
+        }
+      ]
+    },
+    {
+      "host": "live.rudaw.net",
+      "provider": "live.rudaw.net",
+      "kind": "feed",
+      "observed": true,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "src/config/live-video-sources.ts"
+        }
+      ]
+    },
+    {
+      "host": "liveedge-arisenews.visioncdn.com",
+      "provider": "liveedge-arisenews.visioncdn.com",
+      "kind": "feed",
+      "observed": false,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded"
     },
     {
       "host": "livenewschat.eu",
       "provider": "livenewschat.eu",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "lnc-abc-news.tubi.video",
       "provider": "lnc-abc-news.tubi.video",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "lobste.rs",
@@ -5799,7 +6050,7 @@
     {
       "host": "localhost",
       "provider": "Local development transport",
-      "kind": "feed+structured",
+      "kind": "structured",
       "observed": true,
       "license": "Excluded: local development/test transport",
       "attribution": "Excluded from the provider count: local-only URL.",
@@ -5810,9 +6061,6 @@
         },
         {
           "path": "server/worldmonitor/research/v1/list-tech-events.ts"
-        },
-        {
-          "path": "src/components/LiveNewsPanel.ts"
         },
         {
           "path": "src/services/desktop-runtime.ts"
@@ -5933,6 +6181,20 @@
       ]
     },
     {
+      "host": "masterpl.hls.nhkworld.jp",
+      "provider": "masterpl.hls.nhkworld.jp",
+      "kind": "feed",
+      "observed": true,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "src/config/live-video-sources.ts"
+        }
+      ]
+    },
+    {
       "host": "mausam.imd.gov.in",
       "provider": "India Meteorological Department",
       "kind": "structured",
@@ -6046,6 +6308,9 @@
       "status": "terms-review",
       "references": [
         {
+          "path": "server/worldmonitor/news/v1/_feeds.ts"
+        },
+        {
           "path": "src/config/feeds.ts"
         }
       ]
@@ -6054,18 +6319,10 @@
       "host": "miit.gov.cn",
       "provider": "miit.gov.cn",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Provider terms for this feed publisher; verify before redistribution",
       "attribution": "Credit miit.gov.cn and link to the original feed publisher.",
-      "status": "terms-review",
-      "references": [
-        {
-          "path": "server/worldmonitor/news/v1/_feeds.ts"
-        },
-        {
-          "path": "src/config/feeds.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "mining-journal.com",
@@ -6229,6 +6486,20 @@
       ]
     },
     {
+      "host": "n1ctsota.akamaized.net",
+      "provider": "n1ctsota.akamaized.net",
+      "kind": "feed",
+      "observed": true,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "src/config/live-video-sources.ts"
+        }
+      ]
+    },
+    {
       "host": "n1info.hr",
       "provider": "n1info.hr",
       "kind": "feed",
@@ -6306,7 +6577,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -6314,15 +6585,10 @@
       "host": "news.cgtn.com",
       "provider": "news.cgtn.com",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "news.crunchbase.com",
@@ -6540,13 +6806,22 @@
       "host": "nhkwlive-ojp.akamaized.net",
       "provider": "nhkwlive-ojp.akamaized.net",
       "kind": "feed",
+      "observed": false,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded"
+    },
+    {
+      "host": "nmxlive.akamaized.net",
+      "provider": "nmxlive.akamaized.net",
+      "kind": "feed",
       "observed": true,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -6619,7 +6894,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -6648,6 +6923,20 @@
       "references": [
         {
           "path": "scripts/ais-relay.cjs"
+        }
+      ]
+    },
+    {
+      "host": "oauth2.googleapis.com",
+      "provider": "oauth2.googleapis.com",
+      "kind": "structured",
+      "observed": true,
+      "license": "Excluded: first-party, control-plane, UI, or rendering transport",
+      "attribution": "Excluded from the external-provider count: not an ingested upstream dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "scripts/seo-gsc-collect.mjs"
         }
       ]
     },
@@ -6765,6 +7054,20 @@
       ]
     },
     {
+      "host": "open-meteo.caseyjhand.com",
+      "provider": "open-meteo.caseyjhand.com",
+      "kind": "structured",
+      "observed": true,
+      "license": "Community-hosted MCP service. Open-Meteo weather data is CC BY 4.0; free API access is non-commercial only. Commercial access requires a paid Open-Meteo plan and compatible hosting.",
+      "attribution": "Weather data by Open-Meteo.com. MCP server hosted by cyanheads at open-meteo.caseyjhand.com. Preserve the attribution returned with weather results.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "src/services/mcp-store.ts"
+        }
+      ]
+    },
+    {
       "host": "open.alberta.ca",
       "provider": "open.alberta.ca",
       "kind": "structured",
@@ -6828,6 +7131,9 @@
       "status": "excluded",
       "references": [
         {
+          "path": "scripts/eval-classify-labels.mjs"
+        },
+        {
           "path": "scripts/lib/brief-dedup-consts.mjs"
         },
         {
@@ -6885,7 +7191,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -6944,15 +7250,10 @@
       "host": "outbreaknewstoday.com",
       "provider": "outbreaknewstoday.com",
       "kind": "structured",
-      "observed": true,
+      "observed": false,
       "license": "Provider terms for this upstream API/dataset; verify before redistribution",
       "attribution": "Credit outbreaknewstoday.com and link to the original upstream API/dataset.",
-      "status": "terms-review",
-      "references": [
-        {
-          "path": "scripts/seed-disease-outbreaks.mjs"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "overpass-api.de",
@@ -7034,15 +7335,10 @@
       "host": "pe-fa-lp02a.9c9media.com",
       "provider": "pe-fa-lp02a.9c9media.com",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "phys.org",
@@ -7463,6 +7759,9 @@
         },
         {
           "path": "server/worldmonitor/market/v1/get-country-stock-index.ts"
+        },
+        {
+          "path": "server/worldmonitor/market/v1/get-price-history.ts"
         }
       ]
     },
@@ -7526,15 +7825,10 @@
       "host": "rakuten-guardian-1-ie.samsung.wurl.tv",
       "provider": "rakuten-guardian-1-ie.samsung.wurl.tv",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "raw.githubusercontent.com",
@@ -7668,15 +7962,10 @@
       "host": "reuters-reutersnow-1-eu.rakuten.wurl.tv",
       "provider": "reuters-reutersnow-1-eu.rakuten.wurl.tv",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "reuters.com",
@@ -7849,7 +8138,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -7863,7 +8152,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -7877,7 +8166,21 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
+        }
+      ]
+    },
+    {
+      "host": "rtvelivestream.rtve.es",
+      "provider": "rtvelivestream.rtve.es",
+      "kind": "feed",
+      "observed": true,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -7936,7 +8239,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -8054,6 +8357,15 @@
       ]
     },
     {
+      "host": "sdmx.oecd.org",
+      "provider": "sdmx.oecd.org",
+      "kind": "structured",
+      "observed": false,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit sdmx.oecd.org and link to the original upstream API/dataset.",
+      "status": "excluded"
+    },
+    {
       "host": "sealevel.nasa.gov",
       "provider": "sealevel.nasa.gov",
       "kind": "structured",
@@ -8134,6 +8446,20 @@
       "references": [
         {
           "path": "scripts/seo-indexnow-submit.mjs"
+        }
+      ]
+    },
+    {
+      "host": "searchconsole.googleapis.com",
+      "provider": "searchconsole.googleapis.com",
+      "kind": "structured",
+      "observed": true,
+      "license": "Excluded: first-party, control-plane, UI, or rendering transport",
+      "attribution": "Excluded from the external-provider count: not an ingested upstream dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "scripts/seo-gsc-collect.mjs"
         }
       ]
     },
@@ -8372,6 +8698,20 @@
         },
         {
           "path": "src/config/feeds.ts"
+        }
+      ]
+    },
+    {
+      "host": "skai-live.siliconweb.com",
+      "provider": "skai-live.siliconweb.com",
+      "kind": "feed",
+      "observed": true,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -8706,15 +9046,10 @@
       "host": "stream.ads.ottera.tv",
       "provider": "stream.ads.ottera.tv",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "streaming-live.rtp.pt",
@@ -8726,7 +9061,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -8751,15 +9086,10 @@
       "host": "svs.itworkscdn.net",
       "provider": "svs.itworkscdn.net",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
-      "status": "excluded",
-      "references": [
-        {
-          "path": "src/components/LiveNewsPanel.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "syriadirect.org",
@@ -8814,7 +9144,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -9552,13 +9882,22 @@
       "host": "turnerlive.warnermediacdn.com",
       "provider": "turnerlive.warnermediacdn.com",
       "kind": "feed",
+      "observed": false,
+      "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
+      "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
+      "status": "excluded"
+    },
+    {
+      "host": "tv-trthaber.medya.trt.com.tr",
+      "provider": "tv-trthaber.medya.trt.com.tr",
+      "kind": "feed",
       "observed": true,
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -9572,7 +9911,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -9776,6 +10115,9 @@
       "references": [
         {
           "path": "scripts/audit-sentry-resolve-pins.mjs"
+        },
+        {
+          "path": "scripts/sync-sentry-convex-probe-filters.mjs"
         }
       ]
     },
@@ -9894,7 +10236,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },
@@ -10015,7 +10357,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/PinnedWebcamsPanel.ts"
+          "path": "shared/pinned-webcams.ts"
         }
       ]
     },
@@ -10023,21 +10365,10 @@
       "host": "websummit.com",
       "provider": "websummit.com",
       "kind": "structured",
-      "observed": true,
+      "observed": false,
       "license": "Provider terms for this upstream API/dataset; verify before redistribution",
       "attribution": "Credit websummit.com and link to the original upstream API/dataset.",
-      "status": "terms-review",
-      "references": [
-        {
-          "path": "scripts/ais-relay.cjs"
-        },
-        {
-          "path": "scripts/seed-research.mjs"
-        },
-        {
-          "path": "server/worldmonitor/research/v1/list-tech-events.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "whitehouse.gov",
@@ -10094,6 +10425,23 @@
       ]
     },
     {
+      "host": "wits.worldbank.org",
+      "provider": "wits.worldbank.org",
+      "kind": "structured",
+      "observed": true,
+      "license": "UNCTAD TRAINS tariff data served through the World Bank WITS API; redistribution to paying API customers confirmed by the owner on 2026-10-10",
+      "attribution": "Credit UNCTAD TRAINS and World Bank WITS, and link to the WITS query behind each rate.",
+      "status": "reviewed",
+      "references": [
+        {
+          "path": "api/mcp/skill-extension/generated.ts"
+        },
+        {
+          "path": "server/worldmonitor/trade/v1/get-bilateral-tariff.ts"
+        }
+      ]
+    },
+    {
       "host": "workos.com",
       "provider": "workos.com",
       "kind": "structured",
@@ -10110,7 +10458,7 @@
     {
       "host": "worldmonitor.app",
       "provider": "World Monitor web app",
-      "kind": "feed+structured",
+      "kind": "structured",
       "observed": true,
       "license": "Excluded: World Monitor own web application",
       "attribution": "Excluded from the external-provider count: first-party web origin.",
@@ -10132,6 +10480,12 @@
           "path": "api/mcp/skill-extension/generated.ts"
         },
         {
+          "path": "api/miit-news.js"
+        },
+        {
+          "path": "api/notification-suppressions.js"
+        },
+        {
           "path": "api/oauth/authorize.js"
         },
         {
@@ -10145,6 +10499,9 @@
         },
         {
           "path": "api/reverse-geocode.js"
+        },
+        {
+          "path": "api/seed-contract-probe.ts"
         },
         {
           "path": "api/story.js"
@@ -10171,6 +10528,9 @@
           "path": "scripts/cross-strait-activity/adapters.mjs"
         },
         {
+          "path": "scripts/eval-classify-labels.mjs"
+        },
+        {
           "path": "scripts/lib/brief-embedding.mjs"
         },
         {
@@ -10180,6 +10540,9 @@
           "path": "scripts/lib/x-news-accounts.cjs"
         },
         {
+          "path": "scripts/mcp-live-smoke.mjs"
+        },
+        {
           "path": "scripts/mcp-proxy-live-smoke.mjs"
         },
         {
@@ -10187,9 +10550,6 @@
         },
         {
           "path": "scripts/measure-tools-list-compression.mjs"
-        },
-        {
-          "path": "scripts/notification-relay.cjs"
         },
         {
           "path": "scripts/publish-mcp-registry.mjs"
@@ -10219,6 +10579,9 @@
           "path": "scripts/seed-wb-indicators.mjs"
         },
         {
+          "path": "scripts/shared/notify-fields.cjs"
+        },
+        {
           "path": "scripts/validate-seed-migration.mjs"
         },
         {
@@ -10226,6 +10589,9 @@
         },
         {
           "path": "server/_shared/intel-history-embed.ts"
+        },
+        {
+          "path": "server/_shared/notify-fields.ts"
         },
         {
           "path": "server/gateway.ts"
@@ -10237,7 +10603,7 @@
           "path": "src/bootstrap/web-vitals-utils.ts"
         },
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/components/UnifiedSettings.ts"
         },
         {
           "path": "src/config/web-origin.ts"
@@ -10705,6 +11071,23 @@
       "references": [
         {
           "path": "scripts/lib/boc-valet.mjs"
+        },
+        {
+          "path": "scripts/seed-yield-curve-ca.mjs"
+        }
+      ]
+    },
+    {
+      "host": "www.bankofengland.co.uk",
+      "provider": "www.bankofengland.co.uk",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit www.bankofengland.co.uk and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-yield-curve-gb.mjs"
         }
       ]
     },
@@ -10992,6 +11375,20 @@
       "references": [
         {
           "path": "src/config/feeds.ts"
+        }
+      ]
+    },
+    {
+      "host": "www.cidrap.umn.edu",
+      "provider": "www.cidrap.umn.edu",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit www.cidrap.umn.edu and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-disease-outbreaks.mjs"
         }
       ]
     },
@@ -11407,6 +11804,9 @@
       "status": "terms-review",
       "references": [
         {
+          "path": "scripts/seed-disease-outbreaks.mjs"
+        },
+        {
           "path": "scripts/seed-security-advisories.mjs"
         }
       ]
@@ -11763,21 +12163,10 @@
       "host": "www.gitex.com",
       "provider": "www.gitex.com",
       "kind": "structured",
-      "observed": true,
+      "observed": false,
       "license": "Provider terms for this upstream API/dataset; verify before redistribution",
       "attribution": "Credit www.gitex.com and link to the original upstream API/dataset.",
-      "status": "terms-review",
-      "references": [
-        {
-          "path": "scripts/ais-relay.cjs"
-        },
-        {
-          "path": "scripts/seed-research.mjs"
-        },
-        {
-          "path": "server/worldmonitor/research/v1/list-tech-events.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "www.githubstatus.com",
@@ -11886,6 +12275,20 @@
         },
         {
           "path": "src/components/MapPopup.ts"
+        }
+      ]
+    },
+    {
+      "host": "www.googleapis.com",
+      "provider": "www.googleapis.com",
+      "kind": "structured",
+      "observed": true,
+      "license": "Excluded: first-party, control-plane, UI, or rendering transport",
+      "attribution": "Excluded from the external-provider count: not an ingested upstream dataset.",
+      "status": "excluded",
+      "references": [
+        {
+          "path": "scripts/seo-gsc-collect.mjs"
         }
       ]
     },
@@ -12448,6 +12851,9 @@
       "status": "terms-review",
       "references": [
         {
+          "path": "api/miit-news.js"
+        },
+        {
           "path": "scripts/china-policy/adapters.mjs"
         }
       ]
@@ -12534,6 +12940,20 @@
         },
         {
           "path": "src/components/cross-strait-activity-summary.ts"
+        }
+      ]
+    },
+    {
+      "host": "www.mof.go.jp",
+      "provider": "www.mof.go.jp",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit www.mof.go.jp and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-yield-curve-jp.mjs"
         }
       ]
     },
@@ -12875,6 +13295,9 @@
         },
         {
           "path": "scripts/seed-conflict-intel.mjs"
+        },
+        {
+          "path": "src/components/PizzIntIndicator.ts"
         }
       ]
     },
@@ -13062,6 +13485,20 @@
         },
         {
           "path": "src/config/feeds.ts"
+        }
+      ]
+    },
+    {
+      "host": "www.rba.gov.au",
+      "provider": "www.rba.gov.au",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit www.rba.gov.au and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-yield-curve-au.mjs"
         }
       ]
     },
@@ -13889,21 +14326,10 @@
       "host": "www.token2049.com",
       "provider": "www.token2049.com",
       "kind": "structured",
-      "observed": true,
+      "observed": false,
       "license": "Provider terms for this upstream API/dataset; verify before redistribution",
       "attribution": "Credit www.token2049.com and link to the original upstream API/dataset.",
-      "status": "terms-review",
-      "references": [
-        {
-          "path": "scripts/ais-relay.cjs"
-        },
-        {
-          "path": "scripts/seed-research.mjs"
-        },
-        {
-          "path": "server/worldmonitor/research/v1/list-tech-events.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "www.tomshardware.com",
@@ -13998,6 +14424,20 @@
       "references": [
         {
           "path": "scripts/seed-climate-news.mjs"
+        }
+      ]
+    },
+    {
+      "host": "www.unognewsroom.org",
+      "provider": "www.unognewsroom.org",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit www.unognewsroom.org and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/seed-disease-outbreaks.mjs"
         }
       ]
     },
@@ -14255,7 +14695,13 @@
           "path": "api/mcp/skill-extension/generated.ts"
         },
         {
+          "path": "api/mcp/ui/news-dashboard-app.ts"
+        },
+        {
           "path": "api/not-found.ts"
+        },
+        {
+          "path": "api/story.js"
         },
         {
           "path": "scripts/build-accuracy-page.mjs"
@@ -14285,6 +14731,9 @@
           "path": "scripts/capture-resilience-energy-v2-acceptance.mjs"
         },
         {
+          "path": "scripts/check-live-video-sources.mjs"
+        },
+        {
           "path": "scripts/discover-content-corpus-pages.mjs"
         },
         {
@@ -14300,6 +14749,9 @@
           "path": "scripts/github-stars-snapshot.mjs"
         },
         {
+          "path": "scripts/lib/internal-links.mjs"
+        },
+        {
           "path": "scripts/mcp-proxy-live-smoke.mjs"
         },
         {
@@ -14310,6 +14762,9 @@
         },
         {
           "path": "scripts/measure-desktop-mainthread.mjs"
+        },
+        {
+          "path": "scripts/notification-relay.cjs"
         },
         {
           "path": "scripts/seo-indexnow-submit.mjs"
@@ -14324,7 +14779,16 @@
           "path": "server/_shared/deprecation-policy.ts"
         },
         {
+          "path": "server/worldmonitor/intelligence/v1/_country-brief-evidence.ts"
+        },
+        {
           "path": "src/app/panel-layout.ts"
+        },
+        {
+          "path": "src/components/CountryBriefController.ts"
+        },
+        {
+          "path": "src/components/CountryDeepDivePanel.ts"
         },
         {
           "path": "src/components/RuntimeConfigPanel.ts"
@@ -14340,6 +14804,15 @@
         },
         {
           "path": "src/embed/embed-url.ts"
+        },
+        {
+          "path": "src/plugin-country-main.ts"
+        },
+        {
+          "path": "src/services/country-brief-host-transport.ts"
+        },
+        {
+          "path": "src/services/country-brief-source.ts"
         }
       ]
     },
@@ -14430,16 +14903,19 @@
           "path": "api/youtube/live.js"
         },
         {
-          "path": "scripts/ais-relay.cjs"
+          "path": "scripts/check-live-video-sources.mjs"
+        },
+        {
+          "path": "scripts/lib/live-video-channel-live.mjs"
         },
         {
           "path": "server/worldmonitor/aviation/v1/get-youtube-live-stream-info.ts"
         },
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         },
         {
-          "path": "src/components/LiveWebcamsPanel.ts"
+          "path": "src/services/live-video/session.ts"
         }
       ]
     },
@@ -14662,7 +15138,7 @@
       "status": "excluded",
       "references": [
         {
-          "path": "src/components/LiveNewsPanel.ts"
+          "path": "src/config/live-video-sources.ts"
         }
       ]
     },

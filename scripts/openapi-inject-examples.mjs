@@ -211,6 +211,19 @@ function isCuratedOmission(key, context = {}) {
 function overrideStringExample(key, context = {}) {
   const where = `${context.operationId ?? ''} ${context.path ?? ''}`.toLowerCase();
   if (key === 'jmespath') return 'keys(@)';
+  // IOM DTM keys countries by ISO3; the generic ISO2 'US' fails the pattern.
+  if (key === 'countrycode' && (where.includes('getinternaldisplacement') || where.includes('get-internal-displacement'))) {
+    return 'SDN';
+  }
+  if (where.includes('getpricehistory') || where.includes('get-price-history')) {
+    if (key === 'symbols') return 'GC=F,SI=F';
+    if (key === 'range') return '3mo';
+  }
+  // UsInterestRateSeries.id is a closed wire-id set. The generic `example-id`
+  // is not one of the published ids, so the documented 200 sample is un-runnable.
+  if (key === 'id' && (where.includes('getusinterestrates') || where.includes('get-us-interest-rates'))) {
+    return 'fed_funds_effective';
+  }
   if (where.includes('listvulnerabilityrankings') || where.includes('list-vulnerability-rankings')) {
     if (key === 'commodityid') return 'crude_oil';
     if (key === 'band') return 'high';
@@ -254,6 +267,20 @@ function overrideStringExample(key, context = {}) {
     if (key === 'partnercountry') return isParam ? '156' : 'World';
     if (key === 'productsector') return isParam ? 'all' : 'All products';
   }
+  // GetBilateralTariff request codes must stay inside their buf.validate
+  // patterns; the generic heuristic published "US" and "example", which the
+  // gateway rejects with 400. The response example is curated below.
+  if (where.includes('getbilateraltariff') || where.includes('get-bilateral-tariff')) {
+    if (key === 'reportingcountry') return '840';
+    if (key === 'partnercountry') return '484';
+    if (key === 'hscode') return '870323';
+  }
+  // GetUsImportDuty request codes must stay inside their buf.validate
+  // patterns. The response example is curated below.
+  if (where.includes('getusimportduty') || where.includes('get-us-import-duty')) {
+    if (key === 'hscode') return '870380';
+    if (key === 'partnercountry') return '156';
+  }
   // GetFoodStocks' commodity is a closed slug set enforced by
   // normalizeFoodStocksCommodity; the heuristic's empty-string -> "example"
   // fallback published a value the handler rejects with 400, so anyone running
@@ -273,6 +300,10 @@ function overrideStringExample(key, context = {}) {
   }
   if (key === 'topic') {
     if (where.includes('getgdelttopictimeline') || where.includes('get-gdelt-topic-timeline')) return GDELT_TOPIC_EXAMPLE_ID;
+  }
+  if (where.includes('getconsumerpricebasketseries') || where.includes('get-consumer-price-basket-series')) {
+    if (key === 'marketcode') return 'ae';
+    if (key === 'currencycode') return 'AED';
   }
   if (key === 'basketslug') return CONSUMER_PRICE_BASKET_EXAMPLE_ID;
   if (key === 'range') {
@@ -701,8 +732,16 @@ function numberExample(name, schema = {}, integer = false) {
   else if (key === 'lat' || key.endsWith('lat') || key.includes('latitude')) value = 40.7128;
   else if (key === 'lng' || key === 'lon' || key.endsWith('lng') || key.endsWith('lon') || key.includes('longitude')) value = -74.006;
   else if (key.includes('time') || key.endsWith('at')) value = 1717200000000;
+  // Epoch-ms calendar fields (UsInterestRateObservation.date, UsCpiMonth.month,
+  // UsTreasuryParYieldCurve.date, UCDP dateStart/dateEnd). Match date as a
+  // token, not a substring — `includes('date')` would hit consolidatedCount
+  // and lastUpdated because those keys contain the letters "date".
+  else if (integer && (key === 'date' || key === 'month' || key.startsWith('date') || key.endsWith('date'))) {
+    value = 1717200000000;
+  }
   else if (key.includes('percent') || key.includes('ratio') || key.includes('score')) value = 42.5;
   else if (key.includes('confidence')) value = 0.82;
+  else if (key.includes('probability')) value = 0.62;
   else if (key.includes('price') || key.includes('cost') || key.includes('rate')) value = 75.25;
   else if (key.includes('count') || key.includes('total')) value = 1;
 
@@ -782,6 +821,47 @@ function getCompanyEnrichmentExample() {
 // previousValue/unit/spikeAlert. Curate it so the published example shows what
 // the endpoint actually returns, including the fail-closed shape where the
 // exchange published no comparable prior.
+function getPriceHistoryExample() {
+  const days = [1785542400000, 1785628800000, 1785715200000];
+  return {
+    range: '3mo',
+    series: [
+      { symbol: 'GC=F', name: 'Gold', currency: 'USD', timestamps: days, closes: [4176.4, 4183.1, 4192.0] },
+      { symbol: 'SI=F', name: 'Silver', currency: 'USD', timestamps: days, closes: [60.84, 61.02, 61.25] },
+    ],
+    unavailable: [],
+  };
+}
+
+// One real DTM operation, trimmed to one region and one route.
+function getInternalDisplacementExample() {
+  const kassala = { latitude: 15.66, longitude: 35.87 };
+  return {
+    operations: [{
+      countryCode: 'SDN',
+      countryName: 'Sudan',
+      operation: 'Armed Clashes in Sudan (Overview)',
+      reportingDate: '2026-07-31',
+      roundNumber: 38,
+      totalIdps: 8622801,
+      reasons: [{ reason: 'Conflict', idps: 8622801 }],
+      regions: [{ pcode: 'SD11', name: 'Kassala', idps: 13596, location: kassala }],
+      flows: [{
+        originPcode: 'SD15',
+        originName: 'Aj Jazirah',
+        destinationPcode: 'SD11',
+        destinationName: 'Kassala',
+        idps: 13596,
+        originLocation: { latitude: 14.4, longitude: 33.5 },
+        destinationLocation: kassala,
+      }],
+    }],
+    // After the 2026-07-31 round: a snapshot cannot predate its newest round.
+    fetchedAt: 1785542400000,
+    dataAvailable: true,
+  };
+}
+
 function getShippingRatesExample() {
   return {
     indices: [
@@ -818,6 +898,82 @@ function getShippingRatesExample() {
   };
 }
 
+// GetYoutubeLiveStreamInfo names a video through oEmbed; channel live detection is
+// retired, so a success never reports a live stream or a manifest URL. The generic
+// builder would publish isLive: true, a sample hlsUrl and error: "example" (and
+// constrainedString turns an empty string back into "example"), so curate it.
+function getYoutubeLiveStreamInfoExample() {
+  return {
+    videoId: 'LuKwFajn37U',
+    isLive: false,
+    channelExists: true,
+    channelName: 'DW News',
+    hlsUrl: '',
+    title: 'DW News livestream',
+    error: '',
+  };
+}
+
+// The served US <- Mexico passenger-car answer captured from WITS
+// (tests/fixtures/wits-trains/), trimmed to one group preference. The served
+// UNSPECIFIED unavailableReason is left out, as for GetTariffTrends: the
+// examples contract rejects enum sentinels in success examples. The generic
+// builder priced every rate at 75.25 with a specific-duty line, which reads as
+// a 75% tariff.
+function getBilateralTariffExample() {
+  const zero = { rate: 0, minRate: 0, maxRate: 0, tariffLines: 1, nonAdValoremLines: 0 };
+  return {
+    reportingCountry: '840',
+    partnerCountry: '484',
+    hsCode: '870323',
+    filingReporter: '840',
+    year: 2021,
+    nomenclature: 'H5',
+    basis: 'APPLIED_TARIFF_BASIS_PREFERENTIAL',
+    appliedRate: zero,
+    mfnRate: { rate: 2.5, minRate: 2.5, maxRate: 2.5, tariffLines: 1, nonAdValoremLines: 0 },
+    preferentialRate: zero,
+    groupPreferences: [{ groupCode: 'P22', groupName: 'North American Free Trade Agreement (NAFTA)', rate: zero }],
+    source: 'UNCTAD TRAINS via World Bank WITS',
+    sourceUrl: 'https://wits.worldbank.org/API/V1/SDMX/V21/datasource/TRN/reporter/840/partner/all/product/870323/year/2021/datatype/reported',
+    upstreamUnavailable: false,
+  };
+}
+
+// The served China -> US electric-vehicle answer against HTS 2026 Rev 21
+// (tests/fixtures/us-hts/), trimmed to two of its three duties. Enum
+// sentinels are left out, as above.
+function getUsImportDutyExample() {
+  return {
+    hsCode: '870380',
+    partnerCountry: '156',
+    htsRelease: '2026HTSRev21',
+    lines: [{
+      htsCode: '8703.80.00',
+      description: 'Other vehicles, with only electric motors for propulsion',
+      generalRate: '2.5%',
+      specialRate: 'Free (A+,AU,B,BH,CL,CO,D,E,IL,JO,KR,MA,OM,P,PA,PE,S,SG)',
+      column2Rate: '10%',
+      basis: 'US_DUTY_BASIS_MFN',
+      baseRate: '2.5%',
+      baseAdValorem: 2.5,
+      baseNonAdValorem: false,
+      preferenceProgram: '',
+      unresolvedPrograms: ['D', 'E'],
+      additionalDuties: [
+        { heading: '9903.91.03', authority: 'US_DUTY_AUTHORITY_SECTION_301', program: 'China four-year review', addedRate: 100, topUpTo: 0, status: 'US_ADDITIONAL_DUTY_STATUS_APPLIES', condition: '', legalNote: 'U.S. note 31(d)', effectiveFrom: '2024-09-27' },
+        { heading: '9903.94.01', authority: 'US_DUTY_AUTHORITY_SECTION_232', program: 'Passenger vehicles and light trucks', addedRate: 25, topUpTo: 0, status: 'US_ADDITIONAL_DUTY_STATUS_CONDITIONAL', condition: 'Section 232 rates vary by origin deal and, for some derivatives, apply to metal content only.', legalNote: 'U.S. note 33(b)', effectiveFrom: '' },
+      ],
+      estimatedRate: 102.5,
+      estimateComplete: false,
+    }],
+    additionalDutiesLoaded: true,
+    source: 'USITC Harmonized Tariff Schedule',
+    sourceUrl: 'https://hts.usitc.gov/search?query=8703.80',
+    upstreamUnavailable: false,
+  };
+}
+
 function exampleForSchema(schema, spec, context = {}, depth = 0, seen = new Set()) {
   if (!schema || typeof schema !== 'object') return 'example';
   const original = schema;
@@ -845,10 +1001,45 @@ function exampleForSchema(schema, spec, context = {}, depth = 0, seen = new Set(
   }
   if (
     depth === 0
+    && String(context.operationId ?? '').toLowerCase() === 'getbilateraltariff'
+    && String(context.name ?? '').toLowerCase().endsWith('response')
+  ) {
+    return getBilateralTariffExample();
+  }
+  if (
+    depth === 0
+    && String(context.operationId ?? '').toLowerCase() === 'getusimportduty'
+    && String(context.name ?? '').toLowerCase().endsWith('response')
+  ) {
+    return getUsImportDutyExample();
+  }
+  if (
+    depth === 0
+    && String(context.operationId ?? '').toLowerCase() === 'getinternaldisplacement'
+    && String(context.name ?? '').toLowerCase().endsWith('response')
+  ) {
+    return getInternalDisplacementExample();
+  }
+  if (
+    depth === 0
+    && String(context.operationId ?? '').toLowerCase() === 'getpricehistory'
+    && String(context.name ?? '').toLowerCase().endsWith('response')
+  ) {
+    return getPriceHistoryExample();
+  }
+  if (
+    depth === 0
     && String(context.operationId ?? '').toLowerCase() === 'getshippingrates'
     && String(context.name ?? '').toLowerCase().endsWith('response')
   ) {
     return getShippingRatesExample();
+  }
+  if (
+    depth === 0
+    && String(context.operationId ?? '').toLowerCase() === 'getyoutubelivestreaminfo'
+    && String(context.name ?? '').toLowerCase().endsWith('response')
+  ) {
+    return getYoutubeLiveStreamInfoExample();
   }
   const ref = original.$ref;
   if (ref) {
@@ -956,6 +1147,20 @@ function exampleForSchema(schema, spec, context = {}, depth = 0, seen = new Set(
     }
     return out;
   }
+  // TP_A_0010 carries no bound rate, so the seeder writes boundRate 0 and the
+  // contract documents it as reserved. The generic `rate` heuristic published
+  // 75.25, an example the API cannot return.
+  // GetBilateralTariff's year is a calendar year; the generic integer `1`
+  // asks TRAINS for a year it does not hold. 2021 matches the curated
+  // response example.
+  if (type === 'integer' && String(name ?? '').toLowerCase() === 'year') {
+    const where = `${context.operationId ?? ''} ${context.path ?? ''}`.toLowerCase();
+    if (where.includes('getbilateraltariff') || where.includes('get-bilateral-tariff')) return 2021;
+  }
+  if (type === 'number' && String(name ?? '').toLowerCase() === 'boundrate') {
+    const where = `${context.operationId ?? ''} ${context.path ?? ''}`.toLowerCase();
+    if (where.includes('gettarifftrends') || where.includes('get-tariff-trends')) return 0;
+  }
   if (type === 'integer') return numberExample(name, schema, true);
   if (type === 'number') return numberExample(name, schema, false);
   if (type === 'boolean') {
@@ -1035,6 +1240,14 @@ function injectDisplacementYearContract(spec) {
 
 function injectSpecExamples(spec) {
   let changed = injectDisplacementYearContract(spec);
+  const runId = spec.components?.schemas?.GetSimulationOutcomeRequest?.properties?.runId;
+  const runIdParameter = spec.paths?.['/api/forecast/v1/get-simulation-outcome']?.get?.parameters
+    ?.find((item) => item?.in === 'query' && item.name === 'runId');
+  if (runId && runIdParameter) {
+    const schema = { type: 'string', maxLength: runId.maxLength, pattern: runId.pattern, example: runId.example ?? runId.examples?.[0] };
+    if (!eq(runIdParameter.schema, schema)) changed = true;
+    runIdParameter.schema = schema;
+  }
   let operations = 0;
   let requestBearingOperations = 0;
   let responseOperations = 0;
@@ -1351,6 +1564,12 @@ function patchYamlExamples(raw, spec, label) {
   if (displacementParameter?.schema) {
     const loc = findOperation(lines, '/api/displacement/v1/get-displacement-summary', 'get', label);
     replaceParamSchema(lines, loc.start, loc.end, 'year', displacementParameter.schema);
+  }
+  const runIdPath = '/api/forecast/v1/get-simulation-outcome';
+  const runIdParameter = spec.paths?.[runIdPath]?.get?.parameters?.find((item) => item?.in === 'query' && item.name === 'runId');
+  if (runIdParameter) {
+    const loc = findOperation(lines, runIdPath, 'get', label);
+    replaceParamSchema(lines, loc.start, loc.end, 'runId', runIdParameter.schema);
   }
   for (const [path, ops] of Object.entries(spec.paths ?? {})) {
     for (const [method, op] of Object.entries(ops ?? {})) {

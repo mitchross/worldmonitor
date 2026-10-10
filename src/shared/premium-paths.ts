@@ -7,6 +7,7 @@
 export const PREMIUM_RPC_PATHS = new Set<string>([
   '/api/market/v1/analyze-stock',
   '/api/market/v1/get-stock-analysis-history',
+  '/api/market/v1/get-insider-transactions',
   '/api/market/v1/backtest-stock',
   '/api/market/v1/list-stored-stock-backtests',
   // Physical-vs-paper metals: the SGE/COMEX premium series (#6436) and the
@@ -81,6 +82,8 @@ export const PREMIUM_RPC_PATHS = new Set<string>([
   '/api/sanctions/v1/list-sanctions-pressure',
   '/api/trade/v1/list-comtrade-flows',
   '/api/trade/v1/get-tariff-trends',
+  '/api/trade/v1/get-bilateral-tariff',
+  '/api/trade/v1/get-us-import-duty',
   '/api/scenario/v1/run-scenario',
   '/api/scenario/v1/get-scenario-status',
   // #3734: PRO-gated mutation that enqueues a simulation task. Companion
