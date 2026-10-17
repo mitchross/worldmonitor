@@ -20,10 +20,16 @@ function quotedList(values) {
 
 export const OPENAPI_FILTER_PARAM_SCHEMA_OVERRIDES = [
   {
+    path: '/api/news/v1/list-country-headlines',
+    method: 'get',
+    name: 'country_codes',
+    schema: { type: 'array', minItems: 1, maxItems: 250, items: { type: 'string' } },
+  },
+  {
     path: '/api/infrastructure/v1/get-bootstrap-data',
     method: 'get',
     name: 'keys',
-    schema: { type: 'array', maxItems: 1, items: { type: 'string', minLength: 1 } },
+    schema: { type: 'array', maxItems: 100, items: { type: 'string', minLength: 1 } },
   },
   {
     path: '/api/conflict/v1/get-humanitarian-summary',
@@ -37,6 +43,13 @@ export const OPENAPI_FILTER_PARAM_SCHEMA_OVERRIDES = [
     name: 'series_id',
     description: `BLS/FRED-backed series ID. Supported values: ${quotedList(FILTER_PARAM_CONTRACTS.economicBlsSeriesIds)}.`,
     schema: { type: 'string', enum: FILTER_PARAM_CONTRACTS.economicBlsSeriesIds },
+  },
+  {
+    path: '/api/economic/v1/get-fred-series',
+    method: 'get',
+    name: 'series_id',
+    description: `FRED series ID. Supported values: ${quotedList(FILTER_PARAM_CONTRACTS.economicFredSeriesIds)}.`,
+    schema: { type: 'string', enum: FILTER_PARAM_CONTRACTS.economicFredSeriesIds },
   },
   {
     path: '/api/forecast/v1/get-forecasts',
@@ -221,6 +234,7 @@ function schemaLines(schema, indent = 18, name = 'schema') {
   }
   if (schema.pattern) lines.push(`${pad}pattern: ${quoteYaml(schema.pattern)}`);
   if (Number.isInteger(schema.maxItems)) lines.push(`${pad}maxItems: ${schema.maxItems}`);
+  if (Number.isInteger(schema.minItems)) lines.push(`${pad}minItems: ${schema.minItems}`);
   if (Number.isInteger(schema.minLength)) lines.push(`${pad}minLength: ${schema.minLength}`);
   if (schema.items) lines.push(...schemaLines(schema.items, indent + 2, 'items'));
   return lines;

@@ -35,6 +35,8 @@
  *                                       no mcpAccess, expired, or malformed.
  *                                       Provider-confirmed ended coverage uses
  *                                       the restricted free-account path.
+ *   - BROWSER_MISMATCH             403  request lacks the browser-binding cookie
+ *                                       the nonce was minted with
  *   - NONCE_CLAIMED_BY_OTHER_USER  403  nonce already claimed by a different
  *                                       Clerk userId (anti-hijack — see F2)
  *   - TIER_VERIFICATION_UNAVAILABLE 503 entitlement could not be VERIFIED, or a
@@ -62,19 +64,22 @@
 
 export const config = { runtime: 'edge' };
 
-import { resolveClerkSession } from '../../server/_shared/auth-session';
+import { resolveSessionUserId } from '../../server/_shared/auth-session';
 import {
   getEntitlements,
   isEntitlementBackendConfigured,
 } from '../../server/_shared/entitlement-check';
 import {
   checkProMcpAccess,
+  grantSessionVerificationUnavailableResponse,
   proMcpGateDenialResponse,
   type ProMcpEntitlement,
 } from '../../server/_shared/pro-mcp-gate';
 // @ts-expect-error — JS module, no declaration file
-import { isAllowedRedirectUri } from '../oauth/register.js';
+import { isAllowedRedirectUri } from '../oauth/_redirect-uri.js';
 import { GrantConfigError, signGrant } from '../_mcp-grant-hmac';
+// @ts-expect-error — JS module, no declaration file
+import { requestMatchesOAuthBinding } from '../oauth/_browser-binding.js';
 
 // Fixed return URL — NOT user-controllable (anti-phishing).
 const AUTHORIZE_PRO_URL = 'https://api.worldmonitor.app/oauth/authorize-pro';
@@ -97,6 +102,7 @@ interface NonceData {
   redirect_uri: string;
   code_challenge: string;
   state?: string;
+  bind_hash?: string;
   created_at?: number;
 }
 
@@ -176,7 +182,7 @@ async function rawRedisSetNxEx(key: string, value: unknown, ttlSeconds: number):
 
 export interface MintDeps {
   /** Resolves the Clerk userId from the request's Bearer header. Null = unauth. */
-  resolveUserId: (req: Request) => Promise<string | null>;
+  resolveUserId: (req: Request) => Promise<string | Response | null>;
   /** Reads a raw `oauth:*` or `mcp-grant:*` key from Redis. Throws on transport failure. */
   redisGet: (key: string) => Promise<unknown | null>;
   /** Writes a raw `mcp-grant:*` key with TTL. Returns false on failure. */
@@ -209,6 +215,7 @@ export async function mintGrantHandler(req: Request, deps: MintDeps): Promise<Re
   }
 
   const userId = await deps.resolveUserId(req);
+  if (userId instanceof Response) return grantSessionVerificationUnavailableResponse();
   if (!userId) {
     return jsonError('UNAUTHENTICATED', 'A valid Clerk session is required.', 401);
   }
@@ -234,6 +241,12 @@ export async function mintGrantHandler(req: Request, deps: MintDeps): Promise<Re
   }
   if (!nonceData || typeof nonceData.client_id !== 'string' || typeof nonceData.redirect_uri !== 'string') {
     return jsonError('INVALID_NONCE', 'The authorization nonce is missing or expired.', 400);
+  }
+  // The nonce must be redeemed by the browser that started the flow; otherwise
+  // a forwarded /mcp-grant link would mint the victim's grant for the
+  // attacker's redirect_uri and state.
+  if (!(await requestMatchesOAuthBinding(req, nonceData))) {
+    return jsonError('BROWSER_MISMATCH', 'This authorization was started in a different browser. Start over from your MCP client in this browser.', 403);
   }
 
   let clientData: ClientData | null;
@@ -371,7 +384,7 @@ export async function mintGrantHandler(req: Request, deps: MintDeps): Promise<Re
 
 export default async function handler(req: Request): Promise<Response> {
   return mintGrantHandler(req, {
-    resolveUserId: async (r) => (await resolveClerkSession(r))?.userId ?? null,
+    resolveUserId: resolveSessionUserId,
     redisGet: rawRedisGet,
     redisSetEx: rawRedisSetEx,
     redisSetNxEx: rawRedisSetNxEx,

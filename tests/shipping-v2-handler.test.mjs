@@ -8,7 +8,7 @@
  *   - registerWebhook: PRO gate, SSRF guards (https-only, private IP, cloud
  *     metadata), chokepointIds whitelist, alertThreshold 0-100 range,
  *     subscriberId / secret format (wh_ + 24 hex / 64 hex), 30-day TTL
- *     atomic pipeline (SET + SADD + EXPIRE).
+ *     pipeline (SET + SADD + EXPIRE + global SADD).
  *   - listWebhooks: PRO gate, owner-filter isolation, `secret` never in response.
  *   - deliverWebhook: delivery-time DNS re-resolution blocks private/reserved
  *     addresses before fetch to prevent DNS rebinding SSRF.
@@ -190,10 +190,12 @@ describe('ShippingV2Service handlers', () => {
       const calls = [];
       globalThis.fetch = async (_url, init) => {
         const body = JSON.parse(String(init?.body));
+        if (body[0]?.[0] === 'SSCAN') return Response.json([{ result: ['0', []] }]);
+        if (body[0]?.[1]?.endsWith(':sweep')) return Response.json([{ result: body[0][0] === 'GET' ? null : 'OK' }]);
         calls.push(body);
         // Upstash pipeline returns one result per command.
         return new Response(
-          JSON.stringify(body.map(() => ({ result: 'OK' }))),
+          JSON.stringify(body.map(command => ({ result: command[0] === 'SET' ? 'OK' : 1 }))),
           { status: 200 },
         );
       };
@@ -287,7 +289,7 @@ describe('ShippingV2Service handlers', () => {
       );
     });
 
-    it('happy path returns wh_-prefixed subscriberId and 64-char hex secret; issues SET + SADD + EXPIRE pipeline with 30-day TTL', async () => {
+    it('happy path returns wh_-prefixed subscriberId and 64-char hex secret; issues SET + SADD + EXPIRE + global SADD pipeline with 30-day TTL', async () => {
       const calls = stubRedisOk();
       const res = await registerWebhook(proCtx(), {
         callbackUrl: 'https://93.184.216.34/wm',
@@ -300,10 +302,9 @@ describe('ShippingV2Service handlers', () => {
       assert.match(res.subscriberId, /^wh_[0-9a-f]{24}$/);
       assert.match(res.secret, /^[0-9a-f]{64}$/);
 
-      // Exactly one Redis pipeline call with 3 commands in order.
       assert.equal(calls.length, 1);
       const pipeline = calls[0];
-      assert.equal(pipeline.length, 3);
+      assert.equal(pipeline.length, 4);
       assert.equal(pipeline[0][0], 'SET');
       assert.ok(pipeline[0][1].startsWith('webhook:sub:wh_'), 'SET key is webhook:sub:wh_*:v1');
       assert.equal(pipeline[0][3], 'EX');
@@ -313,13 +314,15 @@ describe('ShippingV2Service handlers', () => {
       assert.equal(pipeline[2][0], 'EXPIRE');
       assert.equal(pipeline[2][1], pipeline[1][1], 'EXPIRE targets same owner index key');
       assert.equal(pipeline[2][2], String(86400 * 30));
+      const subscriberId = pipeline[0][1].slice('webhook:sub:'.length, -':v1'.length);
+      assert.deepEqual(pipeline[3], ['SADD', 'webhook:all:v1', subscriberId], 'delivery worker discovers the subscriber');
     });
 
     it('uses the authenticated enterprise cookie for ownership when wms_ is also present', async () => {
       const calls = stubRedisOk();
       await registerWebhook(makeCtx({
         'X-WorldMonitor-Key': 'wms_automatic-anonymous-session',
-        Cookie: 'wm-pro-key=pro-test-key',
+        Cookie: '__Host-wm-pro-key=pro-test-key',
       }), {
         callbackUrl: 'https://93.184.216.34/wm',
         chokepointIds: [],
@@ -388,8 +391,12 @@ describe('ShippingV2Service handlers', () => {
     });
 
     it('returns empty webhooks array when SMEMBERS is empty', async () => {
-      globalThis.fetch = async () =>
-        new Response(JSON.stringify([{ result: [] }]), { status: 200 });
+      globalThis.fetch = async (_url, init) => {
+        const [command] = JSON.parse(String(init?.body));
+        if (command[0] === 'SSCAN') return Response.json([{ result: ['0', []] }]);
+        if (command[1].endsWith(':sweep')) return Response.json([{ result: command[0] === 'GET' ? null : 'OK' }]);
+        return Response.json([{ result: [] }]);
+      };
       const res = await listWebhooks(proCtx(), {});
       assert.deepEqual(res, { webhooks: [] });
     });
@@ -407,6 +414,8 @@ describe('ShippingV2Service handlers', () => {
       };
       globalThis.fetch = async (_url, init) => {
         const body = JSON.parse(String(init?.body));
+        if (body[0]?.[0] === 'SSCAN') return Response.json([{ result: ['0', []] }]);
+        if (body[0]?.[1]?.endsWith(':sweep')) return Response.json([{ result: body[0][0] === 'GET' ? null : 'OK' }]);
         if (body.length === 1 && body[0][0] === 'SMEMBERS') {
           return new Response(
             JSON.stringify([{ result: ['wh_deadbeef000000000000beef'] }]),
@@ -440,6 +449,8 @@ describe('ShippingV2Service handlers', () => {
       };
       globalThis.fetch = async (_url, init) => {
         const body = JSON.parse(String(init?.body));
+        if (body[0]?.[0] === 'SSCAN') return Response.json([{ result: ['0', []] }]);
+        if (body[0]?.[1]?.endsWith(':sweep')) return Response.json([{ result: body[0][0] === 'GET' ? null : 'OK' }]);
         if (body.length === 1 && body[0][0] === 'SMEMBERS') {
           return new Response(
             JSON.stringify([{ result: [record.subscriberId] }]),

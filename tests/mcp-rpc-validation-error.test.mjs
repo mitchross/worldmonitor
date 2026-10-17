@@ -4,7 +4,7 @@
 // generic -32603 "Internal error: data fetch failed".
 import { afterEach, describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 import { TOOL_REGISTRY } from '../api/mcp/registry/index.ts';
 import { dispatchToolsCall } from '../api/mcp/dispatch.ts';
@@ -72,7 +72,7 @@ describe('validation body budget (#6559 follow-up)', () => {
     const body = JSON.stringify({ violations });
     assert.ok(utf8Bytes(body) > 4096 && utf8Bytes(body) <= VALIDATION_BODY_BUDGET_BYTES);
 
-    const res = await callTool('get_food_stocks', {}, async () => json400Response(body));
+    const res = await callTool('get_food_stocks', { country_code: 'EG' }, async () => json400Response(body));
     assert.equal(res.status, 200);
     const parsed = await res.json();
     assert.equal(parsed.error.code, -32602);
@@ -94,7 +94,7 @@ describe('validation body budget (#6559 follow-up)', () => {
     assert.ok(body.length <= 4096, 'character length still fits the old 4 KB gate');
     assert.ok(utf8Bytes(body) > 4096 && utf8Bytes(body) <= VALIDATION_BODY_BUDGET_BYTES);
 
-    const res = await callTool('get_food_stocks', {}, async () => json400Response(body));
+    const res = await callTool('get_food_stocks', { country_code: 'EG' }, async () => json400Response(body));
     const parsed = await res.json();
     assert.equal(parsed.error.code, -32602);
     assert.equal(parsed.error.data.violations.length, 8);
@@ -110,7 +110,7 @@ describe('validation body budget (#6559 follow-up)', () => {
     const body = JSON.stringify({ extra: 'y'.repeat(5000), violations });
     assert.ok(utf8Bytes(body) > 4096 && utf8Bytes(body) <= VALIDATION_BODY_BUDGET_BYTES);
 
-    const res = await callTool('get_food_stocks', {}, async () => json400Response(body));
+    const res = await callTool('get_food_stocks', { country_code: 'EG' }, async () => json400Response(body));
     const parsed = await res.json();
     assert.equal(parsed.error.code, -32602);
     assert.deepEqual(parsed.error.data.violations, [
@@ -127,7 +127,7 @@ describe('validation body budget (#6559 follow-up)', () => {
     const body = `${prefix}${' '.repeat(pad)}${tail}`;
     assert.ok(utf8Bytes(body) > VALIDATION_BODY_BUDGET_BYTES);
 
-    const res = await callTool('get_food_stocks', {}, async () => json400Response(body));
+    const res = await callTool('get_food_stocks', { country_code: 'EG' }, async () => json400Response(body));
     assert.equal(res.status, 200);
     const parsed = await res.json();
     const serialized = JSON.stringify(parsed);
@@ -148,7 +148,7 @@ describe('MCP RPC ValidationError preservation', () => {
   it('GET get_food_stocks 400 returns JSON-RPC -32602 with data.violations', async () => {
     const res = await callTool(
       'get_food_stocks',
-      {},
+      { country_code: 'EG' },
       async (input) => {
         const url = String(typeof input === 'string' ? input : input.url);
         assert.match(url, /\/api\/resilience\/v1\/get-food-stocks/);
@@ -542,5 +542,20 @@ describe('MCP RPC ValidationError preservation on the observed-downstream path',
     assert.equal(downstreamEvent?.response_marker, 'json_error');
     assert.equal(downstreamEvent?.downstream_operation, 'search-intel-history');
     assert.ok(!JSON.stringify(downstreamEvent).includes('country is invalid'));
+  });
+});
+
+describe('handler input rejections', () => {
+  // A message-only ApiError(400) carries no violations, so MCP reports it as
+  // -32603 and agents retry instead of fixing the argument. The batch guard
+  // rejects a forwarded header, not a caller argument.
+  const ALLOWED = new Set(['server/worldmonitor/batch/v1/execute-batch.ts']);
+
+  it('name the rejected field with ValidationError instead of ApiError(400)', () => {
+    const offenders = readdirSync('server', { recursive: true })
+      .map((entry) => `server/${entry}`)
+      .filter((path) => path.endsWith('.ts') && !ALLOWED.has(path))
+      .filter((path) => /new ApiError\(\s*400\b/.test(readFileSync(path, 'utf8')));
+    assert.deepEqual(offenders, []);
   });
 });
