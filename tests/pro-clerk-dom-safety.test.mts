@@ -116,12 +116,19 @@ async function loadClerkServiceWithFailedLoad(): Promise<{
   const stubSources: Record<string, string> = {
     '@clerk/clerk-js': `
       export class Clerk {
-        async load() {
+        async load(options) {
+          if (options.ui?.ClerkUI !== 'test-clerk-ui') {
+            throw new Error('Clerk UI controller missing');
+          }
+          if (!options.appearance?.options?.termsPageUrl) {
+            throw new Error('Clerk legal links missing');
+          }
           globalThis.__proClerkLoadHarness.loadCalls += 1;
           throw new Error('simulated Clerk load failure');
         }
       }
     `,
+    '@clerk/ui': `export const ui = { ClerkUI: 'test-clerk-ui' };`,
     './clerk-dom-safety': `
       export function protectClerkDomFromTranslators() {
         globalThis.__proClerkLoadHarness.protectionStarts += 1;

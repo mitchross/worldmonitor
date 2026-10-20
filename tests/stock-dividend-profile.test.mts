@@ -102,6 +102,11 @@ describe('fetchDividendProfile', () => {
         divs[String(ts)] = { amount, date: ts };
       }
     }
+    // Continue the payout schedule so the fixture remains active throughout the current year.
+    for (let q = 0; q < 4; q++) {
+      const ts = Math.floor(Date.UTC(currentYear, q * 3, 15) / 1000);
+      if (ts <= Date.now() / 1000) divs[String(ts)] = { amount: 0.70, date: ts };
+    }
     globalThis.fetch = (async () => {
       return new Response(JSON.stringify(makeDividendChartPayload(divs)), { status: 200 });
     }) as typeof fetch;

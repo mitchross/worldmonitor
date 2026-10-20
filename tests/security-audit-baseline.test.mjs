@@ -440,33 +440,23 @@ describe('security audit baseline', () => {
     ]);
   });
 
-  it('keeps js-yaml on the backported CVE-2026-59870 fix in every production tree', () => {
-    // GHSA-5p4m-2wfm-xmqj: 3.x is fixed in 3.15.1, 4.x in 4.3.1. Both land
-    // inside the existing semver ranges, so a lockfile refresh is the whole fix.
-    const rootLock = readRepoJson('package-lock.json');
-    const blogLock = readRepoJson('blog-site/package-lock.json');
-    const cpcLock = readRepoJson('consumer-prices-core/package-lock.json');
-
-    for (const [label, entry] of [
-      ['root @istanbuljs', rootLock.packages['node_modules/@istanbuljs/load-nyc-config/node_modules/js-yaml']],
-      ['blog-site gray-matter', blogLock.packages['node_modules/gray-matter/node_modules/js-yaml']],
-    ]) {
-      assert.ok(entry, `${label} js-yaml must be present`);
-      assert.ok(atLeast(entry.version, '3.15.1'), `${label} js-yaml ${entry.version} is below the patched 3.15.1`);
+  it('keeps every js-yaml copy on the backported security fixes', () => {
+    for (const path of ['package-lock.json', 'blog-site/package-lock.json', 'consumer-prices-core/package-lock.json']) {
+      const lockfile = readRepoJson(path);
+      const copies = Object.entries(lockfile.packages)
+        .filter(([name]) => name.endsWith('/node_modules/js-yaml') || name === 'node_modules/js-yaml');
+      assert.ok(copies.length > 0, `${path} must contain js-yaml`);
+      for (const [name, entry] of copies) {
+        const major = Number(entry.version.split('.')[0]);
+        assert.ok(major === 3 || major === 4, `${path}: review the security floor for js-yaml ${entry.version}`);
+        const minimum = major === 3 ? '3.15.2' : '4.3.2';
+        assert.ok(atLeast(entry.version, minimum), `${path}: ${name} ${entry.version} is below ${minimum}`);
+      }
     }
 
-    for (const [label, entry] of [
-      ['blog-site', blogLock.packages['node_modules/js-yaml']],
-      ['consumer-prices-core', cpcLock.packages['node_modules/js-yaml']],
-    ]) {
-      assert.ok(entry, `${label} js-yaml must be present`);
-      assert.ok(atLeast(entry.version, '4.3.1'), `${label} js-yaml ${entry.version} is below the patched 4.3.1`);
-    }
-
-    // The helper must reject the lexicographic trap it exists to avoid.
-    assert.equal(atLeast('3.9.0', '3.15.1'), false);
-    assert.equal(atLeast('3.15.1', '3.15.1'), true);
-    assert.equal(atLeast('4.3.0', '4.3.1'), false);
+    assert.equal(atLeast('3.9.0', '3.15.2'), false);
+    assert.equal(atLeast('3.15.2', '3.15.2'), true);
+    assert.equal(atLeast('4.3.1', '4.3.2'), false);
   });
 
   it('keeps consumer-prices-core on the Fastify v5 audit fix', () => {
@@ -498,36 +488,19 @@ describe('security audit baseline', () => {
   });
 
   it('flags a baseline entry that no longer matches any current advisory', () => {
-    // Every advisory currently baselined for pro-test must be present in the
-    // report for the no-stale case — image-size carries two.
-    const withAllBaselined = {
-      vulnerabilities: {
-        'image-size': {
-          name: 'image-size',
-          severity: 'high',
-          via: [
-            {
-              name: 'image-size',
-              severity: 'high',
-              title: 'image-size JXL/HEIF DoS',
-              url: 'https://github.com/advisories/GHSA-5p2g-fcmc-qvqq',
-            },
-            {
-              name: 'image-size',
-              severity: 'high',
-              title: 'image-size ICNS DoS',
-              url: 'https://github.com/advisories/GHSA-w3rx-r6r6-pgpr',
-            },
-          ],
-        },
-      },
-    };
+    const withBaselined = auditReportWith({
+      name: 'image-size',
+      severity: 'high',
+      title: 'image-size ICNS DoS',
+      url: 'https://github.com/advisories/GHSA-w3rx-r6r6-pgpr',
+    });
 
-    assert.deepEqual(collectStaleBaselineEntries(withAllBaselined, 'pro-test/package-lock.json'), []);
-    assert.deepEqual(collectStaleBaselineEntries({ vulnerabilities: {} }, 'pro-test/package-lock.json'), [
-      'GHSA-5p2g-fcmc-qvqq',
+    assert.deepEqual(collectStaleBaselineEntries(withBaselined, 'package-lock.json'), []);
+    assert.deepEqual(collectStaleBaselineEntries({ vulnerabilities: {} }, 'package-lock.json'), [
       'GHSA-w3rx-r6r6-pgpr',
     ]);
+    assert.deepEqual(baselineEntriesFor('pro-test/package-lock.json'), []);
+    assert.deepEqual(collectStaleBaselineEntries({ vulnerabilities: {} }, 'pro-test/package-lock.json'), []);
     assert.deepEqual(collectStaleBaselineEntries({ vulnerabilities: {} }, 'scripts/package-lock.json'), []);
   });
 

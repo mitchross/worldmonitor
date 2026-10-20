@@ -112,7 +112,7 @@ const NOT_COMMANDS = new Set([
 function proxyFacingFiles() {
   const out = execFileSync(
     'grep',
-    ['-rl', '-e', 'runRedisPipeline', '-e', 'runRedisTransaction', '-e', '/pipeline', '-e', '/multi-exec',
+    ['-rl', '--exclude-dir=node_modules', '-e', 'runRedisPipeline', '-e', 'runRedisTransaction', '-e', '/pipeline', '-e', '/multi-exec',
       'server', 'scripts', 'shared', 'api'],
     { cwd: repoRoot, encoding: 'utf8' },
   );
