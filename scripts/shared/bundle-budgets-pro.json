@@ -7,131 +7,819 @@
   "totalTolerancePct": 0.25,
   "totalToleranceBytes": 16384,
   "total": {
-    "raw": 4973856
+    "raw": 5057858
   },
   "chunks": {
+    "APIKeyModal": {
+      "raw": 473,
+      "files": 1
+    },
+    "APIKeys": {
+      "raw": 13277,
+      "files": 2
+    },
+    "APIKeysPage": {
+      "raw": 2546,
+      "files": 1
+    },
+    "ActionRoot": {
+      "raw": 464,
+      "files": 1
+    },
+    "Alert": {
+      "raw": 1405,
+      "files": 1
+    },
+    "Animated": {
+      "raw": 7918,
+      "files": 1
+    },
+    "AppearanceContext": {
+      "raw": 31033,
+      "files": 1
+    },
+    "ArrowBlockButton": {
+      "raw": 1930,
+      "files": 1
+    },
+    "Avatar": {
+      "raw": 2546,
+      "files": 1
+    },
+    "AvatarUploader": {
+      "raw": 2867,
+      "files": 1
+    },
+    "BillingPage": {
+      "raw": 4107,
+      "files": 1
+    },
+    "CardAlert": {
+      "raw": 1588,
+      "files": 1
+    },
+    "ClipboardInput": {
+      "raw": 1528,
+      "files": 1
+    },
+    "ConfigureDirectorySync": {
+      "raw": 3017,
+      "files": 1
+    },
+    "ConfigureDirectorySyncWizard": {
+      "raw": 32653,
+      "files": 1
+    },
+    "ConfigureSSO": {
+      "raw": 6112,
+      "files": 1
+    },
+    "CopyAPIKeyModal": {
+      "raw": 2698,
+      "files": 1
+    },
+    "CoreSessionContext": {
+      "raw": 227,
+      "files": 1
+    },
+    "CoreUserContext": {
+      "raw": 216,
+      "files": 1
+    },
+    "CreateOrganization": {
+      "raw": 783,
+      "files": 1
+    },
+    "CreateOrganizationAction": {
+      "raw": 258,
+      "files": 1
+    },
+    "CreateOrganizationForm": {
+      "raw": 3972,
+      "files": 1
+    },
+    "CustomPageContentContainer": {
+      "raw": 5876,
+      "files": 1
+    },
+    "DataTable": {
+      "raw": 1331,
+      "files": 1
+    },
+    "Drawer": {
+      "raw": 7548,
+      "files": 1
+    },
+    "EmailForm": {
+      "raw": 5908,
+      "files": 1
+    },
+    "EnvironmentContext": {
+      "raw": 489,
+      "files": 1
+    },
+    "Flow": {
+      "raw": 1073,
+      "files": 1
+    },
+    "Form": {
+      "raw": 47902,
+      "files": 1
+    },
+    "FormContainer": {
+      "raw": 1355,
+      "files": 1
+    },
+    "FullHeightLoader": {
+      "raw": 278,
+      "files": 1
+    },
+    "Gate": {
+      "raw": 647,
+      "files": 1
+    },
+    "GoogleOneTap": {
+      "raw": 1668,
+      "files": 1
+    },
+    "Header": {
+      "raw": 2520,
+      "files": 1
+    },
+    "IconButton": {
+      "raw": 1006,
+      "files": 1
+    },
+    "IdentityPreview": {
+      "raw": 2136,
+      "files": 1
+    },
+    "InviteMembersScreen": {
+      "raw": 9636,
+      "files": 1
+    },
+    "LineItems": {
+      "raw": 3799,
+      "files": 1
+    },
+    "LinkRenderer": {
+      "raw": 426,
+      "files": 1
+    },
+    "LoadingCard": {
+      "raw": 1997,
+      "files": 1
+    },
+    "MemberListTable": {
+      "raw": 3139,
+      "files": 1
+    },
+    "Modal": {
+      "raw": 3403,
+      "files": 1
+    },
+    "MountedCheckoutDrawer": {
+      "raw": 810,
+      "files": 1
+    },
+    "MountedPlanDetailDrawer": {
+      "raw": 520,
+      "files": 1
+    },
+    "MountedSubscriptionDetailDrawer": {
+      "raw": 1816,
+      "files": 1
+    },
+    "Navbar": {
+      "raw": 8175,
+      "files": 1
+    },
+    "NotificationCountBadge": {
+      "raw": 706,
+      "files": 1
+    },
+    "OAuthConsent": {
+      "raw": 12481,
+      "files": 2
+    },
+    "OAuthDeviceVerification": {
+      "raw": 10272,
+      "files": 1
+    },
+    "OptionsContext": {
+      "raw": 342,
+      "files": 1
+    },
+    "OrgSelect": {
+      "raw": 6320,
+      "files": 1
+    },
+    "OrganizationAPIKeysPage": {
+      "raw": 2525,
+      "files": 1
+    },
+    "OrganizationAvatar": {
+      "raw": 257,
+      "files": 1
+    },
+    "OrganizationBillingPage": {
+      "raw": 4268,
+      "files": 1
+    },
+    "OrganizationList": {
+      "raw": 1448,
+      "files": 1
+    },
+    "OrganizationPaymentAttemptPage": {
+      "raw": 1425,
+      "files": 1
+    },
+    "OrganizationPlansPage": {
+      "raw": 2447,
+      "files": 1
+    },
+    "OrganizationProfile": {
+      "raw": 1522,
+      "files": 1
+    },
+    "OrganizationProfileAvatarUploader": {
+      "raw": 758,
+      "files": 1
+    },
+    "OrganizationSecurityPage": {
+      "raw": 41092,
+      "files": 1
+    },
+    "OrganizationStatementPage": {
+      "raw": 1457,
+      "files": 1
+    },
+    "OrganizationSwitcher": {
+      "raw": 1942,
+      "files": 1
+    },
+    "Pagination": {
+      "raw": 3366,
+      "files": 1
+    },
+    "PaymentMethodRow": {
+      "raw": 6269,
+      "files": 1
+    },
+    "PersonalWorkspacePreview": {
+      "raw": 166,
+      "files": 1
+    },
+    "PlanDetails": {
+      "raw": 5412,
+      "files": 1
+    },
+    "Plans": {
+      "raw": 6383,
+      "files": 1
+    },
+    "PlansPage": {
+      "raw": 2154,
+      "files": 1
+    },
+    "Portal": {
+      "raw": 304,
+      "files": 1
+    },
+    "PreviewButton": {
+      "raw": 2387,
+      "files": 1
+    },
+    "PricingTable": {
+      "raw": 303,
+      "files": 1
+    },
+    "ProtectCheckCard": {
+      "raw": 3922,
+      "files": 1
+    },
+    "ProviderIcon": {
+      "raw": 1563,
+      "files": 1
+    },
+    "QRCode": {
+      "raw": 23521,
+      "files": 1
+    },
+    "ReversibleContainer": {
+      "raw": 18398,
+      "files": 1
+    },
+    "RevokeAPIKeyConfirmationModal": {
+      "raw": 2726,
+      "files": 1
+    },
+    "Route": {
+      "raw": 5436,
+      "files": 1
+    },
+    "RouteContext": {
+      "raw": 228,
+      "files": 1
+    },
+    "SearchInput": {
+      "raw": 2534,
+      "files": 1
+    },
+    "SegmentedControl": {
+      "raw": 1893,
+      "files": 1
+    },
+    "Select": {
+      "raw": 6380,
+      "files": 1
+    },
+    "SessionTasks": {
+      "raw": 1461,
+      "files": 1
+    },
+    "SignOut": {
+      "raw": 416,
+      "files": 1
+    },
+    "SignUp": {
+      "raw": 6875,
+      "files": 1
+    },
+    "StyleCacheProvider": {
+      "raw": 1323,
+      "files": 1
+    },
+    "SubscriberType": {
+      "raw": 187,
+      "files": 1
+    },
+    "SubscriptionsList": {
+      "raw": 14204,
+      "files": 1
+    },
+    "SuccessPage": {
+      "raw": 1193,
+      "files": 1
+    },
+    "Switch": {
+      "raw": 2251,
+      "files": 2
+    },
+    "Tabs": {
+      "raw": 3013,
+      "files": 1
+    },
+    "Tooltip": {
+      "raw": 2781,
+      "files": 1
+    },
+    "UserAvatar": {
+      "raw": 633,
+      "files": 2
+    },
+    "UserButton": {
+      "raw": 3901,
+      "files": 1
+    },
+    "UserPreview": {
+      "raw": 2281,
+      "files": 1
+    },
+    "UserProfile": {
+      "raw": 1286,
+      "files": 1
+    },
+    "UserVerification": {
+      "raw": 340,
+      "files": 1
+    },
+    "VerificationCodeCard": {
+      "raw": 2098,
+      "files": 1
+    },
+    "VerificationLinkCard": {
+      "raw": 4213,
+      "files": 1
+    },
+    "Waitlist": {
+      "raw": 682,
+      "files": 1
+    },
+    "Web3SolanaWalletButtons": {
+      "raw": 6563,
+      "files": 1
+    },
+    "Wizard": {
+      "raw": 493,
+      "files": 1
+    },
+    "add": {
+      "raw": 699,
+      "files": 1
+    },
     "ar": {
-      "raw": 56298,
+      "raw": 55956,
+      "files": 1
+    },
+    "arrow-right": {
+      "raw": 556,
+      "files": 1
+    },
+    "arrow-up-tray": {
+      "raw": 618,
+      "files": 1
+    },
+    "badge": {
+      "raw": 483,
       "files": 1
     },
     "bg": {
-      "raw": 65036,
+      "raw": 64724,
+      "files": 1
+    },
+    "billing": {
+      "raw": 577,
+      "files": 1
+    },
+    "billingSubscription": {
+      "raw": 45,
+      "files": 1
+    },
+    "building": {
+      "raw": 639,
+      "files": 1
+    },
+    "checkmark": {
+      "raw": 545,
+      "files": 1
+    },
+    "chevron-down": {
+      "raw": 550,
       "files": 1
     },
     "clerk": {
-      "raw": 2997340,
+      "raw": 1553559,
+      "files": 1
+    },
+    "cog": {
+      "raw": 1087,
+      "files": 1
+    },
+    "componentGuards": {
+      "raw": 318,
+      "files": 1
+    },
+    "constants": {
+      "raw": 80,
+      "files": 1
+    },
+    "copy": {
+      "raw": 761,
+      "files": 1
+    },
+    "createCustomPages": {
+      "raw": 5690,
+      "files": 1
+    },
+    "createSlug": {
+      "raw": 77,
       "files": 1
     },
     "cs": {
-      "raw": 41579,
+      "raw": 41325,
       "files": 1
     },
     "de": {
-      "raw": 41389,
+      "raw": 41138,
       "files": 1
     },
     "el": {
-      "raw": 66206,
+      "raw": 65897,
+      "files": 1
+    },
+    "emailUtils": {
+      "raw": 52,
+      "files": 1
+    },
+    "envelope": {
+      "raw": 626,
+      "files": 1
+    },
+    "errorHandler": {
+      "raw": 1168,
       "files": 1
     },
     "es": {
-      "raw": 43592,
+      "raw": 43359,
+      "files": 1
+    },
+    "esm-vhKiNaSe": {
+      "raw": 2072,
+      "files": 1
+    },
+    "eye": {
+      "raw": 780,
       "files": 1
     },
     "fa": {
-      "raw": 45824,
+      "raw": 45465,
+      "files": 1
+    },
+    "files": {
+      "raw": 995,
+      "files": 1
+    },
+    "floating-ui.react": {
+      "raw": 71856,
       "files": 1
     },
     "fr": {
-      "raw": 45378,
+      "raw": 45128,
       "files": 1
     },
     "hi": {
-      "raw": 71870,
+      "raw": 71434,
       "files": 1
     },
     "hr": {
-      "raw": 41018,
+      "raw": 40786,
       "files": 1
     },
     "hu": {
-      "raw": 45394,
+      "raw": 45123,
       "files": 1
     },
     "index": {
-      "raw": 527141,
-      "files": 2
+      "raw": 1182062,
+      "files": 40
+    },
+    "inert": {
+      "raw": 145,
+      "files": 1
+    },
+    "intl": {
+      "raw": 442,
+      "files": 1
     },
     "it": {
-      "raw": 41615,
+      "raw": 41392,
       "files": 1
     },
     "ja": {
-      "raw": 49155,
+      "raw": 48843,
       "files": 1
     },
     "ko": {
-      "raw": 43182,
+      "raw": 42895,
+      "files": 1
+    },
+    "link": {
+      "raw": 654,
+      "files": 1
+    },
+    "localizationKeys": {
+      "raw": 56,
+      "files": 1
+    },
+    "makeCustomizable": {
+      "raw": 20339,
+      "files": 1
+    },
+    "makeLocalizable": {
+      "raw": 99332,
       "files": 1
     },
     "nl": {
-      "raw": 40298,
+      "raw": 40030,
+      "files": 1
+    },
+    "normalizeRoutingOptions": {
+      "raw": 154,
       "files": 1
     },
     "pl": {
-      "raw": 42295,
+      "raw": 42047,
+      "files": 1
+    },
+    "plus": {
+      "raw": 559,
+      "files": 1
+    },
+    "prefetch-organization-list": {
+      "raw": 210,
+      "files": 1
+    },
+    "protectCheckRunner": {
+      "raw": 3240,
       "files": 1
     },
     "pt": {
-      "raw": 42706,
+      "raw": 42470,
+      "files": 1
+    },
+    "redirectUrls": {
+      "raw": 2595,
+      "files": 1
+    },
+    "redirects": {
+      "raw": 668,
       "files": 1
     },
     "ro": {
-      "raw": 43209,
+      "raw": 42998,
+      "files": 1
+    },
+    "rotate-left-right": {
+      "raw": 677,
       "files": 1
     },
     "ru": {
-      "raw": 65647,
+      "raw": 65288,
+      "files": 1
+    },
+    "sanitizeCustomLinkURL": {
+      "raw": 511,
       "files": 1
     },
     "sentry": {
-      "raw": 86676,
+      "raw": 87194,
+      "files": 1
+    },
+    "sessionTasks": {
+      "raw": 437,
+      "files": 1
+    },
+    "shared": {
+      "raw": 4972,
+      "files": 1
+    },
+    "shield-check": {
+      "raw": 589,
+      "files": 1
+    },
+    "sleep": {
+      "raw": 59,
+      "files": 1
+    },
+    "speech-bubble": {
+      "raw": 4600,
       "files": 1
     },
     "sv": {
-      "raw": 40303,
+      "raw": 40072,
       "files": 1
     },
     "sw": {
-      "raw": 42399,
+      "raw": 42085,
       "files": 1
     },
     "th": {
-      "raw": 82298,
+      "raw": 81820,
       "files": 1
     },
     "tr": {
-      "raw": 42921,
+      "raw": 42582,
+      "files": 1
+    },
+    "truncateTextWithEndVisible": {
+      "raw": 419,
       "files": 1
     },
     "uk": {
-      "raw": 46185,
+      "raw": 45864,
+      "files": 1
+    },
+    "underscore": {
+      "raw": 257,
+      "files": 1
+    },
+    "url": {
+      "raw": 4707,
+      "files": 2
+    },
+    "useClipboard": {
+      "raw": 2613,
+      "files": 1
+    },
+    "useEnabledThirdPartyProviders": {
+      "raw": 6441,
+      "files": 1
+    },
+    "useFetch": {
+      "raw": 1646,
+      "files": 1
+    },
+    "useFetchRoles": {
+      "raw": 946,
+      "files": 1
+    },
+    "useInView": {
+      "raw": 2294,
+      "files": 1
+    },
+    "useLoadingStatus": {
+      "raw": 393,
+      "files": 1
+    },
+    "useMultipleSessions": {
+      "raw": 183,
+      "files": 1
+    },
+    "useMultisessionActions": {
+      "raw": 8917,
+      "files": 1
+    },
+    "useNavigateToFlowStart": {
+      "raw": 276,
+      "files": 1
+    },
+    "useOrganizationEnterpriseConnection": {
+      "raw": 118633,
+      "files": 1
+    },
+    "useOrganizationListInView": {
+      "raw": 1934,
+      "files": 1
+    },
+    "usePrefersReducedMotion": {
+      "raw": 513,
+      "files": 1
+    },
+    "useSafeState": {
+      "raw": 215,
+      "files": 1
+    },
+    "useScrollLock": {
+      "raw": 947,
+      "files": 1
+    },
+    "useSpinDelay": {
+      "raw": 475,
+      "files": 1
+    },
+    "user": {
+      "raw": 384,
+      "files": 1
+    },
+    "user-circle": {
+      "raw": 734,
+      "files": 1
+    },
+    "usernameUtils": {
+      "raw": 338,
+      "files": 1
+    },
+    "users": {
+      "raw": 823,
+      "files": 1
+    },
+    "util": {
+      "raw": 1961,
+      "files": 1
+    },
+    "utils": {
+      "raw": 6320,
+      "files": 3
+    },
+    "utils-V2FbmPWk": {
+      "raw": 356,
       "files": 1
     },
     "vi": {
-      "raw": 51661,
+      "raw": 51309,
+      "files": 1
+    },
+    "warnings": {
+      "raw": 5783,
       "files": 1
     },
     "welcome": {
-      "raw": 52552,
+      "raw": 53721,
+      "files": 1
+    },
+    "windowNavigate": {
+      "raw": 856,
+      "files": 1
+    },
+    "withAvatarShimmer": {
+      "raw": 2421,
+      "files": 1
+    },
+    "withRedirect": {
+      "raw": 1817,
+      "files": 1
+    },
+    "withTaskGuard": {
+      "raw": 540,
       "files": 1
     },
     "zh": {
-      "raw": 36319,
+      "raw": 36356,
       "files": 1
     },
     "zh-TW": {
-      "raw": 36370,
+      "raw": 36404,
       "files": 1
     }
   }
