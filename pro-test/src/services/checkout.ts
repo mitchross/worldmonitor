@@ -301,7 +301,7 @@ async function startCheckoutInner(
   });
 
   if (!c.user) {
-    // Intent travels via afterSignInUrl / afterSignUpUrl — bound to
+    // Intent travels via forceRedirectUrl / signUpForceRedirectUrl — bound to
     // THIS specific openSignIn call. On successful sign-in, Clerk
     // navigates to the returnUrl which carries the checkout intent
     // in its query string; tryResumeCheckoutFromUrl picks it up on
@@ -310,7 +310,7 @@ async function startCheckoutInner(
     // can't trigger surprise purchases.
     const returnUrl = buildCheckoutReturnUrl(window.location.href, productId, options);
     try {
-      c.openSignIn({ afterSignInUrl: returnUrl, afterSignUpUrl: returnUrl });
+      c.openSignIn({ forceRedirectUrl: returnUrl, signUpForceRedirectUrl: returnUrl });
     } catch (err) {
       console.error('[checkout] Failed to open sign in:', err);
       Sentry.captureException(err, { tags: { surface: 'pro-marketing', action: 'checkout-sign-in' } });

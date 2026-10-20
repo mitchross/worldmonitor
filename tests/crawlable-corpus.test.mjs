@@ -1799,7 +1799,7 @@ describe('crawlable corpus generator', () => {
   });
 
   it('derives CII movement copy from live-pulse snapshot age', async () => {
-    const data = await loadCorpusData({ rootDir: repoRoot });
+    const data = await loadCorpusData({ rootDir: repoRoot, livePulseSnapshotPath: 'tests/fixtures/crawlable-live-pulse-fixture.json' });
     const capturedAtMs = Date.parse(`${data.livePulse.capturedAt}T00:00:00Z`);
     assert.ok(Number.isFinite(capturedAtMs), 'loaded pulse must have a capturedAt date');
 
@@ -2116,15 +2116,36 @@ describe('crawlable corpus generator', () => {
     }
   });
 
+  it('keeps the current published microstate corpus below the similarity limits', async () => {
+    const outDir = mkdtempSync(join(tmpdir(), 'wm-live-corpus-similarity-'));
+    try {
+      await buildCorpus({ rootDir: repoRoot, outDir, baseUrl: 'https://www.worldmonitor.app' });
+      const similarity = auditMicrostateCorpusSimilarity({ corpusDir: outDir });
+      for (const pair of similarity.pairs) {
+        assert.ok(
+          pair.jaccard <= similarity.threshold,
+          `${pair.codes.join(' / ')} 5-gram Jaccard ${(pair.jaccard * 100).toFixed(1)}% must be within five points of the ${(similarity.floor.jaccard * 100).toFixed(1)}% ranked-page floor`,
+        );
+      }
+      assert.ok(
+        similarity.maskedSentenceSharing.share < 0.4,
+        `masked sentences shared across TV / MO / SM must be below 40%, got ${(similarity.maskedSentenceSharing.share * 100).toFixed(1)}%`,
+      );
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
+  });
+
   it('builds a non-trivial static corpus with canonical raw HTML pages', async () => {
     const outDir = mkdtempSync(join(tmpdir(), 'wm-crawlable-corpus-'));
     try {
-      const clock = await loadCorpusData({ rootDir: repoRoot });
+      const clock = await loadCorpusData({ rootDir: repoRoot, livePulseSnapshotPath: 'tests/fixtures/crawlable-live-pulse-fixture.json' });
       const countriesLastmod = clock.lastmod.countries;
       const ciiCountriesLastmod = clock.lastmod.ciiCountries;
       const ciiIndexLastmod = clock.lastmod.countryInstabilityIndex;
       const manifest = await buildCorpus({
         rootDir: repoRoot,
+        livePulseSnapshotPath: 'tests/fixtures/crawlable-live-pulse-fixture.json',
         outDir,
         baseUrl: 'https://www.worldmonitor.app',
       });
@@ -2836,7 +2857,7 @@ describe('crawlable corpus generator', () => {
         'corpus pages must expose a real image for multimodal retrieval (#7382)',
       );
 
-      const corpusData = await loadCorpusData({ rootDir: repoRoot });
+      const corpusData = await loadCorpusData({ rootDir: repoRoot, livePulseSnapshotPath: 'tests/fixtures/crawlable-live-pulse-fixture.json' });
       const countryByCode = new Map(corpusData.countries.map((country) => [country.code, country]));
       const unavailableCoverage = new Set();
       for (const crisis of corpusData.crises) {
@@ -3712,17 +3733,6 @@ describe('crawlable corpus generator', () => {
         assert.match(story, expected.source, `${country.name} must name its excluding source`);
         assert.match(story, expected.reason, `${country.name} must explain its own source gap`);
       }
-      const similarity = auditMicrostateCorpusSimilarity({ corpusDir: outDir });
-      for (const pair of similarity.pairs) {
-        assert.ok(
-          pair.jaccard <= similarity.threshold,
-          `${pair.codes.join(' / ')} 5-gram Jaccard ${(pair.jaccard * 100).toFixed(1)}% must be within five points of the ${(similarity.floor.jaccard * 100).toFixed(1)}% ranked-page floor`,
-        );
-      }
-      assert.ok(
-        similarity.maskedSentenceSharing.share < 0.4,
-        `masked sentences shared across TV / MO / SM must be below 40%, got ${(similarity.maskedSentenceSharing.share * 100).toFixed(1)}%`,
-      );
 
       const liveRiskScript = read(outDir, 'tools/live-tools.js');
       assert.match(liveRiskScript, /\/api\/wm-session/);
@@ -4468,7 +4478,7 @@ describe('crawlable corpus generator', () => {
       assert.match(dover, /tracked as a strategic waterway reference/);
       assert.match(dover, /<table data-chokepoint-routes>/);
 
-      const corpus = await loadCorpusData({ rootDir: repoRoot });
+      const corpus = await loadCorpusData({ rootDir: repoRoot, livePulseSnapshotPath: 'tests/fixtures/crawlable-live-pulse-fixture.json' });
       const chokepointArticles = [];
       for (const cp of corpus.chokepoints) {
         const route = `/chokepoints/${cp.slug}/`;
@@ -5974,8 +5984,8 @@ describe('country recent developments', () => {
     }
   });
 
-  it('applies the publish rules to the committed snapshot at load time', async () => {
-    const data = await loadCorpusData({ rootDir: repoRoot });
+  it('applies the publish rules to the controlled snapshot at load time', async () => {
+    const data = await loadCorpusData({ rootDir: repoRoot, livePulseSnapshotPath: 'tests/fixtures/crawlable-live-pulse-fixture.json' });
     const rows = Object.entries(data.livePulse.countries)
       .map(([code, row]) => [code, row.developments])
       .filter(([, developments]) => developments && typeof developments === 'object');
@@ -6682,28 +6692,32 @@ describe('country recent developments', () => {
     assert.ok(!('dateModified' in plainWebPage), 'no items means no dateModified claim');
   });
 
-  it('sweeps every frozen pulse brief for markdown and ISO heading leaks (#7738)', async () => {
-    const data = await loadCorpusData({ rootDir: repoRoot });
-    const names = new Map(data.countries.map((entry) => [entry.code, entry.name]));
-    let briefCount = 0;
-    let withheldCount = 0;
-    for (const [code, row] of Object.entries(data.livePulse?.countries || {})) {
-      const developments = row?.developments;
-      if (developments?.briefSkipped === 'unsupported-citation') {
-        withheldCount += 1;
-        const html = renderCountryDevelopments({ countryName: names.get(code), developments });
-        assert.ok(!html.includes('data-intel-brief'));
-        const dataset = JSON.parse(countryDatasetDownload(data.countries.find((entry) => entry.code === code), { developments }));
-        assert.equal(dataset.developments.brief, null);
+  it('sweeps fixture and current pulse briefs for markdown and ISO heading leaks (#7738)', async () => {
+    for (const livePulseSnapshotPath of ['tests/fixtures/crawlable-live-pulse-fixture.json', undefined]) {
+      const data = await loadCorpusData({ rootDir: repoRoot, livePulseSnapshotPath });
+      const names = new Map(data.countries.map((entry) => [entry.code, entry.name]));
+      let briefCount = 0;
+      let withheldCount = 0;
+      for (const [code, row] of Object.entries(data.livePulse?.countries || {})) {
+        const developments = row?.developments;
+        if (developments?.briefSkipped === 'unsupported-citation') {
+          withheldCount += 1;
+          const html = renderCountryDevelopments({ countryName: names.get(code), developments });
+          assert.ok(!html.includes('data-intel-brief'));
+          const dataset = JSON.parse(countryDatasetDownload(data.countries.find((entry) => entry.code === code), { developments }));
+          assert.equal(dataset.developments.brief, null);
+        }
+        if (!developments?.brief?.text) continue;
+        briefCount += 1;
+        const name = names.get(code);
+        assert.ok(name, `pulse country ${code} must resolve to a display name`);
+        const html = renderCountryDevelopments({ countryName: name, developments });
+        assertCountryBriefPresentation({ pagePath: `/countries/${code}/`, html, sources: developments.brief.sources });
       }
-      if (!developments?.brief?.text) continue;
-      briefCount += 1;
-      const name = names.get(code);
-      assert.ok(name, `pulse country ${code} must resolve to a display name`);
-      const html = renderCountryDevelopments({ countryName: name, developments });
-      assertCountryBriefPresentation({ pagePath: `/countries/${code}/`, html, sources: developments.brief.sources });
+      if (livePulseSnapshotPath) {
+        assert.ok(briefCount + withheldCount >= 10, 'the fixture sweep must inspect published and withdrawn briefs');
+      }
     }
-    assert.ok(briefCount + withheldCount >= 10, 'the sweep must inspect published and withdrawn briefs');
   });
 });
 describe('GEO residue #7616 (U2b changelog lastmod)', () => {

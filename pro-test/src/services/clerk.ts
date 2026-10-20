@@ -76,18 +76,23 @@ function publishClerkLoaded(instance: LoadedClerk): void {
 }
 
 async function loadClerk(): Promise<LoadedClerk> {
-  const { Clerk: C } = await import('@clerk/clerk-js');
+  const [{ Clerk: C }, { ui }] = await Promise.all([
+    import('@clerk/clerk-js'),
+    import('@clerk/ui'),
+  ]);
   const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
   if (!key) throw new Error('VITE_CLERK_PUBLISHABLE_KEY not set');
   const instance = new C(key);
   const stopTranslatorProtection = protectClerkDomFromTranslators();
   try {
     await instance.load({
+      ui,
+      afterSignOutUrl: 'https://www.worldmonitor.app/pro',
       appearance: {
         // Sign-up carries the same assent line as checkout (#6976): Clerk renders
         // Terms/Privacy links in the auth card footer when these are set, so the
         // documents are presented at account creation, not only at purchase.
-        layout: {
+        options: {
           // The EULA, not the Terms: sign-up should show the document that
           // states what the account is licensed to do (#6983). Clerk exposes one
           // "terms" slot; the EULA links the Terms from its section 2.

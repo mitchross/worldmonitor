@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, createContext, useContext, type ReactElement, type ReactNode } from 'react';
-import type { UserResource } from '@clerk/types';
+import type { UserResource } from '@clerk/shared/types';
 import * as Sentry from '@sentry/react';
 import { motion } from 'motion/react';
 import {
@@ -276,9 +276,7 @@ function ClerkUserButton({ user }: { user: UserResource | null }): ReactElement 
     ensureClerk()
       .then((clerk) => {
         if (unmounted || !el) return;
-        clerk.mountUserButton(el, {
-          afterSignOutUrl: 'https://www.worldmonitor.app/pro',
-        });
+        clerk.mountUserButton(el, {});
       })
       .catch((err) => {
         console.error('[auth] Failed to mount user button:', err);

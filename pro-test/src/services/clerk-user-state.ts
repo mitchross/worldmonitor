@@ -1,4 +1,4 @@
-import type { UserResource } from '@clerk/types';
+import type { UserResource } from '@clerk/shared/types';
 
 export type ClerkUserState = { user: UserResource | null; isLoaded: boolean; signedIn: boolean };
 export type ClerkUserStateUpdate = ClerkUserState | ((current: ClerkUserState) => ClerkUserState);
