@@ -19,7 +19,11 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const workflowPath = resolve(repoRoot, '.github/workflows/railway-deploy-drift.yml');
 const source = readFileSync(workflowPath, 'utf8');
 const workflow = YAML.parse(source);
+<<<<<<< HEAD
 const MAIN_GUARD = "${{ github.ref == 'refs/heads/main' && (github.repository == 'koala73/worldmonitor' || github.event_name == 'workflow_dispatch') }}";
+=======
+const MAIN_GUARD = "${{ (github.ref == 'refs/heads/main') && (github.event_name != 'schedule' || github.repository == 'koala73/worldmonitor') }}";
+>>>>>>> upstream/main
 
 function steps(job) {
   assert.ok(Array.isArray(job?.steps), 'job must define steps');
@@ -342,13 +346,15 @@ describe('Railway Native Deploy Health workflow', () => {
       assert.match(healthyDrift.stdout, /Every service this repository deploys is running/);
       assert.match(
         healthyDrift.stderr,
-        /Read 83 service histories in 1 fleet page\(s\) \(83 records\), 0 direct fallback\(s\)\./,
+        // 88 since seed-country-history was enrolled; FLEET_PAGE_SIZE is
+        // 500, so it is still one fleet page.
+        /Read 88 service histories in 1 fleet page\(s\) \(88 records\), 0 direct fallback\(s\)\./,
       );
       const queries = readFileSync(fixture.queryLog, 'utf8').trim().split('\n');
       assert.equal(
         queries.filter((query) => query === 'ViewerDeploymentConfig').length,
-        83,
-        'the config audit must reuse the deployment projection instead of reading 83 services twice',
+        88,
+        'the config audit must reuse the deployment projection instead of reading 88 services twice',
       );
       assert.equal(queries.filter((query) => query === 'FleetDeployments').length, 1);
       // The refresh is the whole point of the post-observation fetch: without it

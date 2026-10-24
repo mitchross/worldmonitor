@@ -221,6 +221,7 @@ export type ExtractionProviderName = Extract<AcquisitionProviderName, 'firecrawl
 export type ExtractionFailureReason =
   | 'provider-error'
   | 'provider-cooldown'
+  | 'source-http-error'
   | 'missing-price'
   | 'price-evidence-missing'
   | 'title-mismatch'
@@ -419,9 +420,14 @@ export class SearchAdapter implements RetailerAdapter {
     itemConstraints?: ItemConstraints,
   ): Promise<ExtractionAttempt> {
     const sizeHint = extractSizeHint(canonicalName);
-    const sizeClause = sizeHint
-      ? ` You are looking for "${canonicalName}". The product MUST be ${sizeHint}. If the page shows a different size, pack count, or bulk case, return null for price.`
-      : ` You are looking for "${canonicalName}".`;
+    const canonicalSize = parseSize(canonicalName);
+    const { minBaseQty, maxBaseQty, baseUnit } = itemConstraints ?? {};
+    const quantityWindow = canonicalSize && canonicalSize.baseUnit === baseUnit && minBaseQty != null && maxBaseQty != null
+      ? ` The total product quantity must be between ${minBaseQty}${baseUnit} and ${maxBaseQty}${baseUnit}. Convert equivalent displayed units to ${baseUnit} before comparing the quantity. Keep the requested pack count of ${canonicalSize.packCount}. If the page shows a quantity outside this range, an incompatible measurement type, a different pack count, or a bulk case, return null for price.`
+      : sizeHint
+        ? ` The product MUST be ${sizeHint}. If the page shows a different size, pack count, or bulk case, return null for price.`
+        : '';
+    const sizeClause = ` You are looking for "${canonicalName}".${quantityWindow}`;
 
     const extractSchema = {
       // No numeric example here, deliberately. A worked example ("combine them
@@ -498,6 +504,10 @@ export class SearchAdapter implements RetailerAdapter {
           ctx.logger.info(
             `  [search:provider-cooldown] ${ctx.config.slug}: ${provider === 'firecrawl' ? 'Firecrawl' : 'Exa'} extraction recovered — cooldown closed after a successful probe`,
           );
+        }
+        if (result.sourceStatusCode != null && result.sourceStatusCode >= 400) {
+          failures.push({ provider, reason: 'source-http-error', detail: `HTTP ${result.sourceStatusCode}` });
+          continue;
         }
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);

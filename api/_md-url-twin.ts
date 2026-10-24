@@ -20,6 +20,7 @@
 // @ts-expect-error — JS module, no declaration file
 import { getPublicCorsHeaders } from './_cors.js';
 import { appendDeprecationPolicyLinkToRecord, DEPRECATION_POLICY_LINK } from '../server/_shared/deprecation-policy';
+import { declaredHtmlCanonical, pageCanonicalUrl } from '../shared/page-canonical.js';
 
 export const MD_TWIN_LOOP_HEADER = 'x-wm-md-twin';
 const MAX_TWIN_CHARS = 512_000;
@@ -40,9 +41,15 @@ const FORWARDED_RESPONSE_HEADERS = [
   'x-ratelimit-reset',
 ] as const;
 
+// Control characters and whitespace are rejected outright: the URL parser
+// strips tab/CR/LF, so a path like "/<TAB>/host/x" would otherwise resolve to
+// the protocol-relative "//host/x" and leave the origin.
+const UNSAFE_PATH_CHARS = /[\x00-\x20\x7f]/;
+
 export function isMarkdownTwinPath(pathname: string): boolean {
   return (
     pathname.startsWith('/') &&
+    !UNSAFE_PATH_CHARS.test(pathname) &&
     pathname.endsWith('.md') &&
     pathname.length > 4 &&
     !pathname.includes('..') &&
@@ -306,6 +313,33 @@ async function readSiblingBody(response: Response): Promise<string> {
   return new TextDecoder().decode(body);
 }
 
+/**
+ * The canonical the sibling HTML page declares for itself. The twin repeats it
+ * verbatim (via pageCanonicalUrl) instead of guessing from the fetched path:
+ * static directory pages answer 200 at both /x and /x/, so the path alone
+ * cannot say which one the page names. Best-effort: any failure falls back to
+ * the page's own URL.
+ */
+async function fetchDeclaredCanonical(
+  siblingUrl: URL,
+  outbound: Headers,
+  signal: AbortSignal,
+  fetchImpl: typeof fetch,
+): Promise<string | null> {
+  try {
+    const headers = new Headers(outbound);
+    headers.set('accept', 'text/html');
+    const res = await fetchImpl(siblingUrl, { method: 'GET', headers, redirect: 'manual', signal });
+    if (!res.ok || !/html/i.test(res.headers.get('content-type') ?? '')) {
+      void res.body?.cancel().catch(() => {});
+      return null;
+    }
+    return declaredHtmlCanonical(await readSiblingBody(res));
+  } catch {
+    return null;
+  }
+}
+
 function forwardedResponseHeaders(response: Response): Record<string, string> {
   const headers: Record<string, string> = {};
   for (const name of FORWARDED_RESPONSE_HEADERS) {
@@ -352,6 +386,14 @@ export async function buildMarkdownTwinResponse(
   const heading = headingFromPath(sibling);
   const requestUrl = new URL(req.url);
   let siblingUrl = new URL(sibling, requestUrl);
+  // The sibling is always a page on this site. Checked on the resolved URL,
+  // not the path string, so no parser quirk can turn it into another host.
+  if (siblingUrl.origin !== requestUrl.origin) {
+    return new Response('# Not found\n', {
+      status: 404,
+      headers: markdownHeaders(null, { ...NOT_A_DOCUMENT }),
+    });
+  }
   siblingUrl.search = requestUrl.search;
   if (requestUrl.pathname === '/api/md-twin' || requestUrl.pathname === '/api/md-twin/') {
     // `path`/`mdPath` belong to the afterFiles rewrite, not to the caller.
@@ -419,16 +461,22 @@ export async function buildMarkdownTwinResponse(
   // An /api/ sibling gets none at all. Those endpoints are not canonical web
   // pages, and many need their query to mean anything, so the query-less form
   // would name a different, degenerate resource than the one served.
-  const canonical =
-    isFailure || siblingUrl.pathname.startsWith('/api/')
-      ? null
-      : `${siblingUrl.origin}${siblingUrl.pathname}`;
+  const servesCanonicalPage = !isFailure && !siblingUrl.pathname.startsWith('/api/');
   const responseHeaders: Record<string, string> = {
     ...(isFailure ? NOT_A_DOCUMENT : {}),
     ...forwardedResponseHeaders(siblingRes),
   };
 
+  const resolveCanonical = async (body: string | null, contentType: string): Promise<string | null> => {
+    if (!servesCanonicalPage) return null;
+    const declared = body !== null && /html/i.test(contentType)
+      ? declaredHtmlCanonical(body)
+      : await fetchDeclaredCanonical(siblingUrl, outbound, deadline, fetchImpl);
+    return pageCanonicalUrl(siblingUrl, declared);
+  };
+
   if (req.method === 'HEAD') {
+    const canonical = await resolveCanonical(null, '');
     return new Response(null, {
       status: siblingStatus,
       headers: markdownHeaders(canonical, responseHeaders),
@@ -436,6 +484,7 @@ export async function buildMarkdownTwinResponse(
   }
 
   if (siblingStatus === 304) {
+    const canonical = await resolveCanonical(null, '');
     return new Response(null, {
       status: siblingStatus,
       headers: markdownHeaders(canonical, responseHeaders),
@@ -443,9 +492,10 @@ export async function buildMarkdownTwinResponse(
   }
 
   let markdown: string;
+  let raw: string;
+  const contentType = siblingRes.headers.get('content-type') ?? '';
   try {
-    const contentType = siblingRes.headers.get('content-type') ?? '';
-    const raw = await readSiblingBody(siblingRes);
+    raw = await readSiblingBody(siblingRes);
 
     if (/markdown|text\/plain/i.test(contentType) && (/^# /m.test(raw) || FRONT_MATTER.test(raw))) {
       markdown = raw.slice(0, MAX_TWIN_CHARS);
@@ -467,6 +517,7 @@ export async function buildMarkdownTwinResponse(
     });
   }
 
+  const canonical = await resolveCanonical(raw, contentType);
   return new Response(withMarkdownMetadata(markdown, canonical, heading), {
     status: siblingStatus,
     headers: markdownHeaders(canonical, responseHeaders),

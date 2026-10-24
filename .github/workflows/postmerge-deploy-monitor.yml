@@ -29,10 +29,14 @@ concurrency:
 
 jobs:
   monitor:
+<<<<<<< HEAD
     # Scheduled production acceptance belongs to the canonical repository.
     # Forks inherit schedules but not the deployments they observe; keep an
     # explicit dispatch available for intentional fork diagnostics.
     if: ${{ github.repository == 'koala73/worldmonitor' || github.event_name == 'workflow_dispatch' }}
+=======
+    if: (github.event_name != 'schedule' || github.repository == 'koala73/worldmonitor')
+>>>>>>> upstream/main
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -44,7 +48,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
 

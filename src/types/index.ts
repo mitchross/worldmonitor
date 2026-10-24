@@ -106,6 +106,28 @@ export interface StoryMeta {
 }
 
 
+export interface NewsLocationMarker {
+  lat: number;
+  lon: number;
+  title: string;
+  threatLevel: string;
+  timestamp?: Date;
+  /** Original loaded article identity; marker titles may include inferred locations. */
+  article?: Pick<NewsItem, 'link' | 'title' | 'source'>;
+  /**
+   * #9213: the cluster's verdict from assessCorroboration, as the News panel
+   * shows it. Describes coverage, not accuracy.
+   */
+  corroboration?: NewsCorroboration;
+}
+
+/** Structural copy of Corroboration in server/_shared/corroboration.ts; corroboration-flag.ts checks they match. */
+export type NewsCorroboration =
+  | { readonly state: 'corroborated'; readonly publishers: number }
+  | { readonly state: 'single-publisher'; readonly publishers: 1 }
+  | { readonly state: 'tier4-only'; readonly publishers: number }
+  | { readonly state: 'unknown' };
+
 export interface NewsItem {
   source: string;
   title: string;
@@ -186,6 +208,7 @@ export interface ClusteredEvent {
   lastUpdated: Date;
   isAlert: boolean;
   monitorColor?: string;
+  credibilityScore?: number;
   velocity?: VelocityMetrics;
   threat?: ThreatClassification;
   lat?: number;
@@ -682,6 +705,7 @@ export interface MapLayers {
   protests: boolean;
   flights: boolean;
   military: boolean;
+  aircraftEmergencies?: boolean;
   natural: boolean;
   spaceports: boolean;
   minerals: boolean;
@@ -1075,6 +1099,7 @@ export interface PizzIntLocation {
   address: string;
   current_popularity: number;
   percentage_of_usual: number | null;
+  no_live_signal?: boolean;
   is_spike: boolean;
   spike_magnitude: number | null;
   data_source: string;
@@ -1272,7 +1297,16 @@ export interface CascadeResult {
     id: string;
     name: string;
     capacityShare: number;
+    /** False when the alternative crosses a chokepoint that a cut cable also crosses. */
+    avoidsCutZone?: boolean;
   }[];
+  /** Every disrupted node when several were cut together (multi-cable / chokepoint cut). */
+  sources?: InfrastructureNode[];
+  /** Present when the result rests on estimated rather than measured inputs. */
+  dataQuality?: {
+    estimated: boolean;
+    note: string;
+  };
 }
 
 export type PortType = 'container' | 'oil' | 'lng' | 'naval' | 'mixed' | 'bulk';
@@ -1591,7 +1625,10 @@ export interface CountryBriefSignals {
   aisDisruptions: number;
   satelliteFires: number;
   radiationAnomalies: number;
-  temporalAnomalies: number;
+  /** Observed country anomalies; null when the cluster snapshot is unavailable. */
+  temporalAnomalies: number | null;
+  /** Global observations, never included in country counts or severity totals. */
+  globalTemporalAnomalies?: number | null;
   cyberThreats: number;
   earthquakes: number;
   displacementOutflow: number;
@@ -1609,3 +1646,5 @@ export interface CountryBriefSignals {
   sanctionsDesignations: number;
   sanctionsNewDesignations: number;
 }
+
+export type CountrySignalCounts = { [K in keyof CountryBriefSignals]: CountryBriefSignals[K] | null };

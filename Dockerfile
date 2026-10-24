@@ -8,12 +8,19 @@
 # =============================================================================
 
 # ── Stage 1: Builder ─────────────────────────────────────────────────────────
+<<<<<<< HEAD
 FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS builder
+=======
+FROM node:24-alpine@sha256:feb76650b7195319268c59cb2d419c732d6c499b13bf5296f16ab59eb1f0a4f3 AS builder
+>>>>>>> upstream/main
 
 WORKDIR /app
+ENV npm_config_install_links=true
 
 # Install root dependencies (layer-cached until package.json changes)
 COPY package.json package-lock.json ./
+COPY vendor/braces/ ./vendor/braces/
+COPY vendor/stream-json/ ./vendor/stream-json/
 RUN npm ci --ignore-scripts
 
 # Copy full source
@@ -57,7 +64,11 @@ RUN npx tsc && npx vite build
 RUN test -s dist/pro/index.html && test -s dist/pro/welcome.html
 
 # ── Stage 2: Runtime dependencies ───────────────────────────────────────────
+<<<<<<< HEAD
 FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS runtime-deps
+=======
+FROM node:24-alpine@sha256:feb76650b7195319268c59cb2d419c732d6c499b13bf5296f16ab59eb1f0a4f3 AS runtime-deps
+>>>>>>> upstream/main
 
 WORKDIR /app
 
@@ -71,7 +82,11 @@ COPY docker/runtime-package-lock.json ./package-lock.json
 RUN npm ci --omit=dev --omit=optional --ignore-scripts
 
 # ── Stage 3: Runtime ─────────────────────────────────────────────────────────
+<<<<<<< HEAD
 FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS final
+=======
+FROM node:24-alpine@sha256:feb76650b7195319268c59cb2d419c732d6c499b13bf5296f16ab59eb1f0a4f3 AS final
+>>>>>>> upstream/main
 
 # nginx + supervisord
 RUN apk add --no-cache nginx supervisor gettext && \

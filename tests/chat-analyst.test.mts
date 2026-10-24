@@ -1296,12 +1296,17 @@ describe('#5857 — pure formatters cannot be tricked into forging a line', () =
   // poisoning each interpolated field independently.
   it('buildMarketImplications: EVERY interpolated card field is guarded, not just the title', () => {
     const benign = { ticker: 'GLD', title: 'Gold thesis', direction: 'LONG', confidence: 'HIGH' };
-    for (const field of ['ticker', 'title', 'direction', 'confidence'] as const) {
+    for (const field of ['ticker', 'title', 'direction'] as const) {
       const out = buildMarketImplications({
         cards: [{ ...benign, [field]: `${benign[field]}${FORGED_BULLET}` }],
       });
       assertNoForgedBullet(out, 1, `buildMarketImplications via ${field}`);
     }
+  });
+
+  it('buildMarketImplications: omits the unscored confidence label (#8869)', () => {
+    const out = buildMarketImplications({ cards: [{ ticker: 'GLD', title: 'Gold thesis', direction: 'LONG', confidence: 'HIGH' }] });
+    assert.equal(out, 'AI Market Signals:\n- GLD LONG: Gold thesis');
   });
 
   it('buildForecasts: both the title and the domain label are guarded', () => {
@@ -1367,6 +1372,22 @@ describe('#5857 — pure formatters cannot be tricked into forging a line', () =
       `the body must not be able to open its own section; got:\n${viaBody}`);
   });
 
+  it('buildEnergyExposure: marks rows older than the header year with their own year', () => {
+    const out = buildEnergyExposure({
+      year: 2025,
+      gas: [{ name: 'Algeria', share: 99, year: 2024 }, { name: 'Italy', share: 46, year: 2025 }],
+      oil: [{ name: 'Western Sahara', share: 100, year: 2009 }],
+    });
+    assert.match(out, /Algeria 99% \(2024\), Italy 46%(,|\n|$)/);
+    assert.match(out, /Western Sahara 100% \(2009\)/);
+  });
+
+  it('buildEnergyExposure: marks undated rows (pre-reseed payload) as year unavailable', () => {
+    const out = buildEnergyExposure({ year: 2025, gas: [{ name: 'Qatar', share: 100 }] });
+    assert.match(out, /Qatar 100% \(year n\/a\)/);
+    assert.doesNotMatch(buildEnergyExposure({ gas: [{ name: 'Qatar', share: 100 }] }), /n\/a/);
+  });
+
   it('buildEnergyExposure: a newline in a country name does not forge an extra line', () => {
     const out = buildEnergyExposure({ year: 2023, gas: [{ name: `Italy${FORGED_BULLET}`, share: 46 }] });
     assertNoForgedBullet(out, 0, 'buildEnergyExposure');
@@ -1402,7 +1423,7 @@ describe('#5857 — pure formatters cannot be tricked into forging a line', () =
       buildMarketImplications({
         cards: [{ ticker: 'GLD', title: 'Gold bid on haven flows', direction: 'LONG', confidence: 'HIGH' }],
       }),
-      'AI Market Signals:\n- GLD LONG (HIGH): Gold bid on haven flows',
+      'AI Market Signals:\n- GLD LONG: Gold bid on haven flows',
     );
     assert.equal(
       buildCountryBrief({ countryName: 'Ukraine', brief: 'Front lines static.' }),

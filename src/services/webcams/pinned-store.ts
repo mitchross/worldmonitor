@@ -1,27 +1,30 @@
+import { normalizePinnedWebcam, normalizePinnedWebcams, normalizePinnedWebcamList, MAX_PINNED_WEBCAMS, MAX_ACTIVE_WEBCAMS, type PinnedWebcam } from '../../../shared/pinned-webcams';
+import { safeStorageSet } from '../../utils/safe-storage';
+import type { CloudPrefsAppliedDetail } from '../../utils/cloud-prefs-sync';
+export type { PinnedWebcam } from '../../../shared/pinned-webcams';
+
 const STORAGE_KEY = 'wm-pinned-webcams';
 const CHANGE_EVENT = 'wm-pinned-webcams-changed';
-const MAX_ACTIVE = 4;
-
-export interface PinnedWebcam {
-  webcamId: string;
-  title: string;
-  lat: number;
-  lng: number;
-  category: string;
-  country: string;
-  playerUrl: string;
-  active: boolean;
-  pinnedAt: number;
-}
+// Mirrors CLOUD_PREFS_APPLIED_EVENT; importing the value would pull clerk and feeds into this store.
+const CLOUD_PREFS_APPLIED_EVENT = 'wm:cloud-prefs-applied';
+const MAX_ACTIVE = MAX_ACTIVE_WEBCAMS;
 
 let _cachedList: PinnedWebcam[] | null = null;
 let _cacheFrame: number | null = null;
+
+function invalidateCache(): void {
+  _cachedList = null;
+}
 
 function load(): PinnedWebcam[] {
   if (_cachedList !== null) return _cachedList;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    _cachedList = raw ? (JSON.parse(raw) as PinnedWebcam[]) : [];
+    _cachedList = normalizePinnedWebcams(raw);
+    const normalized = JSON.stringify(_cachedList);
+    if (raw !== null && raw !== normalized) {
+      safeStorageSet(STORAGE_KEY, normalized);
+    }
   } catch {
     _cachedList = [];
   }
@@ -41,7 +44,7 @@ function showToast(msg: string): void {
 
 function save(webcams: PinnedWebcam[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(webcams));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizePinnedWebcamList(webcams)));
   } catch (err) {
     console.warn('[pinned-webcams] localStorage save failed:', err);
     showToast('Could not save pinned webcams — storage full');
@@ -68,13 +71,23 @@ export function isPinned(webcamId: string): boolean {
 export function pinWebcam(webcam: Omit<PinnedWebcam, 'active' | 'pinnedAt'>): void {
   const list = load();
   if (list.some(w => w.webcamId === webcam.webcamId)) return;
+  if (list.length >= MAX_PINNED_WEBCAMS) {
+    showToast(`You can pin up to ${MAX_PINNED_WEBCAMS} webcams`);
+    return;
+  }
   const activeCount = list.filter(w => w.active).length;
-  list.push({
+  const pinned = normalizePinnedWebcam({
     ...webcam,
     active: activeCount < MAX_ACTIVE,
     pinnedAt: Date.now(),
   });
-  save(list);
+  if (!pinned) return;
+  const next = normalizePinnedWebcamList([...list, pinned]);
+  if (next.length === list.length) {
+    showToast('Could not pin webcam because the saved webcam size limit was reached');
+    return;
+  }
+  save(next);
 }
 
 export function unpinWebcam(webcamId: string): void {
@@ -102,6 +115,26 @@ export function toggleWebcam(webcamId: string): void {
 
 export function onPinnedChange(handler: () => void): () => void {
   const wrapped = () => handler();
+  // Another tab wrote the list, or cleared storage (key === null).
+  const onStorage = (e: StorageEvent) => {
+    if (e.storageArea !== localStorage) return;
+    if (e.key !== null && e.key !== STORAGE_KEY) return;
+    invalidateCache();
+    handler();
+  };
+  // Cloud sign-in, merge or undo-restore rewrote the list in this tab.
+  const onCloudApplied = (e: Event) => {
+    const keys = (e as CustomEvent<CloudPrefsAppliedDetail>).detail?.keys;
+    if (!keys?.includes(STORAGE_KEY)) return;
+    invalidateCache();
+    handler();
+  };
   window.addEventListener(CHANGE_EVENT, wrapped);
-  return () => window.removeEventListener(CHANGE_EVENT, wrapped);
+  window.addEventListener('storage', onStorage);
+  window.addEventListener(CLOUD_PREFS_APPLIED_EVENT, onCloudApplied);
+  return () => {
+    window.removeEventListener(CHANGE_EVENT, wrapped);
+    window.removeEventListener('storage', onStorage);
+    window.removeEventListener(CLOUD_PREFS_APPLIED_EVENT, onCloudApplied);
+  };
 }

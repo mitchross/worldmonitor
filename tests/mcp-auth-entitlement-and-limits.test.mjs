@@ -32,6 +32,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { Ratelimit } from '@upstash/ratelimit';
 import { HMAC_SECRET, PRO_USER_ID, PRO_TOKEN_ID, makeProDeps } from './helpers/mcp-pro-deps.mjs';
+import { hashKeySync } from '../server/_shared/usage-identity.ts';
 
 const originalEnv = { ...process.env };
 const ORIGINAL_SLIDING_WINDOW = Ratelimit.slidingWindow;
@@ -382,7 +383,8 @@ describe('api/mcp/auth.ts — pre-check resolves the plan MCP daily limit (U3 / 
     const { deps } = makeProDeps({ getEntitlements: async () => withLimits('enterprise', null, 3) });
     const res = await authMod.runContextPreChecks(PRO_CONTEXT, deps, RESOURCE_META_URL, CORS);
     assert.equal(res.ok, true);
-    assert.deepEqual(res.budget, { allowance: 'mcp', limit: null }, 'null is the unlimited sentinel, not an absent value');
+    // A tier-3 budget also carries the high-usage-alarm flag; lower tiers never do.
+    assert.deepEqual(res.budget, { allowance: 'mcp', limit: null, enterprisePlan: true }, 'null is the unlimited sentinel, not an absent value');
   });
 
   it('pro context on a legacy row without planLimits falls back to the dedicated 50 default', async () => {
@@ -411,7 +413,7 @@ describe('api/mcp/auth.ts — pre-check resolves the plan MCP daily limit (U3 / 
     assert.deepEqual(viaUserKey.budget, { allowance: 'api', counter: 'api', limit: 10_000 });
   });
 
-  it('env_key passes with no limit at all (never metered by the daily counter)', async () => {
+  it('env_key passes with no entitlement budget (its ceiling is reserved per key in dispatch)', async () => {
     const { deps } = makeProDeps({ getEntitlements: async () => withLimits('api_business', 10_000, 2) });
     const res = await authMod.runContextPreChecks(ENV_KEY_CONTEXT, deps, RESOURCE_META_URL, CORS);
     assert.equal(res.ok, true);
@@ -491,7 +493,7 @@ async function withTelemetry(fn) {
 
 describe('api/mcp/auth.ts — applyPerMinuteLimit (#5379 Gap 9)', () => {
   const PER_MINUTE_CONTEXTS = [
-    { kind: 'env_key', context: ENV_KEY_CONTEXT, key: `rl:mcp:key:${ENV_KEY}`, message: 'Rate limit exceeded. Max 60 requests per minute per API key.' },
+    { kind: 'env_key', context: ENV_KEY_CONTEXT, key: `rl:mcp:key:${hashKeySync(ENV_KEY)}`, message: 'Rate limit exceeded. Max 60 requests per minute per API key.' },
     { kind: 'pro', context: PRO_CONTEXT, key: `rl:mcp:pro-min:pro-user:${PRO_USER_ID}`, message: 'Rate limit exceeded. Max 60 requests per minute per user.' },
     { kind: 'user_key', context: USER_KEY_CONTEXT, key: `rl:mcp:pro-min:pro-user:${USER_KEY_USER_ID}`, message: 'Rate limit exceeded. Max 60 requests per minute per user.' },
   ];

@@ -1,8 +1,9 @@
+import { hasCurrentEntitlementCoverage } from './entitlement-coverage.js';
 // @ts-expect-error — JS module, no declaration file
 import { validateApiKey } from '../../api/_api-key.js';
 // @ts-expect-error — JS module, no declaration file
 import { timingSafeIncludes } from '../../api/_crypto.js';
-import { validateBearerToken } from '../auth-session';
+import { validateBearerToken } from '../auth-session.js';
 import {
   classifyBillingVerification,
   getEntitlements,
@@ -10,17 +11,32 @@ import {
   unverifiableEntitlementDenial,
   type BillingVerificationDenial,
   type BillingVerificationInput,
-} from './entitlement-check';
+} from './entitlement-check.js';
 import {
   INTERNAL_MCP_VERIFIED_HEADER,
   TRUSTED_USER_ID_HEADER,
   getInternalMcpVerifiedNonce,
-} from './mcp-internal-hmac';
-import { validateUserApiKey } from './user-api-key';
+} from './mcp-internal-hmac.js';
+import { validateUserApiKey } from './user-api-key.js';
 import {
   DIRECT_LLM_UNVERIFIED_DAILY_QUOTA_LIMIT,
   resolveActiveDirectLlmLimit,
-} from './direct-llm-quota';
+} from './direct-llm-quota.js';
+import { OPERATOR_KEY_DAILY_CEILINGS, operatorKeyQuotaPrincipal } from './high-usage-alarm.js';
+import { hashKeySync } from './usage-identity.js';
+
+/** Operator keys are premium but metered per key against a circuit breaker. */
+async function operatorKeyIdentity(key: string): Promise<PremiumCallerIdentity> {
+  return {
+    isPremium: true,
+    userId: null,
+    kind: 'enterprise',
+    quotaExempt: false,
+    quotaUserId: await operatorKeyQuotaPrincipal(key),
+    alarmPrincipal: hashKeySync(key),
+    directLlmDailyLimit: OPERATOR_KEY_DAILY_CEILINGS.directLlmCalls,
+  };
+}
 
 export type PremiumCallerIdentity =
   | { isPremium: true; userId: string; kind: 'internal-mcp'; quotaExempt: true }
@@ -39,8 +55,28 @@ export type PremiumCallerIdentity =
        * source it from `resolveActiveDirectLlmLimit`.
        */
       directLlmDailyLimit: number | null;
+      /**
+       * True for a catalog Enterprise (tier 3) row, whose daily limits are
+       * circuit breakers that should page before they trip. REQUIRED for the
+       * same reason as `directLlmDailyLimit`.
+       */
+      enterprisePlan: boolean;
     }
-  | { isPremium: true; userId: null; kind: 'enterprise'; quotaExempt: true }
+  | {
+      isPremium: true;
+      userId: null;
+      kind: 'enterprise';
+      quotaExempt: false;
+      /**
+       * Operator keys carry no account, so their direct-LLM spend is metered
+       * per key under this principal (`operatorKeyQuotaPrincipal`) — never the
+       * raw key — against a circuit-breaker ceiling.
+       */
+      quotaUserId: string;
+      /** Principal for logs and alarms: the gateway's `hashKeySync` of the key. */
+      alarmPrincipal: string;
+      directLlmDailyLimit: number;
+    }
   | {
     isPremium: false;
     userId: null;
@@ -210,9 +246,9 @@ export async function requirePremiumRpcAccess<T extends RpcApiErrorLike>(
   request: Request,
   ApiErrorConstructor: RpcApiErrorConstructor<T>,
   fallbackMessage: string,
-): Promise<void> {
+): Promise<Extract<PremiumCallerIdentity, { isPremium: true }>> {
   const identity = await resolvePremiumCallerIdentity(request);
-  if (identity.isPremium) return;
+  if (identity.isPremium) return identity;
 
   const billingError = createPremiumRpcBillingDenialError(identity, ApiErrorConstructor);
   if (billingError) throw billingError;
@@ -255,7 +291,7 @@ export async function resolvePremiumCallerIdentity(request: Request): Promise<Pr
     if (diff === 0) {
       const ent = await getEntitlements(trustedUserId);
       if (
-        ent &&
+        hasCurrentEntitlementCoverage(ent) &&
         ent.features.tier >= 1 &&
         // mcpAccess lands in U10. Until then the field is undefined for
         // existing entitlement rows; treat undefined as false (fail-closed)
@@ -286,7 +322,7 @@ export async function resolvePremiumCallerIdentity(request: Request): Promise<Pr
     const validKeys = (process.env.WORLDMONITOR_VALID_KEYS ?? '')
       .split(',').map((k) => k.trim()).filter(Boolean);
     if (await timingSafeIncludes(wmKey, validKeys)) {
-      return { isPremium: true, userId: null, kind: 'enterprise', quotaExempt: true };
+      return operatorKeyIdentity(wmKey);
     }
 
     // Check user-owned API keys (wm_ prefix) via Convex lookup.
@@ -298,17 +334,14 @@ export async function resolvePremiumCallerIdentity(request: Request): Promise<Pr
       const userKey = await validateUserApiKey(wmKey);
       if (userKey) {
         const ent = await getEntitlements(userKey.userId);
-        if (ent && ent.features.apiAccess === true) {
+        if (hasCurrentEntitlementCoverage(ent) && ent.features.apiAccess === true) {
           return {
             isPremium: true,
             userId: userKey.userId,
             kind: 'user-api-key',
             quotaExempt: false,
-            // apiAccess proves the plan sells API access; it does NOT prove the
-            // subscription is still current. resolveActiveDirectLlmLimit
-            // re-checks tier + validUntil so a lapsed row cannot keep spending
-            // its old allowance against the shared daily counter.
             directLlmDailyLimit: resolveActiveDirectLlmLimit(ent),
+            enterprisePlan: ent.features.tier >= 3,
           };
         }
         // Preserve main's billing-verification tag on confirmed denials (#5622).
@@ -327,11 +360,16 @@ export async function resolvePremiumCallerIdentity(request: Request): Promise<Pr
     }
   }
 
-  const keyCheck = (await validateApiKey(request, {})) as { valid: boolean; required: boolean };
+  const keyCheck = (await validateApiKey(request, {})) as {
+    valid: boolean;
+    required: boolean;
+    credential?: string;
+  };
   // Only treat as premium when an explicit API key was validated (required: true).
   // Trusted-origin short-circuits (required: false) do NOT imply PRO entitlement.
-  if (keyCheck.valid && keyCheck.required) {
-    return { isPremium: true, userId: null, kind: 'enterprise', quotaExempt: true };
+  // Every valid `required: true` result is an operator key and names it.
+  if (keyCheck.valid && keyCheck.required && keyCheck.credential) {
+    return operatorKeyIdentity(keyCheck.credential);
   }
 
   const authHeader = request.headers.get('Authorization');
@@ -363,23 +401,21 @@ export async function resolvePremiumCallerIdentity(request: Request): Promise<Pr
         kind: 'bearer',
         quotaExempt: false,
         directLlmDailyLimit: DIRECT_LLM_UNVERIFIED_DAILY_QUOTA_LIMIT,
+        enterprisePlan: false,
       };
     }
     // Clerk role isn't 'pro' — check Dodo entitlement tier as second signal.
     // A Dodo subscriber (tier >= 1) is premium regardless of Clerk role.
     if (session.userId) {
       const ent = await getEntitlements(session.userId);
-      if (ent && ent.features.tier >= 1) {
+      if (hasCurrentEntitlementCoverage(ent) && ent.features.tier >= 1) {
         return {
           isPremium: true,
           userId: session.userId,
           kind: 'bearer',
           quotaExempt: false,
-          // Premium-ness here keys on tier alone (pre-existing contract). The
-          // SPEND limit is stricter on purpose: a lapsed row must not keep its
-          // paid allowance, and an Enterprise row's null must not skip the
-          // meter once it has expired.
           directLlmDailyLimit: resolveActiveDirectLlmLimit(ent),
+          enterprisePlan: ent.features.tier >= 3,
         };
       }
       return denyFor(ent);

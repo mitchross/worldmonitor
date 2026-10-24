@@ -31,6 +31,7 @@ concurrency:
 
 jobs:
   prepare:
+<<<<<<< HEAD
     # The dispatched 5-platform build (build-desktop.yml, #5905) hard-fails
     # without these four client env secrets. Until they exist in the fork,
     # every scheduled cycle re-tags the pending version and dispatches a
@@ -42,6 +43,9 @@ jobs:
       secrets.VITE_WS_RELAY_URL != '' &&
       secrets.VITE_PMTILES_URL_PUBLIC != '' &&
       secrets.CONVEX_URL != ''
+=======
+    if: (github.event_name != 'schedule' || github.repository == 'koala73/worldmonitor')
+>>>>>>> upstream/main
     runs-on: ubuntu-latest
     steps:
       - name: Require the default branch
