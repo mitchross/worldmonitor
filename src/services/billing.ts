@@ -39,6 +39,9 @@ export interface SubscriptionInfo {
   displayName: string;
   status: 'active' | 'on_hold' | 'cancelled' | 'expired';
   currentPeriodEnd: number; // epoch ms, renewal date
+  // Cancelled in the Dodo portal but still `active` until currentPeriodEnd.
+  // Optional across a mixed frontend/backend deploy.
+  cancelAtPeriodEnd?: boolean;
   // #4771: verdict of the request-path renewal verification (#4770), null
   // when no verification episode is recorded. Drives the billing-aware
   // gating copy in billing-state.ts.
@@ -66,17 +69,10 @@ function normalizeCaughtError(action: string, err: unknown): Error {
   // without it the same fault produces two differently-shaped titles depending
   // on which branch caught it, and neither says where it happened.
   if (typeof DOMException !== 'undefined' && err instanceof DOMException) {
-    const wrapped = new Error(`[billing] ${action}: ${err.name}: ${err.message}`);
-    (wrapped as Error & { cause?: unknown }).cause = err;
-    return wrapped;
+    return new Error(`[billing] ${action}: ${err.name}: ${err.message}`, { cause: err });
   }
   const rendered = err === undefined ? 'undefined' : String(err);
-  const wrapped = new Error(`[billing] ${action} threw non-Error: ${rendered}`);
-  // Attach the original thrown value as `cause` so Sentry shows it as structured data.
-  // Assigned post-construction because tsconfig target=ES2020 lacks ErrorOptions typing;
-  // Sentry and modern browsers read the property either way.
-  (wrapped as Error & { cause?: unknown }).cause = err;
-  return wrapped;
+  return new Error(`[billing] ${action} threw non-Error: ${rendered}`, { cause: err });
 }
 
 function requireSignedInUserId(action: string): string {

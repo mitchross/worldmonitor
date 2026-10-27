@@ -1,6 +1,6 @@
 /**
  * Publish job: builds compact WorldMonitor snapshot payloads and writes to Redis.
- * Runs as an independent Railway cron service (02:30 UTC daily) after aggregate.
+ * Runs as an independent Railway cron service (02:30-05:30 UTC, hourly) after aggregate.
  * This is the handoff point between consumer-prices-core and WorldMonitor.
  */
 import {
@@ -196,7 +196,7 @@ export async function publishAll() {
       logger.error(`overview:${marketCode} failed: ${err}`);
     }
 
-    for (const days of [7, 30]) {
+    for (const days of [7, 30, 90]) {
       try {
         const movers = await buildMoversSnapshot(marketCode, days);
         // Null is a data-quality skip, not an infrastructure failure: every

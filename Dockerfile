@@ -11,9 +11,12 @@
 FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS builder
 
 WORKDIR /app
+ENV npm_config_install_links=true
 
 # Install root dependencies (layer-cached until package.json changes)
 COPY package.json package-lock.json ./
+COPY vendor/braces/ ./vendor/braces/
+COPY vendor/stream-json/ ./vendor/stream-json/
 RUN npm ci --ignore-scripts
 
 # Copy full source

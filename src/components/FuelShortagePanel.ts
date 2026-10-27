@@ -1,5 +1,7 @@
+import { CountrySectionError } from '@/services/country-brief-error';
 import { Panel } from './Panel';
 import { escapeHtml, sanitizeUrl, unsafeRawHtml } from '@/utils/sanitize';
+import { iso2ToCountryName } from '@/utils/country-codes';
 import { createLazyClient, getRpcBaseUrl, rpcFetch } from '@/services/rpc-client';
 import { attributionFooterHtml, ATTRIBUTION_FOOTER_CSS } from '@/utils/attribution-footer';
 
@@ -127,13 +129,14 @@ export class FuelShortagePanel extends Panel {
   private selectedId: string | null = null;
   private detail: GetFuelShortageDetailResponse | null = null;
   private detailLoading = false;
+  private detailError: string | null = null;
   private openDetailHandler = (ev: Event): void => {
     const id = (ev as CustomEvent<{ shortageId?: string }>).detail?.shortageId;
     if (!id || !this.element?.isConnected) return;
     void this.loadDetail(id);
   };
 
-  constructor() {
+  constructor(private readonly detailSource?: Pick<ReturnType<typeof getSupplyChainClient>, 'getFuelShortageDetail'>) {
     super({
       id: 'fuel-shortages',
       title: 'Global Fuel Shortage Registry',
@@ -215,21 +218,28 @@ export class FuelShortagePanel extends Panel {
     }
   }
 
+  public async presentDetail(data: ListFuelShortagesResponse, id: string): Promise<void> {
+    this.data = data;
+    await this.loadDetail(id);
+  }
+
   private async loadDetail(shortageId: string): Promise<void> {
     this.selectedId = shortageId;
     this.detailLoading = true;
+    this.detailError = null;
     this.render();
     try {
-      const d = await getSupplyChainClient().getFuelShortageDetail({ shortageId });
+      const d = await (this.detailSource ?? getSupplyChainClient()).getFuelShortageDetail({ shortageId });
       if (!this.element?.isConnected || this.selectedId !== shortageId) return;
       this.detail = d;
       this.detailLoading = false;
       this.render();
-    } catch {
+    } catch (error) {
       if (!this.element?.isConnected) return;
       if (this.selectedId !== shortageId) return;
       this.detailLoading = false;
       this.detail = null;
+      this.detailError = error instanceof CountrySectionError ? error.message : null;
       this.render();
     }
   }
@@ -277,7 +287,7 @@ export class FuelShortagePanel extends Panel {
 
     const drawer = this.selectedId ? this.renderDrawer() : '';
 
-    this.setSafeContent(unsafeRawHtml(`
+    const html = unsafeRawHtml(`
       <div class="fs-wrap">
         <div class="fs-summary">${escapeHtml(summary)}</div>
         <table class="fs-table">
@@ -321,7 +331,9 @@ export class FuelShortagePanel extends Panel {
         .fs-src-type-operator { background: #27ae60; color: #fff; }
         .fs-src-type-press { background: #555; color: #ccc; }
       </style>
-    `, 'legacy Panel.setContent() migration'));
+    `, 'legacy Panel.setContent() migration');
+    if (this.detailSource) this.setSafeContentImmediate(html);
+    else this.setSafeContent(html);
   }
 
   private renderRow(s: FuelShortageEntry): string {
@@ -345,7 +357,7 @@ export class FuelShortagePanel extends Panel {
     }
     const s = this.detail?.shortage;
     if (!s) {
-      return `<div class="fs-drawer"><button class="fs-drawer-close" aria-label="Close">✕</button>Shortage detail unavailable.</div>`;
+      return `<div class="fs-drawer"><button class="fs-drawer-close" aria-label="Close">✕</button>${escapeHtml(this.detailError ?? 'Shortage detail unavailable.')}</div>`;
     }
 
     const ev = s.evidence;
@@ -368,7 +380,7 @@ export class FuelShortagePanel extends Panel {
     return `
       <div class="fs-drawer">
         <button class="fs-drawer-close" aria-label="Close">✕</button>
-        <h3>${escapeHtml(s.country)} · ${escapeHtml(s.product)} ${severityChip(s.severity)}</h3>
+        <h3>${escapeHtml(iso2ToCountryName(s.country))} · ${escapeHtml(s.product)} ${severityChip(s.severity)}</h3>
         <div class="fs-kv">
           <div class="fs-kv-key">Description</div>  <div>${escapeHtml(s.shortDescription)}</div>
           <div class="fs-kv-key">First seen</div>   <div>${escapeHtml(s.firstSeen.slice(0, 10))}</div>
