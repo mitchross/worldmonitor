@@ -50,12 +50,34 @@ const MACRO_SECTIONS = [
   // fail-closed preflight (RESILIENCE_FIN_SYS_EXPOSURE_ENABLED=true).
   { label: 'WB-External-Debt', script: 'seed-wb-external-debt.mjs', seedMetaKey: 'economic:wb-external-debt', canonicalKey: 'economic:wb-external-debt:v1', intervalMs: 30 * DAY, timeoutMs: 300_000 },
   { label: 'BIS-LBS', script: 'seed-bis-lbs.mjs', seedMetaKey: 'economic:bis-lbs', canonicalKey: 'economic:bis-lbs:v1', intervalMs: 7 * DAY, timeoutMs: 300_000 },
+  // Cross-country capital flows: IMF BOP quarterly + annual + PIP and two BIS
+  // LBS pulls, all in parallel, plus World Bank GDP. PIP (~43s) is the long
+  // pole; per-call timeouts with one retry keep the worst case under 300_000.
+  { label: 'Capital-Flows', script: 'seed-capital-flows.mjs', seedMetaKey: 'economic:capital-flows', canonicalKey: 'economic:capital-flows:v1', completionMetaKey: 'seed-completion:economic:capital-flows', intervalMs: 7 * DAY, timeoutMs: 300_000 },
   // FATF fetches 3 URLs (entry sequential, black+grey parallel) through a 6-tier
   // fallback chain (direct → proxy → wayback-cdx-direct → wayback-cdx-proxy →
   // wayback-snap-direct → wayback-snap-proxy, ≤125s/URL). Worst-case ≤250s;
   // 300_000 gives ~50s margin and matches peer sections. Pre-PR-#3415 the section
   // was 120_000 — too tight for the multi-tier fallback, would SIGTERM mid-fetch.
   { label: 'FATF-Listing', script: 'seed-fatf-listing.mjs', seedMetaKey: 'economic:fatf-listing', canonicalKey: 'economic:fatf-listing:v1', intervalMs: 30 * DAY, timeoutMs: 300_000 },
+  // Full CPI history is six FRED series from 1947. Kept at the tail so a slow
+  // FRED day cannot take the admission slot of an established member.
+  { label: 'US-CPI', script: 'seed-us-cpi.mjs', seedMetaKey: 'economic:us-cpi', canonicalKey: 'economic:us-cpi:v1', completionMetaKey: 'seed-completion:economic:us-cpi', intervalMs: DAY, timeoutMs: 180_000 },
+  // One Treasury XML document per year since 1990. The tail placement is the
+  // same admission choice as US-CPI.
+  { label: 'US-Treasury-Par-Yield', script: 'seed-us-treasury-par-yield.mjs', seedMetaKey: 'economic:us-treasury-par-yield', canonicalKey: 'economic:us-treasury-par-yield:v1', completionMetaKey: 'seed-completion:economic:us-treasury-par-yield', intervalMs: DAY, timeoutMs: 180_000 },
+  // Twelve full-history FRED series. Kept at the tail for the same reason as US-CPI.
+  { label: 'US-Interest-Rates', script: 'seed-us-interest-rates.mjs', seedMetaKey: 'economic:us-interest-rates', canonicalKey: 'economic:us-interest-rates:v1', completionMetaKey: 'seed-completion:economic:us-interest-rates', intervalMs: DAY, timeoutMs: 180_000 },
+  // Worldwide CPI: five sources feeding one country-indexed read
+  // (GetWorldCpiMonthly). Each section is a small, bounded fetch — the IMF
+  // section is the largest at two ~2 MB CSV documents — and they share the
+  // #8481 tail placement so a slow overlay cannot take an established member's
+  // admission slot. Absent sources are tolerated by the read path, which
+  // selects a per-country source with a staleness fall-through.
+  { label: 'World-CPI-IMF', script: 'seed-world-cpi-imf.mjs', seedMetaKey: 'economic:world-cpi-imf', canonicalKey: 'economic:world-cpi:imf:v1', completionMetaKey: 'seed-completion:economic:world-cpi-imf', intervalMs: DAY, timeoutMs: 240_000 },
+  { label: 'World-CPI-Eurostat', script: 'seed-world-cpi-eurostat.mjs', seedMetaKey: 'economic:world-cpi-eurostat', canonicalKey: 'economic:world-cpi:eurostat:v1', completionMetaKey: 'seed-completion:economic:world-cpi-eurostat', intervalMs: DAY, timeoutMs: 180_000 },
+  { label: 'World-CPI-JP', script: 'seed-world-cpi-estat.mjs', requiredEnv: ['ESTAT_APPID'], seedMetaKey: 'economic:world-cpi-estat', canonicalKey: 'economic:world-cpi:estat:v1', completionMetaKey: 'seed-completion:economic:world-cpi-estat', intervalMs: DAY, timeoutMs: 120_000 },
+  { label: 'World-CPI-AU', script: 'seed-world-cpi-abs.mjs', seedMetaKey: 'economic:world-cpi-abs', canonicalKey: 'economic:world-cpi:abs:v1', completionMetaKey: 'seed-completion:economic:world-cpi-abs', intervalMs: DAY, timeoutMs: 120_000 },
 ];
 
 // Education is normally last so a persistent failure in the new flag-dark

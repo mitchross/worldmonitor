@@ -305,6 +305,42 @@ path, commands and results, evidence location, and unverified parts. A timeout,
 interruption, skipped job, or unmet prerequisite is not a pass. Keep local proof,
 PR readiness, merge, deployment, production observation, and acceptance separate.
 
+### CodeQL scan schedule and setup handover
+
+`.github/workflows/codeql.yml` does not run on pull requests or pushes. CodeQL
+does not gate merges, and a full scan costs about 30 runner-minutes, so it runs
+once a day at 03:23 UTC across all six languages. Findings for a change appear
+in **Security > Code scanning** when the first scan after it reaches `main`
+completes, which can be more than 24 hours later; dispatch **CodeQL** on `main`
+to scan sooner. Scheduled and manual runs use separate
+concurrency groups, and neither cancels a running scan.
+
+After each default-branch scan, the `prune-overlay-bases` job deletes every CodeQL
+overlay-base cache except the newest per workflow/job/language group, because
+CodeQL saves a new base under a unique key on every run and never removes old ones.
+
+The repository owner must coordinate activation with the approved merge:
+
+1. Keep default setup enabled while reviewing this workflow. Advanced analysis
+   uploads can be rejected while default setup is enabled; this is not a passing
+   CodeQL validation result.
+2. At the approved handover, disable default setup in **Settings > Code security >
+   CodeQL analysis**, then merge the workflow and dispatch **CodeQL** on `main`. GitHub documents the [switch to advanced setup](https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/configure-code-scanning/configuring-advanced-setup-for-code-scanning).
+3. Confirm all six `Analyze (<language>)` jobs succeed and publish fresh results
+   for the merged commit in **Security > Code scanning**. Check any required
+   code-scanning rules still accept the new workflow; do not treat skipped jobs
+   as proof of analysis. Confirm the next daily run, and compare
+   runner-minutes after seven days before claiming savings.
+4. If analysis or uploads fail, restore default setup and disable the advanced
+   workflow until repaired. Avoid leaving both disabled or allowing both to run
+   as the steady state.
+   If the merge or manual dispatch cannot proceed after default setup is
+   disabled, restore default setup immediately. An interrupted handover is not
+   complete; do not leave main without an active scan configuration.
+
+Run `node --test tests/codeql-workflow.test.mjs` for local workflow contract
+checks. These tests do not execute CodeQL or prove SARIF upload access.
+
 ## How to Contribute
 
 ### Types of Contributions We Welcome
@@ -456,6 +492,10 @@ make install-plugins   # Install sebuf protoc-gen plugins (requires Go)
 
 The pinned sebuf version is set by `SEBUF_VERSION` in the `Makefile` (currently **v0.11.1**). All three plugins — `protoc-gen-ts-client`, `protoc-gen-ts-server`, `protoc-gen-openapiv3` — must be installed from the same sebuf release. If you see codegen drift after pulling, rerun `make install-plugins` to resync.
 
+### Derived Files
+
+Product facts, `llms.txt`, the AI search briefing, source attribution, catalogs, locales and legal digests are committed outputs of generators in `scripts/`. Run `npm run generate` after changing anything they read; it runs each generator's `--check` and rewrites only what is stale, in dependency order. `npm run generate:check` reports without writing. The pre-push hook regenerates stale files and stops the push so you can commit them, and the always-on `docs-stats` CI job runs the check. Proto output is separate (`make generate`, below). App translations, internal links, the sitemap and docs page dates are not covered; see the header of `scripts/generate-derived.mjs`.
+
 ### Generated Artifacts in Pull Requests
 
 `make generate` writes generated files under `src/generated/` and `docs/api/`, plus the seven scorecard Edge mirrors named by `scripts/generate-scorecard-edge-mirrors.mjs`. These files remain committed to the repository, but they must never be edited by hand.
@@ -472,7 +512,9 @@ The repository owner's push must create a `pull_request` `synchronize` event. CI
 
 If `make generate` produces no diff, create an owner-pushed empty commit on the original fork branch. The empty commit creates the required `synchronize` event.
 
-If maintainer edits are disabled, move the commit to a trusted internal branch. Dependabot codegen changes remain blocked and use the internal branch process.
+If maintainer edits are disabled, move the commit to a trusted internal branch.
+
+For Dependabot pull requests from this repository, use the same owner-review and generation procedure on the existing branch. An owner push creates the required `synchronize` event and permits read-only validation of the exact head and merge result. CI does not publish generated patches or write to the Dependabot branch. A later Dependabot push revokes trust; an owner rerun or reopen does not restore it. Commit any required generated artifacts locally before the owner push.
 
 ### OpenAPI Output
 

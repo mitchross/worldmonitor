@@ -44,7 +44,28 @@ export type McpInboundHostClass =
   | 'vercel_preview'
   | 'other';
 
+export type ConflictSourceObservation = {
+  ucdp: {
+    fetchedAt?: number;
+    candidateVersion?: string | null;
+    candidateComplete?: boolean;
+    annualFailedPages?: number;
+    newestItemAt?: number | null;
+    maxContentAgeMin?: number;
+  };
+};
+
 export interface McpToolExecutionContext {
+  readAccountAllowance?: () => Promise<import('./_account-allowance').McpAllowanceStatus>;
+  // The checkout session dispatch already created for `start_upgrade` (#9144).
+  startUpgradeResult?: import('./checkout').StartUpgradeResult;
+  panelRequest?: import('./panel-requests').PaidPanelAdmission;
+  panelScope?: 'forecasts';
+  // Set only by dispatch for an original forecast read billed per tool call.
+  perToolForecastRead?: true;
+  // Set only by dispatch after a dedicated paid country-panel read is authorized.
+  countryPanelCode?: string;
+  countryRiskHistoryReuseUntil?: number | null;
   inboundHostClass: McpInboundHostClass;
   downstreamOrigin: string;
   downstreamOriginTag: string;
@@ -54,7 +75,10 @@ export interface McpToolExecutionContext {
 // Tool registry types
 // ---------------------------------------------------------------------------
 export interface BaseToolDef {
+  // Pure caller-input checks that must run before any allowance reservation.
+  _validateArgs?: (params: Record<string, unknown>) => void;
   name: string;
+  title: string;
   description: string;
   inputSchema: {
     type: string;
@@ -67,6 +91,13 @@ export interface BaseToolDef {
   // envelope instead of the oversized payload. Required so a new tool can't
   // be added without an explicit budget choice.
   _outputBudgetBytes: number;
+  // Optional reshaping for a response that would exceed `_outputBudgetBytes`:
+  // shed duplicate or bulky detail and record what was omitted, so the call
+  // still returns rows. Dispatch applies it only to an over-budget result and
+  // re-runs the caller's projection on the reshaped payload, so a projection
+  // that already fits still sees the original detail. Return the input
+  // unchanged when it cannot fit; the budget gate then answers as before.
+  _fitToBudget?: (result: Record<string, unknown>, budgetBytes: number, args: Record<string, unknown>) => Record<string, unknown>;
   // JMESPath expression extracting this tool's source list from its
   // UNPROJECTED payload. Declared by every tool whose `outputSchema` carries a
   // licence marker (`shared/attribution-rider.ts::LICENCE_MARKER_FIELDS`), and
@@ -88,11 +119,13 @@ export interface BaseToolDef {
   // throws rather than signing. In practice that means `_apiPaths: []` and a
   // committed-registry or cache read. Enforced by test, not by convention.
   _freeTier?: true;
+  // Cache-backed tools can require the same paid access as their REST route.
+  _subscriptionOnly?: true;
   // Budget units this tool charges, overriding the class default in
   // `registry/index.ts::toolWeight`. Set it only when the tool's downstream
-  // fan-out differs from its class — the two tools that fetch twice. A tool
-  // that grows a second fetch and forgets this is undercharging, which
-  // `tests/mcp-tool-weight.test.mjs` catches by re-deriving fan-out from source.
+  // maximum downstream fan-out differs from its class. A tool that adds a
+  // fetch and forgets this undercharges; `tests/mcp-tool-weight.test.mjs`
+  // checks source call sites and measures input-dependent airspace requests.
   _weight?: number;
   // Spec-defined `Tool.outputSchema` (MCP 2025-06-18+). JSON Schema fragment
   // describing the tool's normal (non-envelope) response shape so a compliant
@@ -121,7 +154,6 @@ export interface BaseToolDef {
   // https://modelcontextprotocol.io/specification/2025-06-18/server/tools
   //
   //   - readOnlyHint: "If true, the tool does not modify its environment."
-  //     Every tool here is true — none write/mutate any user-visible state.
   //     Consuming a daily Pro quota counter is NOT environment modification
   //     in the spec sense (which targets the read/write split on the data
   //     plane, not metering on the auth plane).
@@ -136,7 +168,7 @@ export interface BaseToolDef {
   //     downstream MCP clients use this hint to decide whether to dedup,
   //     cache, or auto-retry tool calls. Two classes of tool earn `false`:
   //       1. LLM-synthesized tools (get_world_brief, get_country_brief,
-  //          analyze_situation, generate_forecasts) — the model output is
+  //          analyze_situation) — the model output is
   //          non-deterministic across calls.
   //       2. Live external-API reads with rapidly-changing content
   //          (get_airspace, get_maritime_activity, search_flights,
@@ -169,6 +201,7 @@ export interface BaseToolDef {
   // constructs the public `_meta` object from it). Optional: only tools with
   // an interactive UI surface set it.
   _uiResourceUri?: string;
+  _openaiEntrypoints?: Array<{ type: 'global' | 'thread' }>;
 }
 
 // Per-entity content-freshness contract (#6080). `maxStaleMin` and
@@ -225,6 +258,12 @@ export interface CacheToolDef extends BaseToolDef {
   // the dispatcher reads this list directly with no synthesized fallback.
   _freshnessChecks: [FreshnessCheck, ...FreshnessCheck[]];
   _execute?: never;
+  // Optional argument-free projection of the stored values onto the fields the
+  // tool's `outputSchema` declares, applied to the label-walked `data` map
+  // before `_postFilter` and summary. Use it when the Redis value carries
+  // producer-internal blocks the public contract withholds. A throw fails the
+  // call; there is no fallback to the unprojected value.
+  _project?: (data: Record<string, unknown>) => Record<string, unknown>;
   // Optional in-memory post-filter applied to the label-walked `data` map
   // AFTER the Redis reads + freshness + cache_all_null guard. Pure narrowing:
   // receives the assembled data object plus the tools/call `arguments`, returns
@@ -233,7 +272,7 @@ export interface CacheToolDef extends BaseToolDef {
   // are no-ops, never errors. Every property a `_postFilter` reads MUST be
   // declared in the same tool's `inputSchema.properties` (schema and behaviour
   // co-located so the advertised contract can never drift from what runs).
-  _postFilter?: (data: Record<string, unknown>, params: Record<string, unknown>) => Record<string, unknown>;
+  _postFilter?: (data: Record<string, unknown>, params: Record<string, unknown>, execution?: McpToolExecutionContext) => Record<string, unknown>;
   // Optional tool-specific summary transform. Most cache tools use the shared
   // `summarizeData`; tools with tighter output invariants can preserve the
   // shared count/sample shape while additionally bounding optional samples.
@@ -272,9 +311,9 @@ export interface RpcToolDef extends BaseToolDef {
   //       static JSON registry — see get_commodity_geo), OR
   //   (b) The tool's _execute fetches an endpoint whose runtime method
   //       drifts from the OpenAPI spec AND no covering op exists in the
-  //       spec (e.g. generate_forecasts POSTs /api/forecast/v1/get-forecasts
-  //       but the spec declares only GET — that GET is owned by
-  //       get_forecast_predictions). Document the drift inline; an EXCLUDED
+  //       spec (e.g. the retired generate_forecasts POSTed
+  //       /api/forecast/v1/get-forecasts but the spec declares only GET —
+  //       that GET is owned by get_forecast_predictions). Document the drift inline; an EXCLUDED
   //       entry is the wrong fix (the op IS covered, just via a sibling
   //       tool with matching method).
   //
@@ -297,14 +336,19 @@ export type McpAccessClass = 'free' | 'free-account' | 'subscription';
 // ---------------------------------------------------------------------------
 // JMESPath result envelope
 // ---------------------------------------------------------------------------
-export type JmespathFailKind = 'expression_too_long' | 'projection_too_large' | 'invalid_expression';
+export type JmespathFailKind = 'expression_too_long' | 'projection_too_large' | 'invalid_expression' | 'empty_projection';
 
 // Result envelope. `text` is always the wire-ready JSON the dispatcher will
 // emit in `content[0].text`. `failed` is set only on a soft-failure path,
 // and its value is the same enum string used as the `_jmespath_error`
 // envelope prefix (no drift).
+//
+// `value` is the document `text` serializes — the projected value, the
+// unprojected payload on the identity path, or the soft-fail envelope — so the
+// dispatcher can build `structuredContent` without parsing `text` back.
 export interface ApplyJmespathResult {
   text: string;
+  value: unknown;
   failed?: JmespathFailKind;
 }
 
@@ -313,6 +357,7 @@ export interface ApplyJmespathResult {
 // ---------------------------------------------------------------------------
 export interface PublicToolShape {
   name: string;
+  title: string;
   description: string;
   inputSchema: {
     type: string;
@@ -322,6 +367,7 @@ export interface PublicToolShape {
   };
   outputSchema: object;
   annotations: {
+    title: string;
     readOnlyHint: boolean;
     destructiveHint: boolean;
     idempotentHint: boolean;
@@ -347,6 +393,7 @@ export interface PublicToolShape {
   _meta: {
     ui?: { resourceUri: string };
     'ui/resourceUri'?: string;
+    'openai/ui'?: { entrypoints: Array<{ type: 'global' | 'thread' }> };
     'worldmonitor/access': McpAccessClass;
     'worldmonitor/weight': number;
   };
@@ -436,6 +483,9 @@ export interface McpHandlerDeps {
   // contacting Redis.
   guardUserApiKeyValidation: (request: Request, corsHeaders: Record<string, string>) => Promise<Response | null>;
   redisPipeline: PipelineFn;
+  // `start_upgrade` checkout relay (#9144). Optional so existing fixtures keep
+  // compiling; dispatch falls back to the production Convex relay.
+  createCheckout?: import('./checkout').McpCreateCheckout;
 }
 
 export interface AuthResolution {
@@ -481,6 +531,11 @@ export interface McpPreCheckPassed {
    * site only (#6716). Must never be set by relaxing `checkProMcpAccess`.
    */
   freeAccountAllowance?: true;
+  /**
+   * The entitlement's plan key, from the same read. Lets a denial recommend
+   * the plan one step up (#9144). Omitted when the row carries none.
+   */
+  planKey?: string;
 }
 export interface McpPreCheckRejected {
   ok: false;

@@ -7,15 +7,23 @@
 //   - startCommand: node seed-fire-detections.mjs
 //   - Cron schedule: "*/10 * * * *" (every 10min UTC)
 
-import { loadEnvFile, readSeedSnapshot, runSeed, writeExtraKey, MAX_PAYLOAD_BYTES } from './_seed-utils.mjs';
+import { getRedisCredentials, loadEnvFile, readSeedSnapshot, redisCommand, runSeed, withRetry, writeExtraKey, MAX_PAYLOAD_BYTES } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
 import { compactWildfireDashboardPayload, WILDFIRE_CANONICAL_DETECTION_LIMIT } from './_wildfire-dashboard.mjs';
+import {
+  summarizeWildfireDetections,
+  WILDFIRE_FIRES_SUMMARY_ACTIVATION_KEY,
+  WILDFIRE_FIRES_SUMMARY_KEY,
+  WILDFIRE_FIRES_SUMMARY_META_KEY,
+} from './shared/wildfire-fires-summary.mjs';
 import {
   fetchCwfisFires,
   CWFIS_SNAPSHOT_TTL_SECONDS,
   CWFIS_SNAPSHOT_KEY,
 } from './wildfire/cwfis-wfs.mjs';
 import {
+  BC_SNAPSHOT_KEY,
+  BC_SNAPSHOT_TTL_SECONDS,
   canadianWildfireAfterPublish,
   fetchBcFirePoints,
   hasCompleteWorldwideWildfireCoverage,
@@ -92,17 +100,24 @@ async function fetchMergedWildfires() {
       fetchFn: globalThis.fetch, cache,
       previousSnapshot: await readSeedSnapshot(CWFIS_SNAPSHOT_KEY),
     }),
-    fetchBcWildfire: () => fetchBcFirePoints({ fetchFn: globalThis.fetch, cache }),
+    // The strict read fails closed, so a transient Upstash glitch (an HTTP-200
+    // body that is not JSON, a 5xx, a timeout) would otherwise exit 1 with no
+    // BC snapshot to persist. A read that keeps failing still exits 1 after
+    // the retries, so last-good BC state is never overwritten from a bad read.
+    fetchBcWildfire: async () => fetchBcFirePoints({
+      fetchFn: globalThis.fetch, cache,
+      previousSnapshot: await withRetry(() => readSeedSnapshot(BC_SNAPSHOT_KEY, { strict: true }), 2, 500),
+    }),
   });
   if (data.fireDetections.length === 0) {
-    await persistCwfisSnapshot(data).catch(error => {
+    await persistSourceSnapshots(data).catch(error => {
       throw Object.assign(error, { nonRetryable: true });
     });
   }
   return data;
 }
 
-async function persistCwfisSnapshot(data) {
+async function persistSourceSnapshots(data) {
   const snapshot = data._cwfisSnapshot;
   if (!snapshot) throw new Error('CWFIS recovery snapshot is missing');
   await writeExtraKey(CWFIS_SNAPSHOT_KEY, snapshot, CWFIS_SNAPSHOT_TTL_SECONDS);
@@ -113,6 +128,32 @@ async function persistCwfisSnapshot(data) {
     sourceState: snapshot.consecutiveFailures ? 'degraded' : 'ok',
     sourceVersion: 'cwfis-recovery-v1',
   }, CWFIS_SNAPSHOT_TTL_SECONDS);
+  const bcSnapshot = data._bcSnapshot;
+  if (!bcSnapshot) throw new Error('BC recovery snapshot is missing');
+  await writeExtraKey(BC_SNAPSHOT_KEY, bcSnapshot, BC_SNAPSHOT_TTL_SECONDS);
+  await writeExtraKey('seed-meta:wildfire:bc-source', {
+    fetchedAt: bcSnapshot.fetchedAt,
+    recordCount: bcSnapshot.fireDetections.length,
+    lastAttemptAt: bcSnapshot.lastAttemptAt,
+    sourceState: bcSnapshot.errorCode ? 'degraded' : 'ok',
+    errorCode: bcSnapshot.errorCode,
+    sourceVersion: 'bc-fire-points-v1',
+  }, BC_SNAPSHOT_TTL_SECONDS);
+}
+
+// Durable (no TTL) marker that ends /api/health's pre-rollout softening of the
+// wildfiresSummary probe; runSeed calls it after the extra keys and the canonical
+// seed-meta are written. Best-effort: a missed marker costs one more cycle of
+// on-demand softening.
+async function markSummaryActivated() {
+  try {
+    const { url, token } = getRedisCredentials();
+    await redisCommand(url, token, ['SET', WILDFIRE_FIRES_SUMMARY_ACTIVATION_KEY, '1'], {
+      label: `Activation marker ${WILDFIRE_FIRES_SUMMARY_ACTIVATION_KEY}`,
+    });
+  } catch (err) {
+    console.warn(`  WARN: activation marker write failed: ${err?.message || err}`);
+  }
 }
 
 async function main() {
@@ -145,14 +186,25 @@ async function main() {
       transform: (data) => compactWildfireDashboardPayload(wildfirePublishData(data)),
       declareRecords,
       metaKey: 'seed-meta:wildfire:fires-bootstrap',
+    }, {
+      // Per-country intensity rows plus the FIRMS clock for the CII and
+      // temporal-anomaly rebuilds (#9509). Built from the RAW detections, so it
+      // counts the whole fetch even when the canonical key above was capped.
+      key: WILDFIRE_FIRES_SUMMARY_KEY,
+      transform: (data) => summarizeWildfireDetections(wildfirePublishData(data)),
+      declareRecords: (summary) => summary?.totalCount ?? 0,
+      metaKey: WILDFIRE_FIRES_SUMMARY_META_KEY,
     }],
     declareRecords,
     schemaVersion: 1,
     maxStaleMin: 360,
-    beforePublish: persistCwfisSnapshot,
+    beforePublish: persistSourceSnapshots,
     afterPublish: canadianWildfireAfterPublish,
+    // Success path only: the marker follows the summary extra key and the
+    // canonical seed-meta, never a validation skip or a preserved last-good run.
+    afterFreshness: markSummaryActivated,
     afterValidationSkip: async (data, { existingSeedMeta }) => {
-      await persistCwfisSnapshot(data);
+      await persistSourceSnapshots(data);
       return canadianWildfireAfterPublish(data, { previousMeta: existingSeedMeta });
     },
   });

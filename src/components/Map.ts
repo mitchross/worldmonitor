@@ -4,7 +4,7 @@ import { escapeHtml } from '@/utils/sanitize';
 import { getCSSColor } from '@/utils';
 import type { Topology, GeometryCollection } from 'topojson-specification';
 import type { Feature, Geometry } from 'geojson';
-import type { MapLayers, Hotspot, NewsItem, InternetOutage, RelatedAsset, AssetType, AisDisruptionEvent, AisDensityZone, CableAdvisory, RepairShip, SocialUnrestEvent, MilitaryFlight, MilitaryVessel, MilitaryFlightCluster, MilitaryVesselCluster, NaturalEvent, CyberThreat, CableHealthRecord, MilitaryBase } from '@/types';
+import type { MapLayers, Hotspot, NewsItem, NewsLocationMarker, InternetOutage, RelatedAsset, AssetType, AisDisruptionEvent, AisDensityZone, CableAdvisory, RepairShip, SocialUnrestEvent, MilitaryFlight, MilitaryVessel, MilitaryFlightCluster, MilitaryVesselCluster, NaturalEvent, CyberThreat, CableHealthRecord, MilitaryBase } from '@/types';
 import type { AirportDelayAlert, PositionSample } from '@/services/aviation';
 import type { Earthquake } from '@/services/earthquakes';
 import { type IranEvent, getIranEventCssColor, getIranEventSize } from '@/services/conflict';
@@ -14,6 +14,7 @@ import { getNaturalEventIcon } from '@/services/eonet';
 import type { WeatherAlert } from '@/services/weather';
 import type { RadiationObservation } from '@/services/radiation';
 import { getSeverityColor } from '@/services/weather';
+import { getThreatColor } from '@/services/threat-classifier';
 import { startSmartPollLoop, type SmartPollLoopHandle } from '@/services/smart-poll-loop';
 import { scheduleAfterFirstPaint, yieldToMain } from '@/utils/after-paint';
 import { measure, mutate } from '@/utils/layout-batch';
@@ -38,10 +39,12 @@ import {
 import { STARTUP_HUBS, ACCELERATORS, TECH_HQS, CLOUD_REGIONS } from '@/config/tech-geo';
 import { AI_DATA_CENTERS } from '@/config/ai-datacenters';
 import { worldTopologyUrl, UNDERSEA_CABLES, NUCLEAR_FACILITIES, SANCTIONED_COUNTRIES, ECONOMIC_CENTERS, SPACEPORTS, CRITICAL_MINERALS } from '@/config/geo-map';
-import { pinWebcam, isPinned } from '@/services/webcams/pinned-store';
+import { mountWebcamPinButton } from '@/services/webcams/pinned-store';
 import type { WebcamEntry, WebcamCluster } from '@/generated/client/worldmonitor/webcam/v1/service_client';
 import { tokenizeForMatch, matchKeyword, findMatchingKeywords } from '@/utils/keyword-match';
 import { MapPopup } from './MapPopup';
+import type { CrossBorderData, CrossBorderPoint } from '@/services/displacement';
+import { createCrossBorderMarker, crossBorderMarkerOffsets } from './cross-border-marker';
 import type { GetChokepointStatusResponse } from '@/services/supply-chain';
 import type { AcledConflictEvent } from '@/generated/client/worldmonitor/conflict/v1/service_client';
 import {
@@ -59,12 +62,14 @@ import { t } from '@/services/i18n';
 import type { ScenarioVisualState } from '@/config/scenario-templates';
 import { setTrustedHtml, trustedHtml } from '@/utils/dom-utils';
 import { renderLayerTruncationBadges } from '@/utils/layer-truncation-badge';
+import { isLowEndDevice } from '@/utils/device-tier';
 import {
   overlayMarkerPosition,
   projectionPointAtScreenCentre,
 } from '@/utils/overlay-marker-geometry';
 import {
   MAP_OVERLAY_MARKER_BUDGET_DESKTOP,
+  MAP_OVERLAY_MARKER_BUDGET_LOW_END,
   MAP_OVERLAY_MARKER_BUDGET_MOBILE,
   proximityRank,
   selectGlobeMarkers,
@@ -192,6 +197,7 @@ export class MapComponent {
   private baseHeight = 0;
   private hotspots: HotspotWithBreaking[];
   private earthquakes: Earthquake[] = [];
+  private newsLocations: NewsLocationMarker[] = [];
   private weatherAlerts: WeatherAlert[] = [];
   private radiationObservations: RadiationObservation[] = [];
   private outages: InternetOutage[] = [];
@@ -205,10 +211,12 @@ export class MapComponent {
   private flightDelays: AirportDelayAlert[] = [];
   private aircraftPositions: PositionSample[] = [];
   private militaryFlights: MilitaryFlight[] = [];
+  private emergencyMarkers: import('../../shared/aircraft-emergencies').EmergencyMapMarker[] = [];
   private militaryFlightClusters: MilitaryFlightCluster[] = [];
   private militaryVessels: MilitaryVessel[] = [];
   private militaryVesselClusters: MilitaryVesselCluster[] = [];
   private naturalEvents: NaturalEvent[] = [];
+  private crossBorderPoints: CrossBorderPoint[] = [];
   private firmsFireData: Array<{ lat: number; lon: number; brightness: number; frp: number; confidence: number; region: string; acq_date: string; daynight: string }> = [];
   private techEvents: TechEventMarker[] = [];
   private techActivities: TechHubActivity[] = [];
@@ -221,6 +229,7 @@ export class MapComponent {
   private onTechHubClick?: (hub: TechHubActivity) => void;
   private onGeoHubClick?: (hub: GeoHubActivity) => void;
   private popup: MapPopup;
+  private onNewsClick?: (item: Pick<NewsLocationMarker, 'article' | 'title'>) => void;
   private onHotspotClick?: (hotspot: Hotspot) => void;
   private onTimeRangeChange?: (range: TimeRange) => void;
   private onLayerChange?: (layer: keyof MapLayers, enabled: boolean, source: 'user' | 'programmatic') => void;
@@ -255,6 +264,8 @@ export class MapComponent {
   private destroyed = false;
   // Mobile loads the lighter 110m country topology (U6); passed in from MapContainer.
   private readonly isMobile: boolean;
+  // Low-memory device (src/utils/device-tier.ts): static markers, smaller budget.
+  private readonly lowEndDevice = isLowEndDevice();
   private readonly canToggleLayer: NonNullable<MapComponentOptions['canToggleLayer']>;
   private overlayAppendTarget: ParentNode | null = null;
   // #7112 overlay marker budget. `overlayMarkerCut` holds the marker objects
@@ -281,6 +292,9 @@ export class MapComponent {
   private labelVisibilityScheduled = false;
   private pendingLabelVisibilityZoom = 1;
   private lastContainerSize = { width: 0, height: 0 };
+  // Mobile can intentionally collapse the map to 0x0 at startup. Preserve an
+  // initial deep-link center until the map is revealed and can project it.
+  private pendingCenter: { lat: number; lon: number } | null = null;
   // #5080 slice 2: last zoom (4dp) whose overlay counter-scale CSS vars were
   // written — lets applyTransform() skip same-value setProperty calls that
   // would restyle every marker on every render pass.
@@ -406,7 +420,9 @@ export class MapComponent {
         // and lets a reveal center off current dimensions instead of the last
         // visible ones (#5022 review). Only a visible size is worth rendering.
         this.rememberContainerSize({ width, height });
-        if (width > 0 && height > 0) this.scheduleRender();
+        if (width > 0 && height > 0) {
+          this.resize();
+        }
       }
     });
     this.resizeObserver.observe(this.container);
@@ -424,11 +440,13 @@ export class MapComponent {
     const wasResizing = this.isResizing;
     this.isResizing = value;
     if (wasResizing && !value) {
-      this.scheduleRender();
+      this.resize();
     }
   }
 
   public resize(): void {
+    const pendingCenter = this.pendingCenter;
+    if (pendingCenter) this.setCenter(pendingCenter.lat, pendingCenter.lon);
     this.scheduleRender();
   }
 
@@ -577,10 +595,10 @@ export class MapComponent {
       // Adding them here would surface a toggle that produces zero output. They're
       // already restricted to renderers: ['deck'] in LAYER_REGISTRY, which keeps
       // them out of the globe picker too.
-      'ais', 'flights', 'gpsJamming',                      // transport/interference
+      'ais', 'flights', 'aircraftEmergencies', 'gpsJamming',
       'natural', 'weather',                               // natural
       'economic',                                         // economic
-      'waterways',                                        // labels
+      'waterways', 'displacement',
       'ciiChoropleth',                                    // Candidate only; SVG capability filter below omits it.
     ];
     const techLayers: (keyof MapLayers)[] = [
@@ -993,7 +1011,7 @@ export class MapComponent {
       if (!(target instanceof Element)) return false;
       return Boolean(
         target.closest(
-          '.map-controls, .time-slider, .layer-toggles, .map-legend, .layer-help-popup, .map-popup, button, select, input, textarea, a'
+          '.map-controls, .time-slider, .layer-toggles, .map-legend, .layer-help-popup, .layer-explanation-popup, .map-popup, button, select, input, textarea, a'
         )
       );
     };
@@ -1180,6 +1198,7 @@ export class MapComponent {
     }, { signal });
 
     this.container.addEventListener('click', (e) => {
+      if (shouldIgnoreInteractionStart(e.target)) return;
       if (!this.onCountryClick) return;
       if (performance.now() - lastDragEndTime < 300) return;
       if (shouldSuppressCountryClick(countryClickGesture)) return;
@@ -1802,6 +1821,17 @@ export class MapComponent {
     protests: readonly SocialUnrestEvent[];
     conflictEvents: readonly AcledConflictEvent[];
     weather: readonly WeatherAlert[];
+    news: readonly MapComponent['newsLocations'][number][];
+    naturalEvents: readonly NaturalEvent[];
+    radiationObservations: readonly RadiationObservation[];
+    outages: readonly InternetOutage[];
+    cableAdvisories: readonly CableAdvisory[];
+    flightDelays: readonly AirportDelayAlert[];
+    militaryFlights: readonly MilitaryFlight[];
+    militaryFlightClusters: readonly MilitaryFlightCluster[];
+    militaryVessels: readonly MilitaryVessel[];
+    militaryVesselClusters: readonly MilitaryVesselCluster[];
+    fires: readonly MapComponent['firmsFireData'][number][];
   } {
     const withinTimeRange = <T extends { occurredAt: number }>(items: readonly T[]): readonly T[] => (
       this.state.timeRange === 'all'
@@ -1813,7 +1843,7 @@ export class MapComponent {
     // renderOverlays is on the pan/zoom path.
     const layers = this.state.layers;
     const activeQuakes = layers.natural ? this.earthquakes : [];
-    const activeIranEvents = layers.iranAttacks ? this.iranEvents : [];
+    const activeIranEvents = layers.iranAttacks ? this.filterByTime(this.iranEvents, (event) => event.timestamp) : [];
     const filteredQuakes = withinTimeRange(activeQuakes);
     return {
       quakes: this.isMobile
@@ -1825,10 +1855,10 @@ export class MapComponent {
       // Already capped at 200 by the render loop; planned on the same slice so
       // the budget cannot spend share on the 201st position onwards.
       aircraft: layers.flights ? this.aircraftPositions.slice(0, 200) : [],
-      // Only riots and high-severity unrest reach the map; the rest stay in the
-      // CII analysis. Budgeting the full feed would cut the ones that render.
+      // Media mentions stay visible without borrowing incident severity.
       protests: layers.protests
-        ? this.protests.filter((event) => event.eventType === 'riot' || event.severity === 'high')
+        ? this.filterByTime(this.protests, (event) => event.time)
+          .filter((event) => event.sourceType === 'gdelt' || event.eventType === 'riot' || event.severity === 'high')
         : [],
       conflictEvents: withinTimeRange(layers.conflicts ? this.conflictEvents : []),
       // `centroid` is optional on WeatherAlert and the render loop skips an alert
@@ -1839,8 +1869,55 @@ export class MapComponent {
       // the earthquake slice (3356f19c8) — this is the only other feed with a
       // per-marker data precondition; the `newsCount === 0` skips sit on exempt
       // groups, which are outside the budget entirely.
-      weather: layers.weather ? this.weatherAlerts.filter((alert) => alert.centroid) : [],
+      weather: layers.weather
+        ? this.filterByTime(this.weatherAlerts, (alert) => alert.onset).filter((alert) => alert.centroid)
+        : [],
+      news: this.newsLocations.filter((item) => {
+        if (!Number.isFinite(item.lat) || !Number.isFinite(item.lon)) return false;
+        if (this.state.timeRange === 'all') return true;
+        const timestamp = item.timestamp?.getTime();
+        return timestamp == null || !Number.isFinite(timestamp) || timestamp >= Date.now() - this.getTimeRangeMs();
+      }),
+      // Same fields DeckGLMap.buildLayers filters on, so both renderers show the
+      // same records for a given TIME RANGE.
+      naturalEvents: layers.natural ? this.filterByTime(this.naturalEvents, (event) => event.date) : [],
+      radiationObservations: layers.radiationWatch
+        ? this.filterByTime(this.radiationObservations, (observation) => observation.observedAt)
+        : [],
+      outages: layers.outages ? this.filterByTime(this.outages, (outage) => outage.pubDate) : [],
+      cableAdvisories: layers.cables ? this.filterByTime(this.cableAdvisories, (advisory) => advisory.reported) : [],
+      flightDelays: layers.flights ? this.filterByTime(this.flightDelays, (delay) => delay.updatedAt) : [],
+      militaryFlights: layers.military ? this.filterByTime(this.militaryFlights, (flight) => flight.lastSeen) : [],
+      militaryFlightClusters: layers.military
+        ? this.militaryFlightClusters.flatMap((cluster) => {
+          const flights = this.filterByTime(cluster.flights ?? [], (flight) => flight.lastSeen);
+          return flights.length === 0 ? [] : [{ ...cluster, flights: [...flights], flightCount: flights.length }];
+        })
+        : [],
+      militaryVessels: layers.military ? this.filterByTime(this.militaryVessels, (vessel) => vessel.lastAisUpdate) : [],
+      militaryVesselClusters: layers.military
+        ? this.militaryVesselClusters.flatMap((cluster) => {
+          const vessels = this.filterByTime(cluster.vessels ?? [], (vessel) => vessel.lastAisUpdate);
+          return vessels.length === 0 ? [] : [{ ...cluster, vessels: [...vessels], vesselCount: vessels.length }];
+        })
+        : [],
+      fires: layers.fires ? this.filterByTime(this.firmsFireData, (fire) => fire.acq_date) : [],
     };
+  }
+
+  /** Mirrors DeckGLMap.filterByTime: a record without a parseable date stays visible. */
+  private filterByTime<T>(
+    items: readonly T[],
+    getTime: (item: T) => Date | string | number | null | undefined,
+  ): readonly T[] {
+    if (this.state.timeRange === 'all') return items;
+    const cutoff = Date.now() - this.getTimeRangeMs();
+    return items.filter((item) => {
+      const value = getTime(item);
+      if (value == null) return true;
+      const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+      return !Number.isFinite(timestamp) || timestamp >= cutoff;
+    });
   }
 
   private planOverlayMarkerBudget(
@@ -1857,6 +1934,7 @@ export class MapComponent {
     ): void => { if (markers.length) groups.push({ layer, markers, ...extra }); };
 
     const layers = this.state.layers;
+    add('news', slices.news);
     if (layers.waterways) add('waterways', STRATEGIC_WATERWAYS);
     if (layers.ais) {
       add('ais', this.aisDisruptions);
@@ -1881,14 +1959,14 @@ export class MapComponent {
     if (this.isLayerZoomVisible('bases')) add('bases', this.getMilitaryBasesForRender());
     if (layers.natural) {
       add('natural', slices.quakes, { rank: (m) => (m as Earthquake).magnitude ?? 0 });
-      add('natural', this.naturalEvents);
+      add('natural', slices.naturalEvents);
     }
     if (layers.economic) add('economic', ECONOMIC_CENTERS);
     if (layers.weather) add('weather', slices.weather);
-    if (layers.radiationWatch) add('radiationWatch', this.radiationObservations);
-    if (layers.outages) add('outages', this.outages);
+    if (layers.radiationWatch) add('radiationWatch', slices.radiationObservations);
+    if (layers.outages) add('outages', slices.outages);
     if (layers.cables) {
-      add('cables', this.cableAdvisories);
+      add('cables', slices.cableAdvisories);
       add('cables', this.repairShips);
     }
     if (layers.datacenters) add('datacenters', RENDERABLE_AI_DATA_CENTERS);
@@ -1899,27 +1977,28 @@ export class MapComponent {
     if (layers.techHQs) add('techHQs', TECH_HQS);
     if (layers.accelerators) add('accelerators', ACCELERATORS);
     if (layers.techEvents) add('techEvents', this.techEvents);
+    if (layers.displacement) add('displacement', this.crossBorderPoints);
     if (layers.stockExchanges) add('stockExchanges', STOCK_EXCHANGES);
     if (layers.financialCenters) add('financialCenters', FINANCIAL_CENTERS);
     if (layers.centralBanks) add('centralBanks', CENTRAL_BANKS);
     if (layers.commodityHubs) add('commodityHubs', COMMODITY_HUBS);
     if (layers.protests) add('protests', slices.protests);
     if (layers.flights) {
-      add('flights', this.flightDelays);
+      add('flights', slices.flightDelays);
       add('flights', slices.aircraft);
     }
     if (layers.military) {
-      add('military', this.militaryFlights);
-      add('military', this.militaryFlightClusters);
+      add('military', slices.militaryFlights);
+      add('military', slices.militaryFlightClusters);
       // Carriers first: AIS is the largest feed on the page and the one the
       // ceiling actually bites on (1,502 of 2,088 markers measured).
-      add('military', this.militaryVessels, {
+      add('military', slices.militaryVessels, {
         rank: (m) => ((m as MilitaryVessel).vesselType === 'carrier' ? 1 : 0),
       });
-      add('military', this.militaryVesselClusters);
+      add('military', slices.militaryVesselClusters);
     }
     if (layers.fires) {
-      add('fires', this.firmsFireData, { rank: (m) => (m as { brightness?: number }).brightness ?? 0 });
+      add('fires', slices.fires, { rank: (m) => (m as { brightness?: number }).brightness ?? 0 });
     }
     if (layers.webcams && this.state.zoom >= 2) add('webcams', this.webcamData);
     // Variant hub overlays have no layer-toggle row, so a truncation here would
@@ -1944,9 +2023,11 @@ export class MapComponent {
       else group.rank = nearestFirst;
     }
 
-    const budget = this.isMobile
-      ? MAP_OVERLAY_MARKER_BUDGET_MOBILE
-      : MAP_OVERLAY_MARKER_BUDGET_DESKTOP;
+    const budget = this.lowEndDevice
+      ? MAP_OVERLAY_MARKER_BUDGET_LOW_END
+      : this.isMobile
+        ? MAP_OVERLAY_MARKER_BUDGET_MOBILE
+        : MAP_OVERLAY_MARKER_BUDGET_DESKTOP;
     const { markers, truncated } = selectGlobeMarkers(groups, budget);
 
     const kept = new Set(markers);
@@ -2049,6 +2130,7 @@ export class MapComponent {
     this.lastTruncationLabelKey = key;
     const { undisclosed } = renderLayerTruncationBadges(root, this.overlayMarkerTruncation, 'pan');
     this.overlayUndisclosedTruncation = undisclosed;
+    this.renderCompactTruncationSummary(this.overlayMarkerTruncation.news ? [this.overlayMarkerTruncation.news] : []);
   }
 
   /**
@@ -2066,13 +2148,8 @@ export class MapComponent {
    * embed opted out of — just the count and a `title` carrying the explanation.
    * Idempotent (one node, updated in place) and removed the moment nothing is
    * being withheld, so it cannot accumulate across renders or outlive the cut.
-   *
-   * Only for the no-rail case. A map that HAS a rail but whose trimmed layer has
-   * no row in that variant's picker is the separate problem tracked in #7144;
-   * fixing it with a second, parallel disclosure surface would be the wrong shape.
    */
-  private renderCompactTruncationSummary(): void {
-    const entries = Object.values(this.overlayMarkerTruncation);
+  private renderCompactTruncationSummary(entries = Object.values(this.overlayMarkerTruncation)): void {
     const existing = this.container.querySelector<HTMLElement>('.map-truncation-summary');
 
     if (entries.length === 0) {
@@ -2132,6 +2209,49 @@ export class MapComponent {
     this.overlayAppendTarget = fragment;
 
     try {
+    if (this.state.layers.displacement) {
+      const offsets = crossBorderMarkerOffsets(this.crossBorderPoints);
+      for (const point of this.crossBorderPoints) {
+        if (this.isOverlayMarkerCut(point)) continue;
+        const pos = projection([point.lon, point.lat]);
+        if (!pos) continue;
+        const marker = createCrossBorderMarker(point);
+        const [offsetX, offsetY] = offsets.get(point)!;
+        marker.style.position = 'absolute';
+        marker.style.left = `${pos[0] + offsetX}px`;
+        marker.style.top = `${pos[1] + offsetY}px`;
+        marker.style.transform = 'translate(-50%, -50%) scale(var(--marker-scale, 1))';
+        marker.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const rect = marker.getBoundingClientRect();
+          const containerRect = this.container.getBoundingClientRect();
+          this.popup.show({ type: 'crossBorder', data: point,
+            x: rect.left - containerRect.left + rect.width / 2, y: rect.top - containerRect.top });
+        });
+        this.appendOverlay(marker);
+      }
+    }
+    for (const item of slices.news) {
+      if (this.isOverlayMarkerCut(item)) continue;
+      const pos = projection([item.lon, item.lat]);
+      if (!pos) continue;
+      const marker = document.createElement('button');
+      marker.type = 'button';
+      marker.className = 'news-location-marker';
+      marker.style.cssText = 'position:absolute;width:24px;height:24px;border:0;padding:0;border-radius:50%;transform:translate(-50%,-50%) scale(var(--marker-scale,1));transform-origin:center;z-index:53;pointer-events:auto;cursor:pointer';
+      marker.style.left = `${pos[0]}px`;
+      marker.style.top = `${pos[1]}px`;
+      marker.style.background = `radial-gradient(circle, ${getThreatColor(item.threatLevel)} 4px, transparent 4px)`;
+      marker.title = item.title;
+      marker.setAttribute('aria-label', item.title);
+      marker.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const rect = this.container.getBoundingClientRect();
+        this.popup.show({ type: 'news', data: item, x: event.clientX - rect.left, y: event.clientY - rect.top });
+        this.onNewsClick?.(item);
+      });
+      this.appendOverlay(marker);
+    }
     // Strategic waterways
     if (this.state.layers.waterways) {
       this.renderWaterways(projection);
@@ -2237,7 +2357,7 @@ export class MapComponent {
     }
 
     // Iran events (severity-colored circles matching DeckGL layer)
-    if (this.state.layers.iranAttacks && this.iranEvents.length > 0) {
+    if (this.state.layers.iranAttacks && slices.iranEvents.length > 0) {
       slices.iranEvents.forEach((ev) => {
         if (this.isOverlayMarkerCut(ev)) return;
         const pos = projection([ev.longitude, ev.latitude]);
@@ -2450,7 +2570,7 @@ export class MapComponent {
     }
 
     if (this.state.layers.radiationWatch) {
-      this.radiationObservations.forEach((observation) => {
+      slices.radiationObservations.forEach((observation) => {
         if (this.isOverlayMarkerCut(observation)) return;
         const pos = projection([observation.lon, observation.lat]);
         if (!pos) return;
@@ -2485,7 +2605,7 @@ export class MapComponent {
 
     // Internet Outages (severity colors)
     if (this.state.layers.outages) {
-      this.outages.forEach((outage) => {
+      slices.outages.forEach((outage) => {
         if (this.isOverlayMarkerCut(outage)) return;
         const pos = projection([outage.lon, outage.lat]);
         if (!pos) return;
@@ -2522,7 +2642,7 @@ export class MapComponent {
 
     // Cable advisories & repair ships
     if (this.state.layers.cables) {
-      this.cableAdvisories.forEach((advisory) => {
+      slices.cableAdvisories.forEach((advisory) => {
         if (this.isOverlayMarkerCut(advisory)) return;
         const pos = projection([advisory.lon, advisory.lat]);
         if (!pos) return;
@@ -3177,7 +3297,6 @@ export class MapComponent {
     }
 
     // Protests / Social Unrest Events (severity colors + icons) - with clustering
-    // Filter to show only significant events on map (all events still used for CII analysis)
     if (this.state.layers.protests) {
       const significantProtests = this.keepBudgetedMarkers(slices.protests);
 
@@ -3206,9 +3325,11 @@ export class MapComponent {
           badge.className = 'cluster-badge';
           badge.textContent = String(cluster.items.length);
           div.appendChild(badge);
-          div.title = `${primaryEvent.country}: ${cluster.items.length} ${t('popups.events')}`;
+          div.title = `${primaryEvent.country}: ${cluster.items.length} ${t('popups.protest.records')}`;
         } else {
-          div.title = `${primaryEvent.city || primaryEvent.country} - ${primaryEvent.eventType} (${primaryEvent.severity})`;
+          div.title = primaryEvent.sourceType === 'gdelt'
+            ? `${primaryEvent.city || primaryEvent.country} - ${t('popups.protest.mediaSignal')}`
+            : `${primaryEvent.city || primaryEvent.country} - ${primaryEvent.eventType} (${primaryEvent.severity})`;
           if (primaryEvent.validated) {
             div.classList.add('validated');
           }
@@ -3240,7 +3361,7 @@ export class MapComponent {
 
     // Flight Delays (delay severity colors + ✈️ icons)
     if (this.state.layers.flights) {
-      this.flightDelays.forEach((delay) => {
+      slices.flightDelays.forEach((delay) => {
         if (this.isOverlayMarkerCut(delay)) return;
         const pos = projection([delay.lon, delay.lat]);
         if (!pos) return;
@@ -3320,7 +3441,7 @@ export class MapComponent {
     // Military Tracking (flights and vessels)
     if (this.state.layers.military) {
       // Render individual flights
-      this.militaryFlights.forEach((flight) => {
+      slices.militaryFlights.forEach((flight) => {
         if (this.isOverlayMarkerCut(flight)) return;
         const pos = projection([flight.lon, flight.lat]);
         if (!pos) return;
@@ -3389,7 +3510,7 @@ export class MapComponent {
       });
 
       // Render flight clusters
-      this.militaryFlightClusters.forEach((cluster) => {
+      slices.militaryFlightClusters.forEach((cluster) => {
         if (this.isOverlayMarkerCut(cluster)) return;
         const pos = projection([cluster.lon, cluster.lat]);
         if (!pos) return;
@@ -3425,7 +3546,7 @@ export class MapComponent {
 
       // Military Vessels (warships, carriers, submarines)
       // Render individual vessels
-      this.militaryVessels.forEach((vessel) => {
+      slices.militaryVessels.forEach((vessel) => {
         if (this.isOverlayMarkerCut(vessel)) return;
         const pos = projection([vessel.lon, vessel.lat]);
         if (!pos) return;
@@ -3493,7 +3614,7 @@ export class MapComponent {
       });
 
       // Render vessel clusters
-      this.militaryVesselClusters.forEach((cluster) => {
+      slices.militaryVesselClusters.forEach((cluster) => {
         if (this.isOverlayMarkerCut(cluster)) return;
         const pos = projection([cluster.lon, cluster.lat]);
         if (!pos) return;
@@ -3528,9 +3649,30 @@ export class MapComponent {
       });
     }
 
+    // After military markers so an emergency-squawking military aircraft keeps
+    // its emergency marker on top and clickable.
+    if (this.state.layers.aircraftEmergencies) {
+      for (const aircraft of this.emergencyMarkers) {
+        const point = projection([aircraft.lon, aircraft.lat]);
+        if (!point) continue;
+        const marker = document.createElement('button');
+        marker.type = 'button';
+        marker.className = 'aircraft-emergency-marker';
+        marker.textContent = `✈ ${aircraft.squawk}`;
+        marker.setAttribute('aria-label', `Reported squawk ${aircraft.squawk}, aircraft ${aircraft.address}`);
+        marker.style.left = `${point[0]}px`;
+        marker.style.top = `${point[1]}px`;
+        marker.onclick = event => {
+          event.stopPropagation();
+          this.container.dispatchEvent(new CustomEvent('aircraft-emergency-select', { detail: aircraft.address }));
+        };
+        this.appendOverlay(marker);
+      }
+    }
+
     // Natural Events (NASA EONET) - part of NATURAL layer
     if (this.state.layers.natural) {
-      this.naturalEvents.forEach((event) => {
+      slices.naturalEvents.forEach((event) => {
         if (this.isOverlayMarkerCut(event)) return;
         const pos = projection([event.lon, event.lat]);
         if (!pos) return;
@@ -3576,7 +3718,7 @@ export class MapComponent {
 
     // Satellite Fires (NASA FIRMS) - separate fires layer
     if (this.state.layers.fires) {
-      this.firmsFireData.forEach((fire) => {
+      slices.fires.forEach((fire) => {
         if (this.isOverlayMarkerCut(fire)) return;
         const pos = projection([fire.lon, fire.lat]);
         if (!pos) return;
@@ -3646,6 +3788,12 @@ export class MapComponent {
   // add .markers-settled on the wrapper so main.css stops the infinite pulses
   // and their compositing layers are released while the map is idle.
   private armMarkerSettle(): void {
+    // Low-end devices skip the attention window: every render restarts ~150
+    // pulses, including the non-compositable conflict-zone fill.
+    if (this.lowEndDevice) {
+      this.wrapper.classList.add('markers-settled');
+      return;
+    }
     this.wrapper.classList.remove('markers-settled');
     if (this.markerSettleTimer !== null) clearTimeout(this.markerSettleTimer);
     this.markerSettleTimer = setTimeout(() => {
@@ -3787,31 +3935,16 @@ export class MapComponent {
             previewDiv.appendChild(span);
           }
 
-          const pinBtn = document.createElement('button');
-          pinBtn.className = 'webcam-pin-btn';
           const wcId = cam.webcamId;
-          if (isPinned(wcId)) {
-            pinBtn.classList.add('webcam-pin-btn--pinned');
-            pinBtn.textContent = '\u{1F4CC} Pinned';
-            pinBtn.disabled = true;
-          } else {
-            pinBtn.textContent = '\u{1F4CC} Pin';
-            pinBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              pinWebcam({
-                webcamId: wcId,
-                title: cam.title || img?.title || '',
-                lat: cam.lat,
-                lng: cam.lng,
-                category: cam.category || 'other',
-                country: cam.country || '',
-                playerUrl: img?.playerUrl || '',
-              });
-              pinBtn.classList.add('webcam-pin-btn--pinned');
-              pinBtn.textContent = '\u{1F4CC} Pinned';
-              pinBtn.disabled = true;
-            });
-          }
+          const pinBtn = mountWebcamPinButton(() => ({
+            webcamId: wcId,
+            title: cam.title || img?.title || '',
+            lat: cam.lat,
+            lng: cam.lng,
+            category: cam.category || 'other',
+            country: cam.country || '',
+            playerUrl: img?.playerUrl || '',
+          }));
           tooltip.appendChild(pinBtn);
         });
       });
@@ -4211,6 +4344,7 @@ export class MapComponent {
   }
 
   public setView(view: MapView, zoom?: number): void {
+    this.pendingCenter = null;
     this.state.view = view;
 
     // Region-specific zoom and pan settings
@@ -4775,6 +4909,10 @@ export class MapComponent {
     });
   }
 
+  public setOnNewsClick(callback: (item: Pick<NewsLocationMarker, 'article' | 'title'>) => void): void {
+    this.onNewsClick = callback;
+  }
+
   public onHotspotClicked(callback: (hotspot: Hotspot) => void): void {
     this.onHotspotClick = callback;
   }
@@ -4818,6 +4956,7 @@ export class MapComponent {
   }
 
   public getCenter(): { lat: number; lon: number } | null {
+    if (this.pendingCenter) return { ...this.pendingCenter };
     const { width, height } = this.readContainerSize();
     const projection = this.getProjection(width, height);
     if (!projection.invert) return null;
@@ -4867,6 +5006,11 @@ export class MapComponent {
   public setCenter(lat: number, lon: number): void {
     console.log('[Map] setCenter called:', { lat, lon });
     const { width, height } = this.readContainerSize();
+    if (width === 0 || height === 0) {
+      this.pendingCenter = { lat, lon };
+      return;
+    }
+    this.pendingCenter = null;
     const projection = this.getProjection(width, height);
     const pos = projection([lon, lat]);
     console.log('[Map] projected pos:', pos, 'container:', { width, height }, 'zoom:', this.state.zoom);
@@ -4893,9 +5037,9 @@ export class MapComponent {
     this.render();
   }
 
-  public setEarthquakes(earthquakes: Earthquake[]): void {
+  public setEarthquakes(earthquakes: Earthquake[], options: { replaceEmpty?: boolean } = {}): void {
     console.log('[Map] setEarthquakes called with', earthquakes.length, 'earthquakes');
-    if (earthquakes.length > 0 || this.earthquakes.length === 0) {
+    if (options.replaceEmpty || earthquakes.length > 0 || this.earthquakes.length === 0) {
       this.earthquakes = earthquakes;
     } else {
       console.log('[Map] Keeping existing', this.earthquakes.length, 'earthquakes (new data was empty)');
@@ -4962,6 +5106,11 @@ export class MapComponent {
     this.render();
   }
 
+  public setAircraftEmergencies(markers: import('../../shared/aircraft-emergencies').EmergencyMapMarker[]): void {
+    this.emergencyMarkers = markers;
+    this.render();
+  }
+
   public setMilitaryVessels(vessels: MilitaryVessel[], clusters: MilitaryVesselCluster[] = []): void {
     this.militaryVessels = vessels;
     this.militaryVesselClusters = clusters;
@@ -4970,6 +5119,11 @@ export class MapComponent {
 
   public setNaturalEvents(events: NaturalEvent[]): void {
     this.naturalEvents = events;
+    this.render();
+  }
+
+  public setCrossBorderArrivals(data: CrossBorderData): void {
+    this.crossBorderPoints = [...data.points, ...(data.deaths ?? [])];
     this.render();
   }
 
@@ -4997,8 +5151,9 @@ export class MapComponent {
     this.render();
   }
 
-  public setNewsLocations(_data: Array<{ lat: number; lon: number; title: string; threatLevel: string; timestamp?: Date }>): void {
-    // SVG/mobile fallback intentionally skips news locations to stay lightweight.
+  public setNewsLocations(data: NewsLocationMarker[]): void {
+    this.newsLocations = data;
+    this.render();
   }
 
   public setTechActivity(activities: TechHubActivity[]): void {

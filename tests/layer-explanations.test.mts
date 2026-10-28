@@ -35,6 +35,14 @@ function constNumber(path: string, name: string): number {
   return evalNumberExpression(match[1]);
 }
 
+function refreshIntervalMinutes(name: string): number {
+  const block = readSource('src/config/variants/base.ts').match(/export const REFRESH_INTERVALS = \{([\s\S]*?)\n\};/);
+  assert.ok(block, 'src/config/variants/base.ts must define REFRESH_INTERVALS');
+  const match = block[1].match(new RegExp(`\\n\\s*${name}:\\s*([^,\\n]+),`));
+  assert.ok(match, `REFRESH_INTERVALS must define ${name}`);
+  return evalNumberExpression(match[1]) / 60_000;
+}
+
 function relayConstMinutes(name: string): number {
   const match = relaySource.match(new RegExp(`const\\s+${name}\\s*=\\s*([^;\\n]+);`));
   assert.ok(match, `scripts/ais-relay.cjs must define ${name}`);
@@ -118,6 +126,7 @@ describe('layer explanation metadata', () => {
       'weather',
       'canadaRoads', 'canadaAlerts',
       'flights',
+      'aircraftEmergencies',
       'ais',
       'waterways',
       'tradeRoutes',
@@ -182,6 +191,12 @@ describe('layer explanation metadata', () => {
     assertDuration(renderedFreshnessText('canadaAlerts'), /([0-9]+)-\s*(minute)\s+freshness budget/i, healthMaxStale('canadaAlerts'), 'alberta AEA health freshness budget');
     assert.equal(healthMaxStale('canadaAlerts'), maxStaleMin('scripts/seed-alberta-emergency-alert.mjs', 'alberta-aea'), 'canadaAlerts health budget must match seeder maxStaleMin');
 
+    const nmsService = JSON.parse(readSource('scripts/railway-services.json')).find((s: { service: string }) => s.service === 'seed-notam-nms');
+    assert.equal(nmsService?.cronSchedule, '*/5 * * * *', 'seed-notam-nms runs every 5 minutes');
+    // Airspace NOTAMs are drawn by the Aviation layer, so its card owns the NMS cadence.
+    assertDuration(renderedFreshnessText('flights'), /every\s+([0-9]+)\s+(minute)s?/i, 5, 'FAA NMS seed cadence');
+    assertDuration(renderedFreshnessText('flights'), /([0-9]+)-\s*(minute)\s+freshness budget/i, healthMaxStale('notamAirspace'), 'FAA NMS health freshness budget');
+
     const aviationCadenceMin = maxStaleMin('scripts/seed-aviation.mjs', 'intl') / 3;
     assertDuration(renderedFreshnessText('flights'), /([0-9]+)-\s*(minute)\s+cadence/i, aviationCadenceMin, 'aviation disruption seed cadence');
     assertDuration(
@@ -215,11 +230,12 @@ describe('layer explanation metadata', () => {
       assertDuration(text, /refresh\s+every\s+([0-9]+)\s+(minute)s?/i, relayConstMinutes('TRANSIT_SUMMARY_INTERVAL_MS'), `${layer} transit-summary cadence`);
     }
 
+    // Hotspot levels are recomputed from the dashboard news, which reloads on the feeds refresh loop.
     assertDuration(
       renderedFreshnessText('hotspots'),
-      /around\s+([0-9]+)\s+(minute)s?/i,
-      constNumber('src/services/live-news.ts', 'CACHE_TTL') / 60_000,
-      'hotspot live-news RSS cache',
+      /around\s+([0-9]+)\s+(minute)s?\s+apart/i,
+      refreshIntervalMinutes('feeds'),
+      'hotspot news refresh cadence',
     );
   });
 
