@@ -2960,13 +2960,15 @@ describe('scheduled workflows run only in the upstream repository', () => {
   // ~1,600 runner IPs against ~17 upstream runs. Push, PR and manual runs in
   // forks stay allowed; only the fork's own schedule is skipped.
   const FORK_GUARD = "github.event_name != 'schedule' || github.repository == 'koala73/worldmonitor'";
+  // Fork-only: this workflow exists to run on the fork's own schedule.
+  const FORK_SCHEDULED = new Set(['sync-upstream.yml']);
 
   it('every job in a scheduled workflow carries the fork guard', () => {
     const missing: string[] = [];
     for (const name of readdirSync(workflowsDir).filter((n) => n.endsWith('.yml') || n.endsWith('.yaml'))) {
       const workflow = YAML.parse(read(resolve(workflowsDir, name)));
       const on = workflow.on ?? workflow[true as unknown as string];
-      if (!on || typeof on !== 'object' || !('schedule' in on)) continue;
+      if (!on || typeof on !== 'object' || !('schedule' in on) || FORK_SCHEDULED.has(name)) continue;
       for (const [jobId, job] of Object.entries(workflow.jobs as Record<string, { if?: unknown }>)) {
         if (!String(job.if ?? '').includes(FORK_GUARD)) missing.push(`${name}#${jobId}`);
       }
