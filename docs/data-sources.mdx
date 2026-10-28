@@ -256,7 +256,7 @@ Deep dives: [News feeds panel](/panels/news-feeds) · [News digest & briefing me
 
 Rather than each client browser independently fetching dozens of RSS feeds through individual edge function invocations, the `listFeedDigest` RPC endpoint aggregates all feeds server-side into a single categorized response.
 
-The public server digest feed inventory below is source-backed from `server/worldmonitor/news/v1/_feeds.ts`; that code file remains the source of truth for exact URLs, Google News query wrappers, and locale-specific URL parameters. Feed choices are intentionally visible here so regional coverage, official-source inclusion, and politically sensitive inclusions such as `Trump - Truth Social` can be reviewed rather than hidden behind a generic "RSS" label. Language-scoped feeds are marked with their language code and are only included when the request language matches. The `full` variant also appends `INTEL_SOURCES` under the `intel` category.
+The public server digest feed inventory below is source-backed from `shared/news-catalog.json` (each feed's server placements); that catalog is the source of truth for exact URLs, Google News query wrappers, and locale-specific URL parameters. Feed choices are intentionally visible here so regional coverage, official-source inclusion, and politically sensitive inclusions such as `Trump - Truth Social` can be reviewed rather than hidden behind a generic "RSS" label. Language-scoped feeds are marked with their language code and are only included when the request language matches. The `full` variant also appends `INTEL_SOURCES` under the `intel` category.
 
 | Variant | Category | Server feed sources |
 | --- | --- | --- |
@@ -587,6 +587,7 @@ Natural hazards and climate stress, merged from independent government and UN-co
 | Hong Kong Observatory | Local tropical-cyclone warning signals | [data.weather.gov.hk](https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=warnsum&lang=en) |
 | Japan Meteorological Agency | Western North Pacific tropical-cyclone observations | [jma.go.jp](https://www.jma.go.jp/bosai/map.html#contents=typhoon) |
 | Open-Meteo | ERA5 reanalysis climate data | [open-meteo.com](https://open-meteo.com) |
+| Copernicus Sentinel-5P TROPOMI | Tropospheric NO2 column aggregated daily over 167 countries and 32 industrial clusters as a year-over-year activity direction (Sentinel Hub Statistical API). Contains modified Copernicus Sentinel data. | [dataspace.copernicus.eu](https://dataspace.copernicus.eu) |
 | US National Weather Service | Official US weather alerts (polygon tier) | [api.weather.gov](https://api.weather.gov/alerts/active) |
 | Environment and Climate Change Canada | Official Canadian weather alerts (polygon tier) | [api.weather.gc.ca](https://api.weather.gc.ca) |
 | WMO Severe Weather Information Centre | Official CAP from WMO members, merged into `weather:alerts:v1` (point tier) | [severeweather.wmo.int](https://severeweather.wmo.int/json/wmo_all.json) |
