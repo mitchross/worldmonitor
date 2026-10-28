@@ -93,6 +93,8 @@ jobs:
         if: steps.check.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
+          # gh prefers a remote named "upstream", so without this it targets koala73.
+          GH_REPO: ${{ github.repository }}
           CONFLICTS: ${{ steps.merge.outputs.conflicts }}
         run: |
           if [ "$CONFLICTS" = "true" ]; then
