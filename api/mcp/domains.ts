@@ -46,6 +46,7 @@ export const TOOL_CATEGORY_BY_NAME: Readonly<Record<string, McpToolCategoryId>> 
   // Markets & economy
   get_market_data: 'markets-economy',
   get_economic_data: 'markets-economy',
+  get_no2_activity: 'markets-economy',
   get_procurement_opportunities: 'markets-economy',
   get_company_intelligence: 'markets-economy',
   get_country_macro: 'markets-economy',
@@ -89,6 +90,7 @@ export const TOOL_CATEGORY_BY_NAME: Readonly<Record<string, McpToolCategoryId>> 
   get_country_brief_section: 'geopolitical-security',
   get_country_brief: 'geopolitical-security',
   get_news_intelligence: 'geopolitical-security',
+  get_media_perspective: 'geopolitical-security',
   get_cyber_threats: 'geopolitical-security',
   get_sanctions_data: 'geopolitical-security',
   get_social_velocity: 'geopolitical-security',

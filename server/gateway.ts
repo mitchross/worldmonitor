@@ -436,6 +436,7 @@ const RPC_CACHE_TIER: Record<string, CacheTier> = {
   // holding one body for an hour made the CDN the freshness floor.
   '/api/news/v1/list-feed-digest': 'fast',
   '/api/news/v1/list-country-headlines': 'fast',
+  '/api/news/v1/list-media-perspective': 'fast',
   '/api/news/v1/list-label-changes': 'fast',
   // #9093 operator queue: never cached, it is gated by a secret header.
   '/api/news/v1/list-error-reports': 'no-store',
@@ -483,6 +484,8 @@ const RPC_CACHE_TIER: Record<string, CacheTier> = {
   '/api/economic/v1/get-economic-calendar': 'slow',
   '/api/economic/v1/get-china-macro-snapshot': 'slow',
   '/api/economic/v1/get-china-activity-nowcast': 'medium',
+  // Daily seed (#9722); the CDN key carries the country_code, region_id and kind filters.
+  '/api/economic/v1/get-no2-activity': 'slow',
   '/api/intelligence/v1/list-market-implications': 'slow',
   '/api/intelligence/v1/list-wsb-tickers': 'no-store',
   '/api/economic/v1/get-ecb-fx-rates': 'slow',
@@ -2027,6 +2030,16 @@ export function createDomainGateway(
       && Boolean(enterpriseCredential)
       && !isUserApiKey
       && keyCheck.kind === 'enterprise';
+    if (requiresDirectLlmQuota && isEnterpriseAuth && enterpriseCredential !== wmKey) {
+      const origin = request.headers.get('Origin');
+      const hasRequestIntent = origin
+        ? isAllowedOrigin(origin)
+        : request.headers.get('Sec-Fetch-Site') === 'same-origin';
+      if (!hasRequestIntent) {
+        emitRequest(403, 'auth_403', null);
+        return createGatewayAuthErrorResponse(403, 'Request intent required for cookie-authorized AI work', corsHeaders);
+      }
+    }
     if (
       !dockerSelfHostSessionAuthorized &&
       !isEnterpriseAuth &&
@@ -2182,7 +2195,9 @@ export function createDomainGateway(
     const hasIdempotencyKey = request.method === 'POST'
       && request.headers.has(IDEMPOTENCY_HEADER)
       && !IDEMPOTENCY_EXEMPT_RPC_PATHS.has(pathname);
-    const idScope = identityForScope.principal_id ?? identityForScope.customer_id;
+    const idScope = isUserApiKey && pathname === '/api/v2/shipping/webhooks'
+      ? userKeyPrincipal?.keyHash ?? null
+      : identityForScope.principal_id ?? identityForScope.customer_id;
     const idempotencyScope = idScope ? `${identityForScope.auth_kind}:${idScope}` : null;
 
     // Look up an existing idempotency record before rate-limit/quota counters.

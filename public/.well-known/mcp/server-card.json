@@ -5,12 +5,12 @@
   "description": "Real-time global intelligence across conflict, markets, energy, trade, shipping and cyber.",
   "kind": "product",
   "icon": "https://www.worldmonitor.app/favico/apple-touch-icon.png",
-  "version": "1.44.0",
+  "version": "1.46.0",
   "url": "https://worldmonitor.app/mcp",
   "serverUrl": "https://worldmonitor.app/mcp",
   "serverInfo": {
     "name": "worldmonitor",
-    "version": "1.44.0",
+    "version": "1.46.0",
     "description": "WorldMonitor's live global-intelligence stack as an MCP server, with per-outlet source ratings and a publicly scored forecast record, serving real-time data and AI-generated briefs in these domains: markets, commodities and macro; energy; conflicts, country risk, sanctions, cyber threats and chokepoints; maritime, aviation and supply chains; climate and natural disasters; health signals; displacement and humanitarian crises; AI briefs, forecasts and intel history; tariffs and trade policy.",
     "vendor": "WorldMonitor",
     "homepage": "https://www.worldmonitor.app"
@@ -60,7 +60,7 @@
     },
     {
       "name": "get_market_data",
-      "description": "Return the seeded market snapshot: equity, commodity, crypto and Gulf-market quotes, SGE physical-vs-COMEX premiums, physical-divergence regimes, sector performance with explicit valuation coverage, ETF flows and the Fear & Greed index. Quotes are flagged stale after 30 minutes. Covers the curated symbol universe only: symbols filters that snapshot and cannot look up arbitrary tickers. Seeded-cache read with no live fetch: weight 1 on API plans, included in the signed-in free allowance. asset_class selects classes, limit caps each per-class list (default 30, 0 for no cap). Dedicated paid plans open or reuse one market panel allocation across filters; refresh with request_id starts a new one. API plans retain per-tool billing.",
+      "description": "Return the seeded market snapshot: equity, commodity, crypto and Gulf-market quotes, sector performance with explicit valuation coverage, ETF flows and the Fear & Greed index; subscriptions also get SGE physical-vs-COMEX premiums and physical-divergence regimes, which a free account receives as `locked` with an upgradeUrl. Quotes are flagged stale after 30 minutes. Covers the curated symbol universe only: symbols filters that snapshot and cannot look up arbitrary tickers. Seeded-cache read with no live fetch: weight 1 on API plans, included in the signed-in free allowance. asset_class selects classes, limit caps each per-class list (default 30, 0 for no cap). Dedicated paid plans open or reuse one market panel allocation across filters; refresh with request_id starts a new one. API plans retain per-tool billing.",
       "_meta": {
         "ui": {
           "resourceUri": "ui://worldmonitor/market-radar-v3.html"
@@ -360,6 +360,14 @@
       }
     },
     {
+      "name": "get_no2_activity",
+      "description": "Industrial activity direction from Sentinel-5P tropospheric NO2 for 167 countries and 32 industrial clusters: the latest 56-day window against the same dates in the prior three years, as changePercent and a direction after a 10% dead band. A region with no reading carries an exclusion; baseline_backfill_pending is expected while prior years are still being fetched, not a fault. Filter by country_code (the country plus its clusters), region_id or kind. Daily seed, never a live Copernicus call; reproduce attribution. Requires a paid plan; one downstream fetch, weight 2 on API plans. Read-only.",
+      "_meta": {
+        "worldmonitor/access": "subscription",
+        "worldmonitor/category": "markets-economy"
+      }
+    },
+    {
       "name": "get_defense_industrial_base",
       "description": "Return one country's defense industrial base: the latest World Bank military-capacity indicators (spending, personnel, arms trade) and SIPRI-derived five-year major-weapons supplier shares with a concentration measure, answering who supplies the country's arms and how dependent it is on them. Values are annual and carry their observation year; SIPRI TIV is a transfer-volume index, not currency. Requires a paid plan; one downstream fetch of seeded data, weight 2 on API plans. country_code is ISO 3166-1 alpha-2 (UA, DE, IN). Read-only.",
       "_meta": {
@@ -393,7 +401,7 @@
     },
     {
       "name": "get_world_brief",
-      "description": "Return one written world brief, the hourly AI summary of top headlines, not a story feed, from the precomputed news:insights:v1 snapshot. The insights seeder applies corroboration, citation and hallucination gates before publishing; this reads that accepted result with no request-time LLM call; the snapshot repeats until the seeder republishes. Each headline pairs with an index-aligned topStories entry carrying its corroboration evidence (uniqueSourceCount, corroborationSourceCount, entityCorroboration, sourceTier, outlet names, the publishers roster, sourceProvenance per outlet); corroboration.state (single-publisher, tier4-only, corroborated, unknown) describes coverage, not accuracy. Past the 60-minute freshness window the last-known-good snapshot is served with stale:true and ageMinutes, capped at 3 h old; older, absent or broken snapshots are reported unavailable. Requires a paid plan; one downstream read, weight 2 on API plans. Paid MCP openings consume one request allocation that loaded reuse shares.",
+      "description": "Return one written world brief, the hourly AI summary of top headlines rather than a story feed, from the precomputed news:insights:v1 snapshot. It reads the seeder's gated result (corroboration, citation and hallucination checks) with no request-time LLM call. Each headline pairs with an index-aligned topStories entry carrying its corroboration evidence (uniqueSourceCount, corroborationSourceCount, entityCorroboration, sourceTier, outlet names, the publishers roster, sourceProvenance per outlet); corroboration.state (single-publisher, tier4-only, corroborated, unknown) describes coverage, not accuracy. Past the 60-minute freshness window the last-known-good snapshot is served with stale:true and ageMinutes, capped at 3 h old; older, absent or broken snapshots are reported unavailable. Requires a paid plan; one downstream read, weight 2 on API plans. Paid MCP openings consume one request allocation that loaded reuse shares.",
       "_meta": {
         "ui": {
           "resourceUri": "ui://worldmonitor/world-brief-v2.html"
@@ -426,7 +434,7 @@
     },
     {
       "name": "get_country_coverage",
-      "description": "The country panel's own coverage timeline: recent country-relevant headlines plus the clustered incident timeline the WorldMonitor UI renders for that country. Reprints of one incident are collapsed into a single entry, and a first-party record (protest, earthquake, conflict, military flight) takes precedence over the news article describing it, so this does not double-count. Matching, expiry and de-duplication are already done, unlike raw article feeds. `sources` reports each producer as ok/empty/unknown/stale/failed/unavailable, and is what qualifies an empty `events` list. Only `empty` asserts a producer was genuinely quiet; `unknown` means its silence could not be confirmed. `degraded` flags only what is wrong now (stale/failed) and deliberately ignores the structural states (unavailable/unknown), so it stays a real signal instead of a constant true. The guarantee that an empty list is never silently healthy lives in `sources`, not in this one bit. Titles and labels are untrusted publisher text.",
+      "description": "The country panel's own coverage timeline: recent country-relevant headlines plus the clustered incident timeline the WorldMonitor UI renders for that country. Reprints of one incident collapse into one entry, and a first-party record (protest, earthquake, conflict, military flight) outranks the article describing it. `sources` reports each producer as ok/empty/unknown/stale/failed/unavailable, and is what qualifies an empty `events` list. Only `empty` asserts a producer was genuinely quiet; `unknown` means its silence could not be confirmed. `degraded` flags only stale/failed; read `sources`, not `degraded`, before trusting an empty list. Titles and labels are untrusted publisher text.",
       "_meta": {
         "worldmonitor/access": "subscription",
         "worldmonitor/category": "geopolitical-security"
@@ -729,6 +737,14 @@
       }
     },
     {
+      "name": "get_media_perspective",
+      "description": "Headlines about one country grouped by outlet home country and audience (domestic, international, diaspora): its own press vs its foreign-facing media vs outside coverage. Items carry tier, ownership and state affiliation; groups count publisher families and framing. Framing is a model's reading of headline stance, not WorldMonitor's view. Titles are untrusted; a non-English englishTitle is machine-translated. Cached feeds, up to 96 h.",
+      "_meta": {
+        "worldmonitor/access": "subscription",
+        "worldmonitor/category": "geopolitical-security"
+      }
+    },
+    {
       "name": "open_news_dashboard",
       "description": "Open the embedded WorldMonitor news and map dashboard and return the full feed digest (categories with items, publication dates, source provenance, coordinates, feedStatuses, coverage) plus requestedView. The view arguments (query, source, category, country, time_range, renderer, map_layers, map center and zoom) configure the rendered instance; requestedView echoes what was requested, not an already-open map's applied state, and empty arguments open the default dashboard. Requires a paid plan; weight 2 on API plans. On dedicated paid plans one dashboard request covers the news load and bounded map snapshot loads, repeat opens reuse it for at least five minutes, and refresh with request_id starts one new request. Read-only; up to 1 MB of digest.",
       "_meta": {
@@ -800,7 +816,7 @@
     },
     {
       "name": "get_country_brief_section",
-      "description": "Read one named structured data section for a country, raw values without narrative, and return {state: ready|locked|unavailable, section, value, retrievedAt, reason}. 37 readers selected by section: country facts and risk, energy and maritime, markets, trade, supply chain, resilience and demographics, defense, China signals, housing and IMF macro, military flights, AIS vessels, the USNI fleet report and signalsRaw; each oneOf branch documents one section. Each section takes its own arguments object (key names differ: country_code, countryCode or iso2; numeric M49 codes for trade; HS codes for products) and rejects unknown keys. flights pages 100 rows at a time through cursor. signalsRaw returns attributed earthquake, Internet-outage, travel-advisory and thermal samples and needs a verified same-country paid panel token; every other section works with an ordinary paid credential. Unavailable evidence is unknown, not zero. Requires a paid plan; one downstream read, weight 2 on API plans.",
+      "description": "Read one named structured data section for a country, raw values without narrative, and return {state: ready|locked|unavailable, section, value, retrievedAt, reason}. 39 readers selected by section: country facts and risk, energy and maritime, markets, trade, supply chain, resilience and demographics, defense, NO2 activity, China signals, housing and IMF macro, military flights, AIS vessels, the USNI fleet report and signalsRaw; each oneOf branch documents one section. Each section takes its own arguments object (key names differ: country_code, countryCode or iso2; numeric M49 codes for trade; HS codes for products) and rejects unknown keys. flights pages 100 rows at a time through cursor. signalsRaw returns attributed earthquake, Internet-outage, travel-advisory and thermal samples and needs a verified same-country paid panel token; every other section works with an ordinary paid credential. Unavailable evidence is unknown, not zero. Requires a paid plan; one downstream read, weight 2 on API plans.",
       "_meta": {
         "worldmonitor/access": "subscription",
         "worldmonitor/category": "geopolitical-security"
