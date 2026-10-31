@@ -13,13 +13,37 @@ export interface BrowserCatalogFeed {
   type?: string;
   lang?: string;
   strategicDefault?: boolean;
+  /**
+   * No digest carries this source in this category yet, so a panel that reads
+   * digests must still fetch it directly. Cleared as sources gain server
+   * placements (shared/news-catalog-pending-migration.json).
+   */
+  browserOnly?: true;
+  /**
+   * The only digest language that carries this source, set whenever the
+   * server restricts it to one language. It can differ from `lang`: BBC
+   * Persian is `fa` on the server but unrestricted in the browser, and The
+   * Hindu is browser-`en` but in every digest. Absent means every digest
+   * language carries it. See digestCarriesFeed.
+   */
+  digestLang?: string;
+}
+
+/**
+ * Whether the `language` digest carries this source in its placements: the
+ * server's isServerFeedReachableForLanguage, read from the browser catalog.
+ */
+export function digestCarriesFeed(feed: Pick<BrowserCatalogFeed, 'browserOnly' | 'digestLang'>, language: string): boolean {
+  return !feed.browserOnly && (feed.digestLang === undefined || feed.digestLang === language);
 }
 
 export interface BrowserCatalog {
-  version: 2;
+  version: 3;
   /** edition → category → feeds, in browser order. Excludes intel. */
   editions: Record<string, Record<string, BrowserCatalogFeed[]>>;
   intel: BrowserCatalogFeed[];
+  /** edition → categories its server digest builds (the catalog's server layout). */
+  digestLayout: Record<string, string[]>;
 }
 
 /** Placement edition for intel sources; it has one category, `intel`. */
@@ -34,4 +58,14 @@ export function browserCategoryFeeds(catalog: BrowserCatalog, edition: string): 
 
 export function browserIntelSources(catalog: BrowserCatalog): BrowserCatalogFeed[] {
   return catalog.intel;
+}
+
+/**
+ * Editions whose digest carries `category`, in layout order. A panel the user
+ * added from another edition reads these digests instead of fetching feeds.
+ */
+export function digestEditionsForCategory(catalog: BrowserCatalog, category: string): string[] {
+  return Object.entries(catalog.digestLayout)
+    .filter(([, categories]) => categories.includes(category))
+    .map(([edition]) => edition);
 }

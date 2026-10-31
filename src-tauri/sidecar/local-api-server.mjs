@@ -920,6 +920,7 @@ const cloudPreferredPrefixes = !process.env.WS_RELAY_URL
 // generated route tables and fails when an entry is not a real RPC path, when
 // its handler reaches an upstream itself, or when a seed-only route is missing.
 const cloudPreferredExact = new Set([
+  '/api/maritime/v1/list-ukmto-incidents',
   '/api/bootstrap',
   '/api/aviation/v1/get-airport-ops-summary',
   '/api/displacement/v1/get-displacement-summary',
@@ -1007,6 +1008,8 @@ const cloudPreferredExact = new Set([
   '/api/military/v1/get-theater-posture',
   '/api/military/v1/get-usni-fleet-report',
   '/api/military/v1/list-defense-patents',
+  '/api/news/v1/list-news-pool',
+  '/api/news/v1/list-source-items',
   '/api/news/v1/summarize-article-cache',
   '/api/research/v1/list-arxiv-papers',
   '/api/research/v1/list-hackernews-items',
@@ -1065,6 +1068,19 @@ const cloudPreferredSeedOnlyPrefixes = [
   '/api/wildfire/v1/',
 ];
 const cloudPreferredAlwaysPrefixes = ['/api/scorecard/v1/'];
+// Plain api/*.js routes whose answer lives in cloud-only state: session signing
+// secrets, OAuth client records, operator Redis sets, cross-user aggregates and
+// the security-report sink. The sidecar holds none of it, so served locally
+// they answer 5xx or empty. Until #9906 they reached the cloud only by accident:
+// a static Upstash import kept them from loading on desktop at all.
+const cloudPreferredServerStateRoutes = new Set([
+  '/api/analytics-health',
+  '/api/notification-suppressions',
+  '/api/oauth/authorize',
+  '/api/oauth/register',
+  '/api/security/report',
+  '/api/wm-session',
+]);
 
 // Versioned route families (api/v{N}/{domain}) the desktop deliberately never
 // bundles — scripts/build-sidecar-handlers.mjs refuses to build an undeclared
@@ -1079,6 +1095,7 @@ const cloudOnlyRouteFamilyPrefixes = ['/api/v2/shipping/'];
 function isCloudPreferred(pathname) {
   if (cloudPreferred.has(pathname)) return true;
   if (cloudPreferredExact.has(pathname)) return true;
+  if (cloudPreferredServerStateRoutes.has(pathname)) return true;
   return cloudPreferredAlwaysPrefixes.some(p => pathname.startsWith(p))
     || cloudPreferredSeedOnlyPrefixes.some(p => pathname.startsWith(p))
     || cloudOnlyRouteFamilyPrefixes.some(p => pathname.startsWith(p))

@@ -490,7 +490,8 @@
     "fearGreed": "恐怖と貪欲",
     "marketBreadth": "市場の広がり",
     "climateNews": "気候ニュース",
-    "fx": "外国為替レート"
+    "fx": "外国為替レート",
+    "ukmtoIncidents": "UKMTO事案"
   },
   "commands": {
     "prefixes": {
@@ -1289,7 +1290,7 @@
         "ucdpEvents": "UCDPイベント",
         "displacementFlows": "避難民フロー",
         "climateAnomalies": "気候異常",
-        "weatherAlerts": "重大気象警報（NWS、ECCC、WMO SWIC）",
+        "weatherAlerts": "気象警報",
         "strategicWaterways": "戦略的水路",
         "economicCenters": "経済中心地",
         "criticalMinerals": "重要鉱物",
@@ -1311,9 +1312,9 @@
         "radiationSpike": "放射線スパイク",
         "radiationElevated": "放射線上昇",
         "canadaRoads": "Canada Roads",
-        "canadaAlerts": "Canada Alerts (AB + BC + SK)",
+        "canadaAlerts": "Canada Alerts",
         "notamAirspace": "NOTAM飛行制限空域",
-        "no2Activity": "産業活動（NO2）"
+        "no2Activity": "産業活動"
       },
       "tooltip": {
         "earthquake": "地震",
@@ -2567,7 +2568,15 @@
       "renewalFailedDesc": "サブスクリプションの更新を確認できませんでした。問題が続く場合は、請求を管理するかサポートにお問い合わせください。",
       "manageBilling": "請求を管理",
       "lapsedDesc": "Proサブスクリプションが終了しました。プレミアムアクセスを取り戻すには再登録してください。",
-      "resubscribe": "再登録"
+      "resubscribe": "再登録",
+      "billingEmailBouncedMessage": "{{email}} 宛ての請求メールが届かずに返送されています。領収書や支払いに関する通知を受け取れるよう、請求先メールアドレスを更新してください。",
+      "fixBillingEmail": "請求先メールを修正",
+      "billingEmailLabel": "新しい請求先メールアドレス",
+      "save": "保存",
+      "billingEmailUpdated": "請求先メールアドレスを {{email}} に更新しました。今後、領収書と支払いに関する通知はこのアドレスに送信されます。",
+      "billingEmailInvalid": "有効なメールアドレスを入力してください。",
+      "billingEmailSuppressed": "このアドレスにも配信できません。別のアドレスをお試しください。",
+      "billingEmailUpdateFailed": "請求先メールアドレスを更新できませんでした。もう一度お試しいただくか、繰り返し失敗する場合はサポートにお問い合わせください。"
     },
     "checkoutFailureBanner": {
       "message": "お支払いが完了できませんでした。請求はされていません。",
@@ -4038,7 +4047,7 @@
           "2": "路面状況のポリラインは、複雑な高速道路の形状を簡略化することがあります。"
         },
         "related": {
-          "0": "重大気象警報（NWS、ECCC、WMO SWIC）",
+          "0": "気象警報",
           "1": "データの鮮度ステータス"
         }
       },
@@ -4054,7 +4063,7 @@
           "2": "地図に載せられる深刻度がない項目（アルバータのCAPと色の意味、ブリティッシュコロンビアの避難状態、SaskAlertのCAP深刻度）は、値を作らず捨てます。SaskAlertの要約に出る色やレベルは、CAPの深刻度としては扱いません。"
         },
         "related": {
-          "0": "重大気象警報（NWS、ECCC、WMO SWIC）",
+          "0": "気象警報",
           "1": "自然災害レイヤー",
           "2": "データの鮮度ステータス"
         }
@@ -4087,7 +4096,7 @@
         },
         "related": {
           "0": "自然災害レイヤーのポップアップ",
-          "1": "重大気象警報（NWS、ECCC、WMO SWIC）",
+          "1": "気象警報",
           "2": "国の概要の自然シグナル"
         }
       },
@@ -4140,5 +4149,14 @@
         "0": "レイヤーガイド"
       }
     }
+  },
+  "ukmto": {
+    "unavailable": "UKMTOデータを利用できません。",
+    "empty": "UKMTOから事案が返されませんでした。",
+    "stale": "情報源のデータが古くなっています。最終確認",
+    "current": "情報源確認済み",
+    "reportedClaims": "発行元の報告です。主張は調査中の場合があります。",
+    "occurred": "発生",
+    "reported": "公開"
   }
 }

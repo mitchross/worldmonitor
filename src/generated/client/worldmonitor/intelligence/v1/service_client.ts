@@ -935,6 +935,11 @@ export interface ComputeEnergyShockScenarioResponse {
   /** @deprecated */
   gasImpact?: GasImpact;
   gasSensitivity?: GasSensitivity;
+  preCrisisBaseline?: CrudeShareBaseline;
+  currentFlows?: CrudeShareBaseline;
+  /** @deprecated */
+  reserveEstimate?: ReserveEstimate;
+  reportedStocks?: ReportedStocks;
 }
 
 export interface ProductImpact {
@@ -977,6 +982,8 @@ export interface GasSensitivity {
   dataSource: string;
   dataMonth: string;
   modelBasis: string;
+  preCrisisBaseline?: LngShareBaseline;
+  currentFlows?: LngShareBaseline;
 }
 
 export interface GasStorageObservation {
@@ -985,6 +992,45 @@ export interface GasStorageObservation {
   trend: string;
   date: string;
   scope: string;
+}
+
+export interface LngShareBaseline {
+  basis: string;
+  fromMonth: string;
+  toMonth: string;
+  monthsCovered: number;
+  hormuzLngShare: number;
+  lngDisruptionTj: number;
+}
+
+export interface CrudeShareBaseline {
+  basis: string;
+  fromMonth: string;
+  toMonth: string;
+  monthsCovered: number;
+  gulfCrudeShare: number;
+  crudeLossKbd: number;
+  crudeLossAfterBypassKbd?: number;
+}
+
+export interface ReserveEstimate {
+  scope: string;
+  asOf: string;
+  credibility: string;
+  lowMb: number;
+  centralMb: number;
+  highMb: number;
+  coverDaysLow?: number;
+  coverDaysHigh?: number;
+}
+
+export interface ReportedStocks {
+  source: string;
+  month: string;
+  crudeMb: number;
+  productsMb: number;
+  totalMb: number;
+  stockDays?: number;
 }
 
 export interface GetCountryPortActivityRequest {

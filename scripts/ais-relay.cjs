@@ -74,7 +74,7 @@ const {
 } = require('./lib/occurrence-events.cjs');
 const {
   createXPostBudget,
-  DEFAULT_X_CURATED_DAILY_COVERAGE_POSTS,
+  X_SHARED_COVERAGE_MODEL,
   xPostBudgetServiceStatus,
 } = require('./lib/x-post-budget.cjs');
 const { buildClassifyCandidateMap, isStaleDigestReplay } = require('./lib/digest-stale-gate.cjs');
@@ -87,6 +87,16 @@ const {
   CLASSIFY_DIGEST_RETRY_DELAYS_MS,
   classifyDigestRetryDecision,
 } = require('./lib/classify-digest-request.cjs');
+const {
+  DIGEST_WARM_ACTIVATION_KEY,
+  DIGEST_WARM_HEARTBEAT_KEY,
+  DIGEST_WARM_HEARTBEAT_TTL_SECONDS,
+  DIGEST_WARM_INTERVAL_MS,
+  fetchDigestWarmCell,
+  runDigestWarmCycle,
+  shouldPublishDigestWarmHeartbeat,
+  summarizeDigestWarmCycle,
+} = require('./lib/news-digest-warm.cjs');
 const {
   YahooQuoteSummaryClient,
   buildSectorSeedMeta,
@@ -2320,7 +2330,7 @@ const X_FEED_POLL_LOCK_TTL_SECONDS = 120;
 const X_POLL_STUCK_AFTER_MS = 60_000;
 const xPostBudget = createXPostBudget({
   evalCommand: upstashEval,
-  dailyCoveragePosts: DEFAULT_X_CURATED_DAILY_COVERAGE_POSTS,
+  ...X_SHARED_COVERAGE_MODEL,
 });
 
 const xState = {
@@ -4744,10 +4754,20 @@ const CLASSIFY_SEED_INTERVAL_MS = 15 * 60 * 1000;
 const CLASSIFY_CACHE_TTL = 86400;
 const CLASSIFY_SKIP_TTL = 1800;
 const CLASSIFY_BATCH_SIZE = 50;
-const CLASSIFY_VARIANTS = ['full', 'tech', 'finance', 'happy', 'commodity'];
-// Zero under RELAY_TEST_MODE so the /__test/seed-classify seam runs a full
-// five-variant cycle in milliseconds instead of twelve minutes.
-const CLASSIFY_VARIANT_STAGGER_MS = RELAY_TEST_MODE ? 0 : 3 * 60 * 1000;
+// Every edition the news digest serves, generated from shared/news-catalog.json
+// (scripts/generate-browser-news-catalog.mjs), so a new edition is classified
+// without a relay edit.
+const CLASSIFY_VARIANTS = requireShared('news-digest-editions.json');
+// The waits between editions total CLASSIFY_STAGGER_TOTAL_MS whatever the
+// edition count, leaving the rest of the 15-minute interval for classify work;
+// a fixed per-edition wait would overrun the interval as editions are added and
+// the in-flight guard would then skip every other cycle. Zero under
+// RELAY_TEST_MODE so the /__test/seed-classify seam runs a full cycle in
+// milliseconds.
+const CLASSIFY_STAGGER_TOTAL_MS = 12 * 60 * 1000;
+const CLASSIFY_VARIANT_STAGGER_MS = RELAY_TEST_MODE
+  ? 0
+  : Math.floor(CLASSIFY_STAGGER_TOTAL_MS / Math.max(1, CLASSIFY_VARIANTS.length - 1));
 
 // Relay gates — active only when RELAY_GATES_READY=1 (see Appendix E of docs/internal/news-alerts-enhancements-from-trendradar.md).
 // When the flag is set the relay becomes the sole authoritative source of rss_alert events and
@@ -5557,6 +5577,52 @@ async function startClassifySeedLoop() {
   const activeProviders = CLASSIFY_LLM_PROVIDERS.filter((p) => !!process.env[p.envKey]).map((p) => p.name);
   console.log(`[Classify] Seed loop starting (interval ${CLASSIFY_SEED_INTERVAL_MS / 1000 / 60}min, providers:${activeProviders.length ? activeProviders.join(',') : 'none'})`);
   startBootSeedLoop('Classify', 'seed-meta:classify', CLASSIFY_SEED_INTERVAL_MS, seedClassify, (e) => console.warn('[Classify] Initial seed error:', e?.message || e), (e) => console.warn('[Classify] Seed error:', e?.message || e));
+}
+
+// ─────────────────────────────────────────────────────────────
+// News digest warm cycle — requests every (edition, language) digest the
+// catalog places a feed in, so every catalog feed is fetched whether or not a
+// reader requests its language (scripts/lib/news-digest-warm.cjs).
+// ─────────────────────────────────────────────────────────────
+const DIGEST_WARM_CELLS = requireShared('news-digest-warm-cells.json');
+let digestWarmInFlight = false;
+
+async function seedDigestWarm() {
+  if (digestWarmInFlight) {
+    console.log('[DigestWarm] Previous cycle still running, skipping');
+    return;
+  }
+  digestWarmInFlight = true;
+  const startedAt = Date.now();
+  try {
+    const results = await runDigestWarmCycle(DIGEST_WARM_CELLS, {
+      fetchCell: (cell) => fetchDigestWarmCell(cell, { userAgent: CHROME_UA, relayKey: RELAY_API_KEY }),
+    });
+    const summary = summarizeDigestWarmCycle(results, { fetchedAt: Date.now(), durMs: Date.now() - startedAt });
+    console.log(
+      `[DigestWarm] ${summary.cells} cells: ${summary.fresh} fresh, ${summary.stale} stale, ${summary.failed} failed ` +
+        `in ${Math.round(summary.durMs / 1000)}s${summary.failures.length ? ` (${summary.failures.join(', ')})` : ''}`,
+    );
+    if (!shouldPublishDigestWarmHeartbeat(summary)) {
+      console.warn(`[DigestWarm] Fewer than half the cells served news${RELAY_API_KEY ? '' : ' (WORLDMONITOR_RELAY_KEY not set)'} — heartbeat not written`);
+      return;
+    }
+    if (!await upstashSet(DIGEST_WARM_HEARTBEAT_KEY, summary, DIGEST_WARM_HEARTBEAT_TTL_SECONDS)) return;
+    // Durable, no TTL: health reads the probe as pending until the first
+    // healthy cycle and strict afterwards (api/health.js ACTIVATION_MARKERS).
+    await upstashEval("return redis.call('SET', KEYS[1], ARGV[1])", [DIGEST_WARM_ACTIVATION_KEY], [String(summary.fetchedAt)]);
+  } finally {
+    digestWarmInFlight = false;
+  }
+}
+
+function startDigestWarmLoop() {
+  if (!UPSTASH_ENABLED) {
+    console.log('[DigestWarm] Disabled (no Upstash Redis)');
+    return;
+  }
+  console.log(`[DigestWarm] Warm loop starting (${DIGEST_WARM_CELLS.length} cells, interval ${DIGEST_WARM_INTERVAL_MS / 1000 / 60}min)`);
+  startBootSeedLoop('DigestWarm', DIGEST_WARM_HEARTBEAT_KEY, DIGEST_WARM_INTERVAL_MS, seedDigestWarm, (e) => console.warn('[DigestWarm] Initial cycle error:', e?.message || e), (e) => console.warn('[DigestWarm] Cycle error:', e?.message || e));
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -10468,7 +10534,10 @@ async function seedChokepointTransits() {
   const payload = { transits, transitCoverage, fetchedAt: now };
   const ok = await envelopeWrite(CHOKEPOINT_TRANSIT_KEY, payload, CHOKEPOINT_TRANSIT_TTL, { recordCount: covered, sourceVersion: 'chokepoint-transits' });
   if (!ok) throw new Error('Transit count publication failed');
-  await upstashSet('seed-meta:supply_chain:chokepoint_transits', { fetchedAt: now, recordCount: covered, transitCoverage }, 604800);
+  // Health names the measurable straits from this transitCoverage, so a dropped
+  // write must fail the tick instead of leaving the previous coverage in place.
+  const metaOk = await upstashSet('seed-meta:supply_chain:chokepoint_transits', { fetchedAt: now, recordCount: covered, transitCoverage }, 604800);
+  if (!metaOk) throw new Error('Transit coverage metadata write failed');
   console.log(`[Transit] Seeded ${covered}/${canonical.length} measured chokepoints (missing: ${missing.join(', ')})`);
 }
 
@@ -15560,6 +15629,7 @@ server.listen(PORT, () => {
   startChokepointWarmPingLoop();
   startCableHealthWarmPingLoop();
   startClassifySeedLoop();
+  startDigestWarmLoop();
   startMiddleEastStrikesLoop();
   startServiceStatusesSeedLoop();
   startTheaterPostureSeedLoop();

@@ -494,7 +494,8 @@
     "consumerPrices": "Precios al Consumidor",
     "marketBreadth": "Amplitud de Mercado",
     "climateNews": "Noticias de Clima",
-    "fx": "Tipos de cambio"
+    "fx": "Tipos de cambio",
+    "ukmtoIncidents": "Incidentes de UKMTO"
   },
   "commands": {
     "prefixes": {
@@ -1126,7 +1127,7 @@
         "ucdpEvents": "Eventos de la UCDP",
         "displacementFlows": "Flujos de desplazamiento",
         "climateAnomalies": "Anomalías climáticas",
-        "weatherAlerts": "Alertas de clima severo (NWS, ECCC, WMO SWIC)",
+        "weatherAlerts": "Alertas meteorológicas",
         "strategicWaterways": "Vías navegables estratégicas",
         "economicCenters": "Centros Económicos",
         "criticalMinerals": "Minerales críticos",
@@ -1148,9 +1149,9 @@
         "radiationSpike": "Pico de radiación",
         "radiationElevated": "Radiación elevada",
         "canadaRoads": "Canada Roads",
-        "canadaAlerts": "Canada Alerts (AB + BC + SK)",
+        "canadaAlerts": "Canada Alerts",
         "notamAirspace": "Restricciones de espacio aéreo NOTAM",
-        "no2Activity": "Actividad industrial (NO2)"
+        "no2Activity": "Actividad industrial"
       },
       "layersTitle": "capas",
       "layerSearch": "Buscar capas...",
@@ -2587,7 +2588,15 @@
       "renewalFailedDesc": "No pudimos verificar la renovación de tu suscripción. Gestiona la facturación o contacta con soporte si el problema persiste.",
       "manageBilling": "Gestionar facturación",
       "lapsedDesc": "Tu suscripción Pro ha finalizado. Vuelve a suscribirte para recuperar el acceso premium.",
-      "resubscribe": "Volver a suscribirse"
+      "resubscribe": "Volver a suscribirse",
+      "billingEmailBouncedMessage": "Los correos de facturación a {{email}} están rebotando. Actualiza tu correo de facturación para recibir recibos y avisos de pago.",
+      "fixBillingEmail": "Corregir correo de facturación",
+      "billingEmailLabel": "Nuevo correo de facturación",
+      "save": "Guardar",
+      "billingEmailUpdated": "Correo de facturación actualizado a {{email}}. A partir de ahora los recibos y avisos de pago llegarán allí.",
+      "billingEmailInvalid": "Introduce una dirección de correo válida.",
+      "billingEmailSuppressed": "Tampoco podemos entregar en esa dirección. Prueba con otra.",
+      "billingEmailUpdateFailed": "No pudimos actualizar tu correo de facturación. Inténtalo de nuevo o contacta con soporte si sigue fallando."
     },
     "checkoutFailureBanner": {
       "message": "No se pudo completar el pago. No se realizó ningún cargo.",
@@ -4078,7 +4087,7 @@
           "2": "Las polilíneas de condiciones de la carretera pueden simplificar la geometría compleja de las autopistas."
         },
         "related": {
-          "0": "Alertas de clima severo (NWS, ECCC, WMO SWIC)",
+          "0": "Alertas meteorológicas",
           "1": "Actualidad de los datos"
         }
       },
@@ -4094,7 +4103,7 @@
           "2": "Las entradas sin una gravedad cartografiable (semántica CAP y de color de Alberta, estado de evacuación de B.C. o gravedad CAP de SaskAlert) se descartan en lugar de inventarse. El color o el nivel del resumen de SaskAlert no se trata como gravedad CAP."
         },
         "related": {
-          "0": "Alertas de clima severo (NWS, ECCC, WMO SWIC)",
+          "0": "Alertas meteorológicas",
           "1": "Capa Eventos naturales",
           "2": "Actualidad de los datos"
         }
@@ -4127,7 +4136,7 @@
         },
         "related": {
           "0": "Ventanas emergentes de la capa Eventos naturales",
-          "1": "Alertas de clima severo (NWS, ECCC, WMO SWIC)",
+          "1": "Alertas meteorológicas",
           "2": "Señales naturales del informe de inteligencia"
         }
       },
@@ -4180,5 +4189,14 @@
         "0": "Guía de capas"
       }
     }
+  },
+  "ukmto": {
+    "unavailable": "Datos de UKMTO no disponibles.",
+    "empty": "UKMTO no devolvió incidentes.",
+    "stale": "Datos de origen desactualizados. Última comprobación",
+    "current": "Fuente comprobada",
+    "reportedClaims": "Informes del editor. Las afirmaciones pueden seguir bajo investigación.",
+    "occurred": "Incidente",
+    "reported": "Publicado"
   }
 }

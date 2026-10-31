@@ -12,8 +12,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
-import { INTEL_EDITION } from '../shared/news-catalog-browser';
-import { VALID_VARIANTS } from '../server/worldmonitor/news/v1/list-feed-digest';
+import { INTEL_EDITION, digestCarriesFeed } from '../shared/news-catalog-browser';
+import { projectBrowserCatalog } from '../shared/news-catalog';
+import { VALID_VARIANTS, __testing__ as digestTesting } from '../server/worldmonitor/news/v1/list-feed-digest';
 import { NEWS_LANGUAGES } from '../src/shared/public-rpc-cache';
 import {
   browserPlacedNames,
@@ -124,5 +125,165 @@ describe('coverage rules (fixtures)', () => {
       feed('Multi', [{ edition: 'full', category: 'politics', serverOrder: 1 }], { browser: { url: { en: 'https://m.example/en', gr: 'https://m.example/gr' } } }),
     ];
     assert.deepEqual(unsupportedLanguages(feeds, new Set(['en', 'el'])), ['gr (Multi)', 'he (Hebrew Daily)']);
+  });
+});
+
+describe('digests serve the categories that used to need per-feed browser fetches', () => {
+  const scheduled = (edition: string) =>
+    new Set(digestTesting.buildDigestFeedBatches(edition, 'en').batches.flat().map(entry => entry.category));
+
+  it('the energy edition digest schedules its energy categories', () => {
+    assert.ok(VALID_VARIANTS.has('energy'));
+    for (const category of ['live-news', 'energy', 'supply-chain']) {
+      assert.ok(scheduled('energy').has(category), `energy digest must fetch ${category}`);
+    }
+  });
+
+  it('the tech digest schedules podcasts and think tanks, the finance digest nq-news', () => {
+    assert.ok(scheduled('tech').has('podcasts'));
+    assert.ok(scheduled('tech').has('thinktanks'));
+    assert.ok(scheduled('finance').has('nq-news'));
+  });
+
+  // AE1: a source migrated out of the browser-only list is fetched by the
+  // digest in its own language, and only there.
+  it('the Portuguese full digest fetches Folha de S.Paulo in latam; the English one does not', () => {
+    const latamSources = (lang: string) => digestTesting.buildDigestFeedBatches('full', lang).batches.flat()
+      .filter(entry => entry.category === 'latam')
+      .map(entry => entry.feed.name);
+    assert.ok(latamSources('pt').includes('Folha de S.Paulo'));
+    assert.ok(!latamSources('en').includes('Folha de S.Paulo'));
+  });
+
+  it('the tech digest fetches its regional startup sources (U6 batch 2)', () => {
+    const regional = digestTesting.buildDigestFeedBatches('tech', 'en').batches.flat()
+      .filter(entry => entry.category === 'regionalStartups')
+      .map(entry => entry.feed.name);
+    for (const name of ['YourStory', 'KrASIA', 'MENA Startups', 'Africa Tech News', 'FinTech LATAM']) {
+      assert.ok(regional.includes(name), `tech digest must fetch ${name}`);
+    }
+  });
+
+  it('the tech digest fetches every tech source the browser shows (U6 batch 3)', () => {
+    const fetched = new Set(digestTesting.buildDigestFeedBatches('tech', 'en').batches.flat()
+      .map(entry => `${entry.category}|${entry.feed.name}`));
+    const browserOnly = catalog.feeds.flatMap(feed => feed.placements
+      .filter(p => p.edition === 'tech' && p.browserOrder !== undefined && (!feed.lang || feed.lang === 'en'))
+      .map(p => `${p.category}|${feed.name}`))
+      .filter(key => !fetched.has(key));
+    assert.deepEqual(browserOnly, []);
+    for (const name of ['DevOps.com', 'FwdStart Newsletter']) {
+      const feed = catalog.feeds.find(f => f.name === name);
+      assert.match(feed?.url ?? '', /^https:\/\//, `${name} must have an absolute URL the server can fetch`);
+    }
+  });
+
+  it('every English digest fetches every source its edition shows (U6 batch 4)', () => {
+    const missing: string[] = [];
+    for (const edition of new Set(catalog.feeds.flatMap(feed => feed.placements.map(p => p.edition)))) {
+      const variant = edition === INTEL_EDITION ? 'full' : edition;
+      if (!VALID_VARIANTS.has(variant)) continue;
+      const fetched = new Set(digestTesting.buildDigestFeedBatches(variant, 'en').batches.flat()
+        .map(entry => entry.feed.name));
+      for (const feed of catalog.feeds) {
+        if (feed.lang && feed.lang !== 'en') continue;
+        if (!feed.placements.some(p => p.edition === edition && p.browserOrder !== undefined)) continue;
+        if (!fetched.has(feed.name)) missing.push(`${edition}|${feed.name}`);
+      }
+    }
+    assert.deepEqual(missing, []);
+    assert.deepEqual(pendingNames, []);
+    // GitHub Trending dates only its channel and links to github.com, so its
+    // entry opts in to both.
+    const trending = catalog.feeds.find(f => f.name === 'GitHub Trending') as { channelDated?: boolean; linkHosts?: string[] } | undefined;
+    assert.equal(trending?.channelDated, true);
+    assert.deepEqual(trending?.linkHosts, ['github.com']);
+    for (const name of ['FAS', 'New Scientist', 'Ransomware.live']) {
+      const feed = catalog.feeds.find(f => f.name === name);
+      assert.match(feed?.url ?? '', /^https:\/\/news\.google\.com\/rss\/search\?q=site:[^&]+\+when:\d+d&/,
+        `${name} reads a dated Google News site: query`);
+    }
+  });
+
+  // The pending list is by name, so a source the server fetches in one edition
+  // used to hide a browser placement no digest fetches in another (MIT Tech
+  // Review on the tech edition's tech panel). Panels match items by source
+  // name, and the on-demand edition reads whichever digest carries its category.
+  it('every browser placement of a migrated source is fetched by a digest for that panel', () => {
+    const served = new Map<string, Set<string>>();
+    for (const feed of catalog.feeds) {
+      for (const p of feed.placements) {
+        if (p.serverOrder === undefined) continue;
+        const keys = served.get(feed.name) ?? new Set<string>();
+        keys.add(`${p.edition}|${p.category}`);
+        served.set(feed.name, keys);
+      }
+    }
+    const gaps = catalog.feeds.flatMap(feed => feed.placements
+      .filter(p => p.browserOrder !== undefined && !pending.has(feed.name))
+      .filter((p) => {
+        const keys = served.get(feed.name) ?? new Set<string>();
+        if (keys.has(`${p.edition}|${p.category}`)) return false;
+        return !(p.edition === 'ondemand' && [...keys].some(key => key.endsWith(`|${p.category}`)));
+      })
+      .map(p => `${p.edition}|${p.category}|${feed.name}`));
+    assert.deepEqual(gaps, []);
+  });
+
+  it('a Spanish outlet the browser shows in every language builds only in the Spanish digest', () => {
+    const latamSources = (lang: string) => digestTesting.buildDigestFeedBatches('full', lang).batches.flat()
+      .filter(entry => entry.category === 'latam')
+      .map(entry => entry.feed.name);
+    assert.ok(latamSources('es').includes('La Silla Vacía'));
+    assert.ok(!latamSources('en').includes('La Silla Vacía'));
+    const browser = projectBrowserCatalog().editions.full!.latam!.find(feed => feed.name === 'La Silla Vacía')!;
+    assert.equal(browser.lang, undefined, 'browser targeting unchanged');
+    assert.equal(browser.digestLang, 'es');
+  });
+
+  it('the browser catalog states exactly which digest languages carry each source', async () => {
+    // Panels read this to decide which sources a digest covers (direct
+    // fetch, #9796 source fill); it must match what each digest builds.
+    const browser = projectBrowserCatalog();
+    const mismatches: string[] = [];
+    for (const edition of VALID_VARIANTS) {
+      const placed: Array<[string, typeof browser.intel]> = Object.entries(browser.editions[edition] ?? {});
+      if (edition === 'full') placed.push(['intel', browser.intel]);
+      for (const language of NEWS_LANGUAGES) {
+        const built = new Set(digestTesting.buildDigestFeedBatches(edition, language).batches.flat()
+          .map(entry => `${entry.category}|${entry.feed.name}`));
+        for (const [category, feeds] of placed) {
+          for (const feed of feeds) {
+            if (feed.browserOnly) continue;
+            if (built.has(`${category}|${feed.name}`) !== digestCarriesFeed(feed, language)) {
+              mismatches.push(`${edition}/${category}/${feed.name}/${language}`);
+            }
+          }
+        }
+      }
+    }
+    assert.deepEqual(mismatches, []);
+  });
+});
+
+describe('relay classify covers every digest edition within its cycle', () => {
+  const relay = readFileSync(join(root, 'scripts/ais-relay.cjs'), 'utf8');
+  const editions = JSON.parse(readFileSync(join(root, 'scripts/shared/news-digest-editions.json'), 'utf8')) as string[];
+  const minutes = (name: string) => {
+    const match = relay.match(new RegExp(`const ${name} = (\\d+) \\* 60 \\* 1000;`));
+    assert.ok(match, `${name} not found in ais-relay.cjs`);
+    return Number(match[1]);
+  };
+
+  it('iterates the generated edition list, which matches the digest editions', () => {
+    assert.match(relay, /const CLASSIFY_VARIANTS = requireShared\('news-digest-editions\.json'\);/);
+    assert.deepEqual([...editions].sort(), [...VALID_VARIANTS].sort());
+  });
+
+  it('keeps the waits between editions inside the classify interval', () => {
+    const interval = minutes('CLASSIFY_SEED_INTERVAL_MS');
+    const staggerTotal = minutes('CLASSIFY_STAGGER_TOTAL_MS');
+    const perEdition = Math.floor(staggerTotal / Math.max(1, editions.length - 1));
+    assert.ok((editions.length - 1) * perEdition < interval, `${editions.length} editions overrun the ${interval}-minute interval`);
   });
 });

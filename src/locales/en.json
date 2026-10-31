@@ -583,7 +583,8 @@
     "fearGreed": "Fear & Greed",
     "marketBreadth": "Market Breadth",
     "climateNews": "Climate News",
-    "fx": "Foreign exchange rates"
+    "fx": "Foreign exchange rates",
+    "ukmtoIncidents": "UKMTO Incidents"
   },
   "commands": {
     "prefixes": {
@@ -1458,7 +1459,7 @@
         "ucdpEvents": "Armed Conflict Events",
         "displacementFlows": "Displacement Flows",
         "climateAnomalies": "Climate Anomalies",
-        "weatherAlerts": "Severe Weather Alerts (NWS, ECCC, WMO SWIC)",
+        "weatherAlerts": "Weather Alerts",
         "strategicWaterways": "Chokepoints",
         "economicCenters": "Economic Centers",
         "criticalMinerals": "Critical Minerals",
@@ -1469,8 +1470,8 @@
         "gulfInvestments": "Gulf Cooperation Council Investments",
         "tradeRoutes": "Trade Routes",
         "iranAttacks": "Middle East Strikes",
-        "gpsJamming": "Navigation interference",
-        "ciiChoropleth": "Country instability",
+        "gpsJamming": "Navigation Interference",
+        "ciiChoropleth": "Country Instability",
         "dayNight": "Day/Night",
         "positiveEvents": "Positive Events",
         "kindness": "Acts of Kindness",
@@ -1478,9 +1479,9 @@
         "speciesRecovery": "Species Recovery",
         "renewableInstallations": "Clean Energy",
         "canadaRoads": "Canada Roads",
-        "canadaAlerts": "Canada Alerts (AB + BC + SK)",
+        "canadaAlerts": "Canada Alerts",
         "notamAirspace": "NOTAM Airspace Restrictions",
-        "no2Activity": "Industrial Activity (NO2)"
+        "no2Activity": "Industrial Activity"
       },
       "tooltip": {
         "earthquake": "Earthquake",
@@ -2701,7 +2702,15 @@
       "renewalFailedDesc": "We couldn't verify your subscription renewal. Manage billing or contact support if this persists.",
       "manageBilling": "Manage Billing",
       "lapsedDesc": "Your Pro subscription has ended. Resubscribe to regain premium access.",
-      "resubscribe": "Resubscribe"
+      "resubscribe": "Resubscribe",
+      "billingEmailBouncedMessage": "Billing emails to {{email}} are bouncing. Update your billing email so you get receipts and payment alerts.",
+      "fixBillingEmail": "Fix billing email",
+      "billingEmailLabel": "New billing email",
+      "save": "Save",
+      "billingEmailUpdated": "Billing email updated to {{email}}. Receipts and payment alerts will go there from now on.",
+      "billingEmailInvalid": "Enter a valid email address.",
+      "billingEmailSuppressed": "We can't deliver to that address either. Try a different one.",
+      "billingEmailUpdateFailed": "We couldn't update your billing email. Try again, or contact support if it keeps failing."
     },
     "exportGate": {
       "signedOutDesc": "Sign in to export dashboard data as CSV, JSON or PDF.",
@@ -4057,7 +4066,7 @@
           "2": "Road-condition polylines may simplify complex highway geometry."
         },
         "related": {
-          "0": "Severe Weather Alerts (NWS, ECCC, WMO SWIC)",
+          "0": "Weather Alerts",
           "1": "Data freshness status"
         }
       },
@@ -4073,7 +4082,7 @@
           "2": "Entries without a mappable severity (Alberta CAP/colour semantics, B.C. evacuation status, or SaskAlert CAP severity) are dropped rather than invented. SaskAlert summary colour/level is not treated as CAP severity."
         },
         "related": {
-          "0": "Severe Weather Alerts (NWS, ECCC, WMO SWIC)",
+          "0": "Weather Alerts",
           "1": "Natural Events layer",
           "2": "Data freshness status"
         }
@@ -4106,7 +4115,7 @@
         },
         "related": {
           "0": "Natural Events layer popups",
-          "1": "Severe Weather Alerts (NWS, ECCC, WMO SWIC)",
+          "1": "Weather Alerts",
           "2": "Country brief natural signals"
         }
       },
@@ -4159,5 +4168,14 @@
         "0": "Layer guide"
       }
     }
+  },
+  "ukmto": {
+    "unavailable": "UKMTO data unavailable.",
+    "empty": "No incidents returned by UKMTO.",
+    "stale": "Stale source data. Last checked",
+    "current": "Source checked",
+    "reportedClaims": "Publisher reports. Claims may remain under investigation.",
+    "occurred": "Incident",
+    "reported": "Published"
   }
 }

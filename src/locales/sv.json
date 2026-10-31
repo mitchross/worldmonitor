@@ -108,7 +108,8 @@
     "fearGreed": "Rädsla & Girighet",
     "marketBreadth": "Marknadsbredd",
     "climateNews": "Klimatnyheter",
-    "fx": "Valutakurser"
+    "fx": "Valutakurser",
+    "ukmtoIncidents": "UKMTO-incidenter"
   },
   "commands": {
     "prefixes": {
@@ -583,7 +584,7 @@
         "ucdpEvents": "UCDP-evenemang",
         "displacementFlows": "Förskjutningsflöden",
         "climateAnomalies": "Klimatanomalier",
-        "weatherAlerts": "Varningar för svåra väderförhållanden (NWS, ECCC, WMO SWIC)",
+        "weatherAlerts": "Vädervarningar",
         "strategicWaterways": "Strategiska vattenvägar",
         "economicCenters": "ekonomiska centra",
         "criticalMinerals": "Kritiska mineraler",
@@ -605,9 +606,9 @@
         "radiationSpike": "Strålningsökning",
         "radiationElevated": "Förhöjd strålning",
         "canadaRoads": "Canada Roads",
-        "canadaAlerts": "Canada Alerts (AB + BC + SK)",
+        "canadaAlerts": "Canada Alerts",
         "notamAirspace": "NOTAM-luftrumsbegränsningar",
-        "no2Activity": "Industriell aktivitet (NO2)"
+        "no2Activity": "Industriell aktivitet"
       },
       "layersTitle": "Lager",
       "layerSearch": "Sök lager...",
@@ -2193,7 +2194,15 @@
       "renewalFailedDesc": "Vi kunde inte verifiera förnyelsen av din prenumeration. Hantera fakturering eller kontakta supporten om problemet kvarstår.",
       "manageBilling": "Hantera fakturering",
       "lapsedDesc": "Din Pro-prenumeration har upphört. Prenumerera igen för att återfå premiumåtkomsten.",
-      "resubscribe": "Prenumerera igen"
+      "resubscribe": "Prenumerera igen",
+      "billingEmailBouncedMessage": "Faktureringsmejl till {{email}} studsar. Uppdatera din faktureringsadress så att du får kvitton och betalningsaviseringar.",
+      "fixBillingEmail": "Rätta faktureringsmejl",
+      "billingEmailLabel": "Ny e-postadress för fakturering",
+      "save": "Spara",
+      "billingEmailUpdated": "E-postadressen för fakturering är nu {{email}}. Kvitton och betalningsaviseringar skickas dit från och med nu.",
+      "billingEmailInvalid": "Ange en giltig e-postadress.",
+      "billingEmailSuppressed": "Vi kan inte leverera till den adressen heller. Prova en annan.",
+      "billingEmailUpdateFailed": "Vi kunde inte uppdatera din e-postadress för fakturering. Försök igen eller kontakta supporten om det fortsätter att misslyckas."
     },
     "checkoutFailureBanner": {
       "message": "Betalningen kunde inte genomföras. Ingen debitering gjordes.",
@@ -4058,7 +4067,7 @@
           "2": "Linjer för väglag kan förenkla komplex motorvägsgeometri."
         },
         "related": {
-          "0": "Varningar för svåra väderförhållanden (NWS, ECCC, WMO SWIC)",
+          "0": "Vädervarningar",
           "1": "Status för dataaktualitet"
         }
       },
@@ -4074,7 +4083,7 @@
           "2": "Poster utan en allvarlighetsgrad som kan ritas ut faller bort i stället för att hittas på. Det gäller Albertas CAP- och färgsemantik, evakueringsstatus i British Columbia eller CAP-allvarlighetsgrad från SaskAlert. Färg eller nivå i SaskAlerts sammanfattning räknas inte som CAP-allvarlighetsgrad."
         },
         "related": {
-          "0": "Varningar för svåra väderförhållanden (NWS, ECCC, WMO SWIC)",
+          "0": "Vädervarningar",
           "1": "lager Naturliga händelser",
           "2": "Status för dataaktualitet"
         }
@@ -4107,7 +4116,7 @@
         },
         "related": {
           "0": "Popup-fönster för lagret Naturliga händelser",
-          "1": "Varningar för svåra väderförhållanden (NWS, ECCC, WMO SWIC)",
+          "1": "Vädervarningar",
           "2": "Natursignaler i underrättelseöversikten"
         }
       },
@@ -4160,5 +4169,14 @@
         "0": "Lagerguide"
       }
     }
+  },
+  "ukmto": {
+    "unavailable": "UKMTO-data är inte tillgängliga.",
+    "empty": "UKMTO returnerade inga incidenter.",
+    "stale": "Inaktuella källdata. Senast kontrollerad",
+    "current": "Källa kontrollerad",
+    "reportedClaims": "Utgivarens rapporter. Påståenden kan fortfarande utredas.",
+    "occurred": "Incident",
+    "reported": "Publicerad"
   }
 }

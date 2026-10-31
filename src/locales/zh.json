@@ -490,7 +490,8 @@
     "consumerPrices": "消费者价格",
     "marketBreadth": "市场广度",
     "climateNews": "气候新闻",
-    "fx": "外汇汇率"
+    "fx": "外汇汇率",
+    "ukmtoIncidents": "UKMTO事件"
   },
   "commands": {
     "prefixes": {
@@ -1289,7 +1290,7 @@
         "ucdpEvents": "UCDP事件",
         "displacementFlows": "流离失所流向",
         "climateAnomalies": "气候异常",
-        "weatherAlerts": "恶劣天气预警（NWS、ECCC、WMO SWIC）",
+        "weatherAlerts": "天气预警",
         "strategicWaterways": "战略水道",
         "economicCenters": "经济中心",
         "criticalMinerals": "关键矿产",
@@ -1311,9 +1312,9 @@
         "radiationSpike": "辐射峰值",
         "radiationElevated": "辐射升高",
         "canadaRoads": "Canada 道路",
-        "canadaAlerts": "加拿大警报（AB + BC + SK）",
+        "canadaAlerts": "加拿大警报",
         "notamAirspace": "NOTAM 空域限制",
-        "no2Activity": "工业活动（NO2）"
+        "no2Activity": "工业活动"
       },
       "tooltip": {
         "earthquake": "地震",
@@ -2567,7 +2568,15 @@
       "renewalFailedDesc": "我们无法核实您的订阅续订。请管理账单，如问题持续请联系支持。",
       "manageBilling": "管理账单",
       "lapsedDesc": "您的 Pro 订阅已结束。重新订阅以恢复高级访问权限。",
-      "resubscribe": "重新订阅"
+      "resubscribe": "重新订阅",
+      "billingEmailBouncedMessage": "发送至 {{email}} 的账单邮件被退回。请更新您的账单邮箱，以便收到收据和付款提醒。",
+      "fixBillingEmail": "修正账单邮箱",
+      "billingEmailLabel": "新的账单邮箱",
+      "save": "保存",
+      "billingEmailUpdated": "账单邮箱已更新为 {{email}}。此后收据和付款提醒将发送至该邮箱。",
+      "billingEmailInvalid": "请输入有效的电子邮箱地址。",
+      "billingEmailSuppressed": "我们也无法向该地址送达邮件。请换一个地址。",
+      "billingEmailUpdateFailed": "无法更新您的账单邮箱。请重试，如果仍然失败，请联系支持团队。"
     },
     "checkoutFailureBanner": {
       "message": "支付无法完成。未进行任何扣款。",
@@ -4038,7 +4047,7 @@
           "2": "路况折线可能简化复杂的公路几何。"
         },
         "related": {
-          "0": "恶劣天气预警（NWS、ECCC、WMO SWIC）",
+          "0": "天气预警",
           "1": "数据新鲜度状态"
         }
       },
@@ -4054,7 +4063,7 @@
           "2": "没有可映射严重程度的条目（艾伯塔CAP与颜色语义、不列颠哥伦比亚疏散状态，或SaskAlert的CAP严重程度）会被丢弃，而不会被编造。SaskAlert摘要中的颜色或级别不视为CAP严重程度。"
         },
         "related": {
-          "0": "恶劣天气预警（NWS、ECCC、WMO SWIC）",
+          "0": "天气预警",
           "1": "自然事件图层",
           "2": "数据新鲜度状态"
         }
@@ -4087,7 +4096,7 @@
         },
         "related": {
           "0": "自然事件图层弹窗",
-          "1": "恶劣天气预警（NWS、ECCC、WMO SWIC）",
+          "1": "天气预警",
           "2": "国家简报的自然信号"
         }
       },
@@ -4140,5 +4149,14 @@
         "0": "图层指南"
       }
     }
+  },
+  "ukmto": {
+    "unavailable": "UKMTO数据不可用。",
+    "empty": "UKMTO未返回任何事件。",
+    "stale": "来源数据已过时。上次检查",
+    "current": "来源已检查",
+    "reportedClaims": "发布方报告。相关说法可能仍在调查中。",
+    "occurred": "事件",
+    "reported": "发布"
   }
 }
