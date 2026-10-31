@@ -561,7 +561,8 @@
     "fearGreed": "Félelem és mohóság",
     "marketBreadth": "Piaci szélesség",
     "climateNews": "Klíma hírek",
-    "fx": "Devizaárfolyamok"
+    "fx": "Devizaárfolyamok",
+    "ukmtoIncidents": "UKMTO-események"
   },
   "commands": {
     "prefixes": {
@@ -1436,7 +1437,7 @@
         "ucdpEvents": "Fegyveres konfliktus események",
         "displacementFlows": "Kényszermigrációs áramlások",
         "climateAnomalies": "Éghajlati anomáliák",
-        "weatherAlerts": "Súlyos időjárási riasztások (NWS, ECCC, WMO SWIC)",
+        "weatherAlerts": "Időjárási riasztások",
         "strategicWaterways": "Szűk átjárók",
         "economicCenters": "Gazdasági központok",
         "criticalMinerals": "Kritikus ásványok",
@@ -1456,9 +1457,9 @@
         "speciesRecovery": "Fajmegmentés",
         "renewableInstallations": "Tiszta energia",
         "canadaRoads": "Canada Roads",
-        "canadaAlerts": "Canada Alerts (AB + BC + SK)",
+        "canadaAlerts": "Canada Alerts",
         "notamAirspace": "NOTAM légtéri korlátozások",
-        "no2Activity": "Ipari aktivitás (NO2)"
+        "no2Activity": "Ipari aktivitás"
       },
       "tooltip": {
         "earthquake": "Földrengés",
@@ -2646,7 +2647,15 @@
       "renewalFailedDesc": "Nem sikerült ellenőrizni előfizetése megújítását. Kezelje a számlázást, vagy lépjen kapcsolatba az ügyfélszolgálattal, ha a probléma továbbra is fennáll.",
       "manageBilling": "Számlázás kezelése",
       "lapsedDesc": "Pro előfizetése lejárt. Fizessen elő újra a prémium hozzáférés visszaszerzéséhez.",
-      "resubscribe": "Újra előfizetek"
+      "resubscribe": "Újra előfizetek",
+      "billingEmailBouncedMessage": "A(z) {{email}} címre küldött számlázási e-mailek visszapattannak. Frissítse számlázási e-mail-címét, hogy megkapja a nyugtákat és a fizetési értesítéseket.",
+      "fixBillingEmail": "Számlázási e-mail javítása",
+      "billingEmailLabel": "Új számlázási e-mail-cím",
+      "save": "Mentés",
+      "billingEmailUpdated": "A számlázási e-mail-cím mostantól {{email}}. A nyugták és a fizetési értesítések ezentúl oda érkeznek.",
+      "billingEmailInvalid": "Adjon meg egy érvényes e-mail-címet.",
+      "billingEmailSuppressed": "Erre a címre sem tudunk kézbesíteni. Próbáljon meg egy másikat.",
+      "billingEmailUpdateFailed": "Nem sikerült frissíteni a számlázási e-mail-címét. Próbálja újra, vagy forduljon az ügyfélszolgálathoz, ha a hiba továbbra is fennáll."
     },
     "checkoutFailureBanner": {
       "message": "A fizetés nem fejeződött be. Nem történt költség.",
@@ -4058,7 +4067,7 @@
           "2": "Az útállapot-vonalak egyszerűsíthetik a bonyolult autópálya-geometriát."
         },
         "related": {
-          "0": "Súlyos időjárási riasztások (NWS, ECCC, WMO SWIC)",
+          "0": "Időjárási riasztások",
           "1": "Az adatfrissesség állapota"
         }
       },
@@ -4074,7 +4083,7 @@
           "2": "A térképezhető súlyosság nélküli bejegyzések kiesnek, nem pedig kitalálódnak. Ez Alberta CAP- és színszemantikája, Brit Columbia kitelepítési állapota vagy a SaskAlert CAP-súlyossága. A SaskAlert összefoglaló színe vagy szintje nem számít CAP-súlyosságnak."
         },
         "related": {
-          "0": "Súlyos időjárási riasztások (NWS, ECCC, WMO SWIC)",
+          "0": "Időjárási riasztások",
           "1": "réteg Természeti események",
           "2": "Az adatfrissesség állapota"
         }
@@ -4107,7 +4116,7 @@
         },
         "related": {
           "0": "A Természeti események rétegének felugró ablakai",
-          "1": "Súlyos időjárási riasztások (NWS, ECCC, WMO SWIC)",
+          "1": "Időjárási riasztások",
           "2": "Természeti jelek a hírszerzési összefoglalóban"
         }
       },
@@ -4160,5 +4169,14 @@
         "0": "Réteg útmutató"
       }
     }
+  },
+  "ukmto": {
+    "unavailable": "Az UKMTO adatai nem érhetők el.",
+    "empty": "Az UKMTO nem adott vissza eseményeket.",
+    "stale": "Elavult forrásadatok. Utolsó ellenőrzés",
+    "current": "Forrás ellenőrizve",
+    "reportedClaims": "A kiadó jelentései. Az állítások vizsgálata még folyamatban lehet.",
+    "occurred": "Esemény",
+    "reported": "Közzétéve"
   }
 }

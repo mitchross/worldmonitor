@@ -490,7 +490,8 @@
     "fearGreed": "공포 & 탐욕",
     "marketBreadth": "시장 폭",
     "climateNews": "기후 뉴스",
-    "fx": "외환 환율"
+    "fx": "외환 환율",
+    "ukmtoIncidents": "UKMTO 사건"
   },
   "commands": {
     "prefixes": {
@@ -1289,7 +1290,7 @@
         "ucdpEvents": "UCDP 사건",
         "displacementFlows": "난민 이동",
         "climateAnomalies": "기후 이상",
-        "weatherAlerts": "악천후 경보(NWS, ECCC, WMO SWIC)",
+        "weatherAlerts": "기상 경보",
         "strategicWaterways": "전략 수로",
         "economicCenters": "경제 중심지",
         "criticalMinerals": "핵심 광물",
@@ -1311,9 +1312,9 @@
         "radiationSpike": "방사능 급증",
         "radiationElevated": "상승된 방사능",
         "canadaRoads": "Canada Roads",
-        "canadaAlerts": "Canada Alerts (AB + BC + SK)",
+        "canadaAlerts": "Canada Alerts",
         "notamAirspace": "NOTAM 공역 제한",
-        "no2Activity": "산업 활동(NO2)"
+        "no2Activity": "산업 활동"
       },
       "tooltip": {
         "earthquake": "지진",
@@ -2567,7 +2568,15 @@
       "renewalFailedDesc": "구독 갱신을 확인할 수 없습니다. 문제가 계속되면 결제를 관리하거나 지원팀에 문의하세요.",
       "manageBilling": "결제 관리",
       "lapsedDesc": "Pro 구독이 종료되었습니다. 프리미엄 이용 권한을 되찾으려면 다시 구독하세요.",
-      "resubscribe": "다시 구독"
+      "resubscribe": "다시 구독",
+      "billingEmailBouncedMessage": "{{email}}(으)로 보낸 결제 이메일이 반송되고 있습니다. 영수증과 결제 알림을 받으려면 결제 이메일을 업데이트하세요.",
+      "fixBillingEmail": "결제 이메일 수정",
+      "billingEmailLabel": "새 결제 이메일",
+      "save": "저장",
+      "billingEmailUpdated": "결제 이메일이 {{email}}(으)로 업데이트되었습니다. 이제부터 영수증과 결제 알림은 이 주소로 발송됩니다.",
+      "billingEmailInvalid": "유효한 이메일 주소를 입력하세요.",
+      "billingEmailSuppressed": "이 주소로도 전송할 수 없습니다. 다른 주소를 사용해 보세요.",
+      "billingEmailUpdateFailed": "결제 이메일을 업데이트하지 못했습니다. 다시 시도하거나, 계속 실패하면 지원팀에 문의하세요."
     },
     "checkoutFailureBanner": {
       "message": "결제를 완료할 수 없습니다. 청구되지 않았습니다.",
@@ -4038,7 +4047,7 @@
           "2": "노면 상태 폴리라인은 복잡한 고속도로 형상을 단순화할 수 있습니다."
         },
         "related": {
-          "0": "악천후 경보(NWS, ECCC, WMO SWIC)",
+          "0": "기상 경보",
           "1": "데이터 최신성 상태"
         }
       },
@@ -4054,7 +4063,7 @@
           "2": "지도에 올릴 수 있는 심각도가 없는 항목(앨버타 CAP과 색의 의미, 브리티시컬럼비아 대피 상태, SaskAlert CAP 심각도)은 값을 만들지 않고 버립니다. SaskAlert 요약의 색이나 수준은 CAP 심각도로 보지 않습니다."
         },
         "related": {
-          "0": "악천후 경보(NWS, ECCC, WMO SWIC)",
+          "0": "기상 경보",
           "1": "자연재해 레이어",
           "2": "데이터 최신성 상태"
         }
@@ -4087,7 +4096,7 @@
         },
         "related": {
           "0": "자연재해 레이어 팝업",
-          "1": "악천후 경보(NWS, ECCC, WMO SWIC)",
+          "1": "기상 경보",
           "2": "국가 개요의 자연 신호"
         }
       },
@@ -4140,5 +4149,14 @@
         "0": "레이어 가이드"
       }
     }
+  },
+  "ukmto": {
+    "unavailable": "UKMTO 데이터를 사용할 수 없습니다.",
+    "empty": "UKMTO에서 반환한 사건이 없습니다.",
+    "stale": "출처 데이터가 오래되었습니다. 마지막 확인",
+    "current": "출처 확인",
+    "reportedClaims": "발행자의 보고입니다. 주장은 아직 조사 중일 수 있습니다.",
+    "occurred": "사건",
+    "reported": "게시"
   }
 }

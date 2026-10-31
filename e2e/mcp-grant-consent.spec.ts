@@ -85,6 +85,10 @@ async function stubClerkModule(
         };
         export async function initClerk() {}
         export function getClerkToken() { return Promise.resolve(user ? 'stub-jwt-token' : null); }
+        // The grant page sends the STANDARD session token (it carries \`sid\`,
+        // which /api/internal/mcp-grant-mint checks for liveness); a missing
+        // export here fails ESM linking and the page never boots.
+        export function getClerkSessionToken() { return Promise.resolve(user ? 'stub-jwt-token' : null); }
         export function getCurrentClerkUser() { return user; }
         export function isClerkSignInOpen() {
           return Boolean(document.querySelector('.cl-modalBackdrop'));
@@ -144,7 +148,7 @@ async function expectConsentPreservedAcrossClerkRefresh(page: Page): Promise<voi
     const errorView = document.getElementById('errorView');
     if (!consent || !errorView) throw new Error('Grant views were not rendered');
 
-    const wasDestroyed = (): boolean => consent.hidden || !errorView.hidden;
+    const wasDestroyed = (): boolean => Boolean(consent.hidden) || !errorView.hidden;
     let destroyed = wasDestroyed();
     const observer = new MutationObserver(() => {
       destroyed ||= wasDestroyed();
@@ -216,7 +220,7 @@ async function interceptGrantRedirect(
   return () => requested;
 }
 
-function stubContextSuccess(page: Page): Promise<void> {
+function stubContextSuccess(page: Page): ReturnType<Page['route']> {
   return page.route('**/api/internal/mcp-grant-context*', async (route) => {
     await route.fulfill({
       status: 200,
@@ -231,7 +235,7 @@ function stubContextError(
   error: string,
   status: number,
   headers?: Record<string, string>,
-): Promise<void> {
+): ReturnType<Page['route']> {
   return page.route('**/api/internal/mcp-grant-context*', async (route) => {
     await route.fulfill({
       status,
@@ -273,7 +277,7 @@ function expectMintRequestContract(route: Route): void {
   expect(request.postDataJSON()).toEqual({ nonce: 'test-nonce-e2e' });
 }
 
-function stubMintSuccess(page: Page): Promise<void> {
+function stubMintSuccess(page: Page): ReturnType<Page['route']> {
   return page.route('**/api/internal/mcp-grant-mint', async (route) => {
     expectMintRequestContract(route);
     await route.fulfill({
@@ -289,7 +293,7 @@ function stubMintError(
   error: string | undefined,
   status: number,
   headers?: Record<string, string>,
-): Promise<void> {
+): ReturnType<Page['route']> {
   return page.route('**/api/internal/mcp-grant-mint', async (route) => {
     expectMintRequestContract(route);
     await route.fulfill({
@@ -301,7 +305,7 @@ function stubMintError(
   });
 }
 
-function stubMintNetworkError(page: Page): Promise<void> {
+function stubMintNetworkError(page: Page): ReturnType<Page['route']> {
   return page.route('**/api/internal/mcp-grant-mint', async (route) => {
     expectMintRequestContract(route);
     await route.abort('connectionrefused');
@@ -311,7 +315,7 @@ function stubMintNetworkError(page: Page): Promise<void> {
 function stubMintRedirect(
   page: Page,
   redirect: string,
-): Promise<void> {
+): ReturnType<Page['route']> {
   return page.route('**/api/internal/mcp-grant-mint', async (route) => {
     expectMintRequestContract(route);
     await route.fulfill({

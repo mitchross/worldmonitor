@@ -60,6 +60,7 @@ import type { RadiationObservation } from '@/services/radiation';
 import { ArcLayer } from '@deck.gl/layers';
 import type { WeatherAlert } from '@/services/weather';
 import type { CanadaRoadRecord } from '@/services/canada-roads';
+import { isReportableCanadaRoad } from '@/services/canada-road-report';
 import type { CanadaAlert } from '@/services/canada-alerts';
 import { escapeHtml } from '@/utils/sanitize';
 import { corroborationLabelHtml } from '@/utils/corroboration-flag';
@@ -84,6 +85,7 @@ import { debounce, rafSchedule, getCurrentTheme } from '@/utils/index';
 import { createIdleAwareFrameProvider } from '@/utils/idle-aware-frame-provider';
 import { isInputPending, scheduleYield } from '@/utils/after-paint';
 import { showLayerWarning } from '@/utils/layer-warning';
+import { ukmtoIncidentLabel, type UkmtoMapIncident } from '../../shared/ukmto-incidents';
 import { localizeMapLabels } from '@/utils/map-locale';
 import {
   createCountryHoverQueryController,
@@ -642,6 +644,7 @@ export class DeckGLMap {
   private satelliteImageryLayerFailed = false;
   private iranEvents: IranEvent[] = [];
   private aisDisruptions: AisDisruptionEvent[] = [];
+  private ukmtoIncidents: UkmtoMapIncident[] = [];
   private aisDensity: AisDensityZone[] = [];
   private liveTankers: Array<{ mmsi: string; lat: number; lon: number; speed: number; shipType: number; name: string }> = [];
   private liveTankersAbort: AbortController | null = null;
@@ -2249,6 +2252,16 @@ export class DeckGLMap {
     // AIS disruptions layer (spoofing/jamming)
     if (mapLayers.ais && this.aisDisruptions.length > 0) {
       layers.push(this.createAisDisruptionsLayer());
+    }
+    if (mapLayers.ais && this.ukmtoIncidents.length > 0) {
+      layers.push(new ScatterplotLayer<UkmtoMapIncident>({
+        id: 'ukmto-incidents-layer',
+        data: this.filterByTimeCached(this.ukmtoIncidents, item => new Date(item.occurredAt)),
+        getPosition: item => [item.location!.longitude, item.location!.latitude],
+        getRadius: 12000, radiusMinPixels: 7, radiusMaxPixels: 14,
+        getFillColor: item => item.stale ? [135, 145, 155, 180] : [120, 180, 255, 220],
+        stroked: true, getLineColor: [255, 255, 255, 200], lineWidthMinPixels: 1, pickable: true,
+      }));
     }
 
     // GPS/GNSS jamming layer
@@ -5341,6 +5354,8 @@ export class DeckGLMap {
       }
       case 'ais-disruptions-layer':
         return { html: `<div class="deckgl-tooltip"><strong>AIS ${text(obj.type || t('components.deckgl.tooltip.disruption'))}</strong><br/>${text(obj.severity)} ${t('popups.severity')}<br/>${text(obj.description)}</div>` };
+      case 'ukmto-incidents-layer':
+        return { html: `<div class="deckgl-tooltip"><strong>${text(ukmtoIncidentLabel(obj))}</strong><br/>${text(obj.description)}</div>` };
       case 'cross-border-deaths-layer':
       case 'cross-border-points-layer': {
         const change = obj.change !== null && obj.change !== 0
@@ -6827,6 +6842,7 @@ export class DeckGLMap {
       const toggle = this.container.querySelector(`.layer-toggle[data-layer="${key}"] input`) as HTMLInputElement;
       if (toggle) toggle.checked = value;
     });
+    this.enforceLayerLimit({ notify: false });
   }
 
   public getState(): DeckMapState {
@@ -7399,7 +7415,7 @@ export class DeckGLMap {
   }
 
   public setCanadaRoads(records: CanadaRoadRecord[]): void {
-    this.canadaRoads = records;
+    this.canadaRoads = records.filter(isReportableCanadaRoad);
   }
   public setCanadaAlerts(alerts: CanadaAlert[]): void {
     this.canadaAlerts = alerts;
@@ -7445,6 +7461,11 @@ export class DeckGLMap {
   public setCableActivity(advisories: CableAdvisory[], repairShips: RepairShip[]): void {
     this.cableAdvisories = advisories;
     this.repairShips = repairShips;
+    this.render();
+  }
+
+  public setUkmtoIncidents(incidents: UkmtoMapIncident[]): void {
+    this.ukmtoIncidents = incidents;
     this.render();
   }
 
@@ -8064,25 +8085,24 @@ export class DeckGLMap {
   }
 
   private layerWarningShown = false;
-  private lastActiveLayerCount = 0;
+  // Null until the picker first renders: the layers a visitor starts with are a
+  // baseline, not an increase, so they never open the performance notice.
+  private lastActiveLayerCount: number | null = null;
 
-  private enforceLayerLimit(): void {
+  // `notify: false` rebases the count after a bulk change without opening the notice.
+  private enforceLayerLimit({ notify = true } = {}): void {
     const WARN_THRESHOLD = 13;
     const togglesEl = this.container.querySelector('.deckgl-layer-toggles');
     if (!togglesEl) return;
-    const activeCount = Array.from(togglesEl.querySelectorAll<HTMLInputElement>('.layer-toggle input'))
-      .filter(i => {
-        const toggle = i.closest('.layer-toggle') as HTMLElement | null;
-        const row = i.closest('.layer-toggle-row') as HTMLElement | null;
-        return toggle?.style.display !== 'none' && row?.style.display !== 'none';
-      })
+    // Skip toggles hidden for this variant, but not rows an active layer search hides.
+    const activeCount = Array.from(togglesEl.querySelectorAll<HTMLInputElement>('.layer-toggle:not([data-layer-hidden]) input'))
       .filter(i => i.checked).length;
-    const increasing = activeCount > this.lastActiveLayerCount;
+    const increasing = notify && this.lastActiveLayerCount !== null && activeCount > this.lastActiveLayerCount;
     this.lastActiveLayerCount = activeCount;
-    if (activeCount >= WARN_THRESHOLD && increasing && !this.layerWarningShown) {
+    if (activeCount > WARN_THRESHOLD && increasing && !this.layerWarningShown) {
       this.layerWarningShown = true;
       showLayerWarning(WARN_THRESHOLD);
-    } else if (activeCount < WARN_THRESHOLD) {
+    } else if (activeCount <= WARN_THRESHOLD) {
       this.layerWarningShown = false;
     }
   }

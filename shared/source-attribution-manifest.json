@@ -678,6 +678,9 @@
       "status": "terms-review",
       "references": [
         {
+          "path": "scripts/_dosm-product-demand.mjs"
+        },
+        {
           "path": "scripts/backfill-fuel-prices-prev.mjs"
         },
         {
@@ -964,6 +967,20 @@
       "references": [
         {
           "path": "scripts/seo-indexnow-submit.mjs"
+        }
+      ]
+    },
+    {
+      "host": "api.mercadopublico.cl",
+      "provider": "api.mercadopublico.cl",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit api.mercadopublico.cl and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/_global-tender-feeds.mjs"
         }
       ]
     },
@@ -1382,6 +1399,12 @@
       "status": "terms-review",
       "references": [
         {
+          "path": "api/mcp/registry/webcam-tools.ts"
+        },
+        {
+          "path": "api/mcp/skill-extension/generated.ts"
+        },
+        {
           "path": "scripts/seed-webcams.mjs"
         },
         {
@@ -1483,9 +1506,6 @@
         },
         {
           "path": "scripts/capture-seed-recovery.mjs"
-        },
-        {
-          "path": "scripts/check-seed-freshness.mjs"
         },
         {
           "path": "scripts/freeze-resilience-ranking.mjs"
@@ -2691,6 +2711,20 @@
       ]
     },
     {
+      "host": "corriere.it",
+      "provider": "corriere.it",
+      "kind": "feed",
+      "observed": true,
+      "license": "Provider terms for this feed publisher; verify before redistribution",
+      "attribution": "Credit corriere.it and link to the original feed publisher.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "shared/news-catalog.json"
+        }
+      ]
+    },
+    {
       "host": "cp24.com",
       "provider": "cp24.com",
       "kind": "feed",
@@ -2715,6 +2749,9 @@
       "references": [
         {
           "path": "server/worldmonitor/displacement/v1/cross-border-data.ts"
+        },
+        {
+          "path": "src/components/UkmtoIncidentsPanel.ts"
         }
       ]
     },
@@ -3842,6 +3879,20 @@
       ]
     },
     {
+      "host": "epms.ppra.gov.pk",
+      "provider": "epms.ppra.gov.pk",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit epms.ppra.gov.pk and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/_global-tender-feeds.mjs"
+        }
+      ]
+    },
+    {
       "host": "ert-ucdn.broadpeak-aas.com",
       "provider": "ert-ucdn.broadpeak-aas.com",
       "kind": "feed",
@@ -3910,15 +3961,10 @@
       "host": "euractiv.com",
       "provider": "euractiv.com",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Provider terms for this feed publisher; verify before redistribution",
       "attribution": "Credit euractiv.com and link to the original feed publisher.",
-      "status": "terms-review",
-      "references": [
-        {
-          "path": "shared/news-catalog.json"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "eurasianet.org",
@@ -3988,6 +4034,20 @@
         },
         {
           "path": "src/config/variants/tech.ts"
+        }
+      ]
+    },
+    {
+      "host": "ezamowienia.gov.pl",
+      "provider": "ezamowienia.gov.pl",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit ezamowienia.gov.pl and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/_global-tender-feeds.mjs"
         }
       ]
     },
@@ -4470,6 +4530,20 @@
       ]
     },
     {
+      "host": "fpri.org",
+      "provider": "fpri.org",
+      "kind": "feed",
+      "observed": true,
+      "license": "Provider terms for this feed publisher; verify before redistribution",
+      "attribution": "Credit fpri.org and link to the original feed publisher.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "shared/news-catalog.json"
+        }
+      ]
+    },
+    {
       "host": "fr.africanews.com",
       "provider": "fr.africanews.com",
       "kind": "feed",
@@ -4532,6 +4606,20 @@
       "observed": true,
       "license": "Provider terms for this feed publisher; verify before redistribution",
       "attribution": "Credit ft.com and link to the original feed publisher.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "shared/news-catalog.json"
+        }
+      ]
+    },
+    {
+      "host": "fwdstart.me",
+      "provider": "fwdstart.me",
+      "kind": "feed",
+      "observed": true,
+      "license": "Provider terms for this feed publisher; verify before redistribution",
+      "attribution": "Credit fwdstart.me and link to the original feed publisher.",
       "status": "terms-review",
       "references": [
         {
@@ -5038,6 +5126,20 @@
       "references": [
         {
           "path": "scripts/seed-us-treasury-par-yield.mjs"
+        }
+      ]
+    },
+    {
+      "host": "hormuz.data-tracking.net",
+      "provider": "hormuz.data-tracking.net",
+      "kind": "structured",
+      "observed": true,
+      "license": "Documented public API, no key (https://hormuz.data-tracking.net/api-docs, reviewed 2026-10-29): data reusable including commercially under CC BY 4.0 with attribution to hormuz.data-tracking.net; republished UKMTO incident reports stay under the Open Government Licence v3.0. The publisher refreshes every 30 minutes and asks clients not to poll faster.",
+      "attribution": "UK Maritime Trade Operations (https://www.ukmto.org/recent-incidents), contains public sector information licensed under the Open Government Licence v3.0; republished by hormuz.data-tracking.net (CC BY 4.0).",
+      "status": "reviewed",
+      "references": [
+        {
+          "path": "scripts/seed-ukmto-incidents.mjs"
         }
       ]
     },
@@ -5671,15 +5773,12 @@
     {
       "host": "lavca.org",
       "provider": "lavca.org",
-      "kind": "feed+structured",
+      "kind": "structured",
       "observed": true,
       "license": "Provider terms for this upstream API/dataset; verify before redistribution",
       "attribution": "Credit lavca.org and link to the original upstream API/dataset.",
       "status": "terms-review",
       "references": [
-        {
-          "path": "shared/news-catalog.json"
-        },
         {
           "path": "src/config/variants/tech.ts"
         }
@@ -6691,6 +6790,20 @@
       ]
     },
     {
+      "host": "newscientist.com",
+      "provider": "newscientist.com",
+      "kind": "feed",
+      "observed": true,
+      "license": "Provider terms for this feed publisher; verify before redistribution",
+      "attribution": "Credit newscientist.com and link to the original feed publisher.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "shared/news-catalog.json"
+        }
+      ]
+    },
+    {
       "host": "newsfeed.zeit.de",
       "provider": "newsfeed.zeit.de",
       "kind": "feed",
@@ -6885,6 +6998,20 @@
       ]
     },
     {
+      "host": "ocds-api.etenders.gov.za",
+      "provider": "ocds-api.etenders.gov.za",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit ocds-api.etenders.gov.za and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/_global-tender-feeds.mjs"
+        }
+      ]
+    },
+    {
       "host": "oecd.org",
       "provider": "oecd.org",
       "kind": "feed",
@@ -7010,6 +7137,20 @@
       "license": "Provider terms for this upstream API/dataset; verify before redistribution",
       "attribution": "Credit open.alberta.ca and link to the original upstream API/dataset.",
       "status": "excluded"
+    },
+    {
+      "host": "open.iub.gov.lv",
+      "provider": "open.iub.gov.lv",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit open.iub.gov.lv and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/_global-tender-feeds.mjs"
+        }
+      ]
     },
     {
       "host": "open.toronto.ca",
@@ -7326,6 +7467,20 @@
       ]
     },
     {
+      "host": "pncp.gov.br",
+      "provider": "pncp.gov.br",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit pncp.gov.br and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/_global-tender-feeds.mjs"
+        }
+      ]
+    },
+    {
       "host": "polityka.pl",
       "provider": "Polityka",
       "kind": "feed",
@@ -7519,6 +7674,20 @@
       "references": [
         {
           "path": "shared/news-catalog.json"
+        }
+      ]
+    },
+    {
+      "host": "public-api.prozorro.gov.ua",
+      "provider": "public-api.prozorro.gov.ua",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit public-api.prozorro.gov.ua and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/_global-tender-feeds.mjs"
         }
       ]
     },
@@ -7743,6 +7912,20 @@
       "license": "Excluded: live-video playback transport; channel/provider terms apply separately",
       "attribution": "Excluded from the external-provider count: presentation-only HLS stream, not an ingested dataset.",
       "status": "excluded"
+    },
+    {
+      "host": "ransomware.live",
+      "provider": "ransomware.live",
+      "kind": "feed",
+      "observed": true,
+      "license": "Provider terms for this feed publisher; verify before redistribution",
+      "attribution": "Credit ransomware.live and link to the original feed publisher.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "shared/news-catalog.json"
+        }
+      ]
     },
     {
       "host": "raw.githubusercontent.com",
@@ -8191,6 +8374,15 @@
           "path": "scripts/_sp500-breadth.mjs"
         }
       ]
+    },
+    {
+      "host": "sccd.royalnavy.mod.uk",
+      "provider": "sccd.royalnavy.mod.uk",
+      "kind": "structured",
+      "observed": false,
+      "license": "UKMTO terms sections 20-23 permit reuse under the Open Government Licence v3.0, subject to excluded third-party rights. Website JSON backend; no verified external developer support contract.",
+      "attribution": "UK Maritime Trade Operations. Link https://www.ukmto.org/recent-incidents and https://www.ukmto.org/terms-and-conditions. Contains public sector information licensed under the Open Government Licence v3.0.",
+      "status": "excluded"
     },
     {
       "host": "schema.org",
@@ -8902,6 +9094,20 @@
       ]
     },
     {
+      "host": "storage.eop.bg",
+      "provider": "storage.eop.bg",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit storage.eop.bg and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/_global-tender-feeds.mjs"
+        }
+      ]
+    },
+    {
       "host": "storage.googleapis.com",
       "provider": "Ember electricity data",
       "kind": "structured",
@@ -9215,6 +9421,20 @@
       "references": [
         {
           "path": "shared/news-catalog.json"
+        }
+      ]
+    },
+    {
+      "host": "tenders.go.ke",
+      "provider": "tenders.go.ke",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit tenders.go.ke and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/_global-tender-feeds.mjs"
         }
       ]
     },
@@ -10459,6 +10679,9 @@
       "status": "excluded",
       "references": [
         {
+          "path": "api/_md-url-twin.ts"
+        },
+        {
           "path": "src/shared/public-rpc-cache.ts"
         },
         {
@@ -11314,15 +11537,10 @@
       "host": "www.corriere.it",
       "provider": "www.corriere.it",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Provider terms for this feed publisher; verify before redistribution",
       "attribution": "Credit www.corriere.it and link to the original feed publisher.",
-      "status": "terms-review",
-      "references": [
-        {
-          "path": "shared/news-catalog.json"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "www.crisisgroup.org",
@@ -11408,6 +11626,20 @@
         },
         {
           "path": "src/config/variants/tech.ts"
+        }
+      ]
+    },
+    {
+      "host": "www.datos.gov.co",
+      "provider": "www.datos.gov.co",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit www.datos.gov.co and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/_global-tender-feeds.mjs"
         }
       ]
     },
@@ -11645,6 +11877,20 @@
       ]
     },
     {
+      "host": "www.epdk.gov.tr",
+      "provider": "www.epdk.gov.tr",
+      "kind": "structured",
+      "observed": true,
+      "license": "Provider terms for this upstream API/dataset; verify before redistribution",
+      "attribution": "Credit www.epdk.gov.tr and link to the original upstream API/dataset.",
+      "status": "terms-review",
+      "references": [
+        {
+          "path": "scripts/_epdk-crude-imports.mjs"
+        }
+      ]
+    },
+    {
       "host": "www.ethiopia-insight.com",
       "provider": "www.ethiopia-insight.com",
       "kind": "feed",
@@ -11809,15 +12055,10 @@
       "host": "www.fpri.org",
       "provider": "www.fpri.org",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Provider terms for this feed publisher; verify before redistribution",
       "attribution": "Credit www.fpri.org and link to the original feed publisher.",
-      "status": "terms-review",
-      "references": [
-        {
-          "path": "shared/news-catalog.json"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "www.france24.com",
@@ -12728,6 +12969,9 @@
         },
         {
           "path": "server/worldmonitor/displacement/v1/cross-border-data.ts"
+        },
+        {
+          "path": "src/components/UkmtoIncidentsPanel.ts"
         }
       ]
     },
@@ -12777,15 +13021,10 @@
       "host": "www.newscientist.com",
       "provider": "www.newscientist.com",
       "kind": "feed",
-      "observed": true,
+      "observed": false,
       "license": "Provider terms for this feed publisher; verify before redistribution",
       "attribution": "Credit www.newscientist.com and link to the original feed publisher.",
-      "status": "terms-review",
-      "references": [
-        {
-          "path": "shared/news-catalog.json"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "www.newyorkfed.org",
@@ -13132,19 +13371,11 @@
     {
       "host": "www.ransomware.live",
       "provider": "www.ransomware.live",
-      "kind": "feed+structured",
-      "observed": true,
+      "kind": "structured",
+      "observed": false,
       "license": "Provider terms for this feed publisher; verify before redistribution",
       "attribution": "Credit www.ransomware.live and link to the original feed publisher.",
-      "status": "terms-review",
-      "references": [
-        {
-          "path": "shared/news-catalog.json"
-        },
-        {
-          "path": "src/config/variants/tech.ts"
-        }
-      ]
+      "status": "excluded"
     },
     {
       "host": "www.rappler.com",
@@ -14211,6 +14442,9 @@
       "attribution": "Credit www.windy.com and link to the original upstream API/dataset.",
       "status": "terms-review",
       "references": [
+        {
+          "path": "api/mcp/registry/webcam-tools.ts"
+        },
         {
           "path": "api/mcp/skill-extension/generated.ts"
         },

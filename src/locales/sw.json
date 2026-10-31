@@ -561,7 +561,8 @@
     "fearGreed": "Hofu & Uchoyo",
     "marketBreadth": "Upana wa Soko",
     "climateNews": "Habari za Hali ya Hewa",
-    "fx": "Kiwango cha ubadilishaji wa fedha za kigeni"
+    "fx": "Kiwango cha ubadilishaji wa fedha za kigeni",
+    "ukmtoIncidents": "Matukio ya UKMTO"
   },
   "commands": {
     "prefixes": {
@@ -1436,7 +1437,7 @@
         "ucdpEvents": "Matukio ya Migogoro ya Silaha",
         "displacementFlows": "Mitiririko ya Uhamisho",
         "climateAnomalies": "Matatizo ya Hali ya Hewa",
-        "weatherAlerts": "Tahadhari za hali mbaya ya hewa (NWS, ECCC, WMO SWIC)",
+        "weatherAlerts": "Tahadhari za hali ya hewa",
         "strategicWaterways": "Chokepoints",
         "economicCenters": "Vituo vya Uchumi",
         "criticalMinerals": "Madini Muhimu",
@@ -1456,9 +1457,9 @@
         "speciesRecovery": "Urejeshaji wa Aina",
         "renewableInstallations": "Nishati Safi",
         "canadaRoads": "Canada Roads",
-        "canadaAlerts": "Canada Alerts (AB + BC + SK)",
+        "canadaAlerts": "Canada Alerts",
         "notamAirspace": "Vikwazo vya Anga la NOTAM",
-        "no2Activity": "Shughuli za viwanda (NO2)"
+        "no2Activity": "Shughuli za viwanda"
       },
       "tooltip": {
         "earthquake": "Tetemeko la ardhi",
@@ -2872,7 +2873,15 @@
       "renewalFailedDesc": "We couldn't verify your subscription renewal. Manage billing or contact support if this persists.",
       "manageBilling": "Manage Billing",
       "lapsedDesc": "Your Pro subscription has ended. Resubscribe to regain premium access.",
-      "resubscribe": "Resubscribe"
+      "resubscribe": "Resubscribe",
+      "billingEmailBouncedMessage": "Barua pepe za malipo kwa {{email}} zinarudishwa. Sasisha barua pepe yako ya malipo ili upokee risiti na arifa za malipo.",
+      "fixBillingEmail": "Rekebisha barua pepe ya malipo",
+      "billingEmailLabel": "Barua pepe mpya ya malipo",
+      "save": "Hifadhi",
+      "billingEmailUpdated": "Barua pepe ya malipo imebadilishwa kuwa {{email}}. Kuanzia sasa risiti na arifa za malipo zitatumwa huko.",
+      "billingEmailInvalid": "Weka anwani halali ya barua pepe.",
+      "billingEmailSuppressed": "Hatuwezi kutuma kwa anwani hiyo pia. Jaribu anwani nyingine.",
+      "billingEmailUpdateFailed": "Hatukuweza kusasisha barua pepe yako ya malipo. Jaribu tena, au wasiliana na usaidizi ikiwa tatizo linaendelea."
     },
     "exportGate": {
       "signedOutDesc": "Sign in to export dashboard data as CSV, JSON or PDF.",
@@ -4058,7 +4067,7 @@
           "2": "Mistari ya hali ya barabara inaweza kurahisisha jiometri tata ya barabara kuu."
         },
         "related": {
-          "0": "Tahadhari za hali mbaya ya hewa (NWS, ECCC, WMO SWIC)",
+          "0": "Tahadhari za hali ya hewa",
           "1": "Hali ya upya wa data"
         }
       },
@@ -4074,7 +4083,7 @@
           "2": "Ingizo zisizo na ukali unaoweza kuchorwa (maana ya CAP au rangi ya Alberta, hali ya uhamishaji ya British Columbia, au ukali wa CAP wa SaskAlert) huachwa badala ya kuvumbuliwa. Rangi au kiwango cha muhtasari wa SaskAlert hakihesabiwi kuwa ukali wa CAP."
         },
         "related": {
-          "0": "Tahadhari za hali mbaya ya hewa (NWS, ECCC, WMO SWIC)",
+          "0": "Tahadhari za hali ya hewa",
           "1": "Tabaka la Matukio ya Asili",
           "2": "Hali ya upya wa data"
         }
@@ -4107,7 +4116,7 @@
         },
         "related": {
           "0": "Madirisha ya Tabaka la Matukio ya Asili",
-          "1": "Tahadhari za hali mbaya ya hewa (NWS, ECCC, WMO SWIC)",
+          "1": "Tahadhari za hali ya hewa",
           "2": "Ishara za matukio ya asili katika Ujasusi kwa kifupi"
         }
       },
@@ -4160,5 +4169,14 @@
         "0": "Mwongozo wa Tabaka"
       }
     }
+  },
+  "ukmto": {
+    "unavailable": "Data za UKMTO hazipatikani.",
+    "empty": "UKMTO haikurudisha matukio.",
+    "stale": "Data za chanzo zimepitwa na wakati. Ukaguzi wa mwisho",
+    "current": "Chanzo kimekaguliwa",
+    "reportedClaims": "Ripoti za mchapishaji. Madai yanaweza kuwa bado yanachunguzwa.",
+    "occurred": "Tukio",
+    "reported": "Imechapishwa"
   }
 }

@@ -38,6 +38,8 @@ export interface CatalogFeed {
   type?: string;
   deadlinePriority?: number;
   depthUrl?: string;
+  channelDated?: boolean;
+  linkHosts?: string[];
   browser?: {
     url?: CatalogUrl;
     lang?: string | null;
@@ -60,6 +62,12 @@ export interface NewsCatalog {
     browser: Record<string, string[]>;
     server: Record<string, string[]>;
   };
+  /**
+   * Server categories the digest last-good gate leaves out of its category
+   * count, per edition: small categories added after the gate's baseline, whose
+   * every feed can fail at once without that meaning the edition regressed.
+   */
+  gateExempt: Record<string, string[]>;
   categoryNotes: CatalogCategoryNote[];
   feeds: CatalogFeed[];
 }
@@ -73,6 +81,8 @@ export interface ServerCatalogFeed {
   strategicDefault?: boolean;
   deadlinePriority?: number;
   depthUrl?: string;
+  channelDated?: boolean;
+  linkHosts?: string[];
 }
 
 function indexServerPlacements(catalog: NewsCatalog): Map<string, CatalogFeed[]> {
@@ -110,6 +120,8 @@ function toServerFeed(feed: CatalogFeed): ServerCatalogFeed {
   if (feed.strategicDefault !== undefined) entry.strategicDefault = feed.strategicDefault;
   if (feed.deadlinePriority !== undefined) entry.deadlinePriority = feed.deadlinePriority;
   if (feed.depthUrl !== undefined) entry.depthUrl = feed.depthUrl;
+  if (feed.channelDated !== undefined) entry.channelDated = feed.channelDated;
+  if (feed.linkHosts !== undefined) entry.linkHosts = feed.linkHosts;
   return entry;
 }
 
@@ -137,8 +149,14 @@ export function projectBrowserCatalog(catalog: NewsCatalog = NEWS_CATALOG): Brow
         if (lang !== undefined) browserFeed.lang = lang;
         const strategicDefault = browserField(feed, 'strategicDefault');
         if (strategicDefault !== undefined) browserFeed.strategicDefault = strategicDefault;
+        if (feed.lang !== undefined && !feed.strategicDefault) browserFeed.digestLang = feed.lang;
       }
-      const placedFeed = placement.type === undefined ? browserFeed : { ...browserFeed, type: placement.type };
+      let placedFeed = placement.type === undefined ? browserFeed : { ...browserFeed, type: placement.type };
+      const digestServed = feed.placements.some((p) =>
+        p.serverOrder !== undefined
+        && p.category === placement.category
+        && (p.edition === INTEL_EDITION || catalog.layout.server[p.edition]?.includes(p.category)));
+      if (!digestServed) placedFeed = { ...placedFeed, browserOnly: true };
       const key = `${placement.edition}|${placement.category}`;
       let bucket = buckets.get(key);
       if (!bucket) buckets.set(key, (bucket = []));
@@ -151,7 +169,10 @@ export function projectBrowserCatalog(catalog: NewsCatalog = NEWS_CATALOG): Brow
   for (const [edition, categories] of Object.entries(catalog.layout.browser)) {
     editions[edition] = Object.fromEntries(categories.map((category) => [category, placed(edition, category)]));
   }
-  return { version: 2, editions, intel: placed(INTEL_EDITION, INTEL_EDITION) };
+  const digestLayout = Object.fromEntries(
+    Object.entries(catalog.layout.server).map(([edition, categories]) => [edition, [...categories]]),
+  );
+  return { version: 3, editions, intel: placed(INTEL_EDITION, INTEL_EDITION), digestLayout };
 }
 
 let browserSlice: BrowserCatalog | null = null;
@@ -171,6 +192,77 @@ export function buildServerVariantFeeds(): Record<string, Record<string, ServerC
 
 export function buildServerIntelSources(): ServerCatalogFeed[] {
   return serverPlacedFeeds(INTEL_EDITION, INTEL_EDITION).map(toServerFeed);
+}
+
+export interface DigestWarmCell {
+  edition: string;
+  lang: string;
+}
+
+/**
+ * Every (edition, language) digest that is the only build fetching some feed:
+ * an edition paired with each language it places a server feed in (a feed with
+ * no `lang` is English; intel feeds build with `full`). A feed's rows are
+ * written only when a digest that includes it builds, so the relay's warm cycle
+ * requests each of these whether or not any reader does. Editions in server
+ * layout order, languages sorted with English first.
+ */
+export function buildDigestWarmCells(): DigestWarmCell[] {
+  const variantFeeds = buildServerVariantFeeds();
+  const cells: DigestWarmCell[] = [];
+  for (const edition of Object.keys(NEWS_CATALOG.layout.server)) {
+    const feeds = Object.values(variantFeeds[edition] ?? {}).flat();
+    if (edition === 'full') feeds.push(...buildServerIntelSources());
+    const langs = [...new Set(feeds.map((feed) => feed.lang ?? 'en'))]
+      .sort((a, b) => (a === 'en' ? -1 : b === 'en' ? 1 : a.localeCompare(b)));
+    for (const lang of langs) cells.push({ edition, lang });
+  }
+  return cells;
+}
+
+export interface NewsPoolCell extends DigestWarmCell {
+  /**
+   * Content languages of the feeds only this cell fetches. A feed with no
+   * `lang` is fetched by every language cell of its edition and counted under
+   * `en`, its own cell, whatever language it publishes in.
+   */
+  contentLanguages: string[];
+}
+
+export interface NewsPoolLayout {
+  /** Edition → digest category keys, in server layout order. */
+  editions: Record<string, string[]>;
+  /** Every content language some cell carries, English first. */
+  languages: string[];
+  cells: NewsPoolCell[];
+}
+
+const englishFirst = (a: string, b: string) => (a === 'en' ? -1 : b === 'en' ? 1 : a.localeCompare(b));
+
+/**
+ * What ListNewsPool can read: the digest cells with the content languages
+ * each one carries, the editions and their category keys (the full digest
+ * also carries intel sources under `INTEL_EDITION`), and every language
+ * available. `contentLanguage` maps a source name to the language it
+ * publishes in (its outlet profile). Generated into
+ * shared/news-pool-layout.generated.ts so MCP tools validate against it
+ * without bundling the catalog.
+ */
+export function buildNewsPoolLayout(contentLanguage: (sourceName: string) => string): NewsPoolLayout {
+  const variantFeeds = buildServerVariantFeeds();
+  const cells = buildDigestWarmCells().map((cell) => {
+    const feeds = Object.values(variantFeeds[cell.edition] ?? {}).flat();
+    if (cell.edition === 'full') feeds.push(...buildServerIntelSources());
+    const own = feeds.filter((feed) => (feed.lang ?? 'en') === cell.lang);
+    const contentLanguages = [...new Set(own.map((feed) => contentLanguage(feed.name)))].sort(englishFirst);
+    return { ...cell, contentLanguages };
+  });
+  const editions: Record<string, string[]> = {};
+  for (const [edition, categories] of Object.entries(NEWS_CATALOG.layout.server)) {
+    editions[edition] = edition === 'full' ? [...categories, INTEL_EDITION] : [...categories];
+  }
+  const languages = [...new Set(cells.flatMap((cell) => cell.contentLanguages))].sort(englishFirst);
+  return { editions, languages, cells };
 }
 
 /** Browser view of one edition: category → feeds, in browser order. */

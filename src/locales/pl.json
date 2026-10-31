@@ -496,7 +496,8 @@
     "fearGreed": "Strach i Chciwość",
     "marketBreadth": "Szerokość Rynku",
     "climateNews": "Wiadomości Klimatyczne",
-    "fx": "Kursy walutowe"
+    "fx": "Kursy walutowe",
+    "ukmtoIncidents": "Incydenty UKMTO"
   },
   "commands": {
     "prefixes": {
@@ -1092,7 +1093,7 @@
         "ucdpEvents": "Wydarzenia UCDP",
         "displacementFlows": "Przepływy wypornościowe",
         "climateAnomalies": "Anomalie klimatyczne",
-        "weatherAlerts": "Ostrzeżenia przed gwałtowną pogodą (NWS, ECCC, WMO SWIC)",
+        "weatherAlerts": "Ostrzeżenia pogodowe",
         "strategicWaterways": "Strategiczne drogi wodne",
         "economicCenters": "Centra Gospodarcze",
         "criticalMinerals": "Minerały krytyczne",
@@ -1114,9 +1115,9 @@
         "radiationSpike": "Skok radioaktywności",
         "radiationElevated": "Podwyższona radioaktywność",
         "canadaRoads": "Canada Roads",
-        "canadaAlerts": "Canada Alerts (AB + BC + SK)",
+        "canadaAlerts": "Canada Alerts",
         "notamAirspace": "Ograniczenia przestrzeni powietrznej NOTAM",
-        "no2Activity": "Aktywność przemysłowa (NO2)"
+        "no2Activity": "Aktywność przemysłowa"
       },
       "layersTitle": "Warstwy",
       "layerSearch": "Szukaj warstw...",
@@ -2597,7 +2598,15 @@
       "renewalFailedDesc": "Nie udało się zweryfikować odnowienia Twojej subskrypcji. Zarządzaj rozliczeniami lub skontaktuj się z pomocą techniczną, jeśli problem będzie się powtarzał.",
       "manageBilling": "Zarządzaj rozliczeniami",
       "lapsedDesc": "Twoja subskrypcja Pro wygasła. Subskrybuj ponownie, aby odzyskać dostęp premium.",
-      "resubscribe": "Subskrybuj ponownie"
+      "resubscribe": "Subskrybuj ponownie",
+      "billingEmailBouncedMessage": "E-maile rozliczeniowe wysyłane na {{email}} są odrzucane. Zaktualizuj adres e-mail do rozliczeń, aby otrzymywać paragony i powiadomienia o płatnościach.",
+      "fixBillingEmail": "Popraw e-mail rozliczeniowy",
+      "billingEmailLabel": "Nowy e-mail rozliczeniowy",
+      "save": "Zapisz",
+      "billingEmailUpdated": "Adres e-mail do rozliczeń zmieniono na {{email}}. Od teraz paragony i powiadomienia o płatnościach będą trafiać tam.",
+      "billingEmailInvalid": "Wpisz prawidłowy adres e-mail.",
+      "billingEmailSuppressed": "Na ten adres również nie możemy dostarczać wiadomości. Spróbuj innego.",
+      "billingEmailUpdateFailed": "Nie udało się zaktualizować adresu e-mail do rozliczeń. Spróbuj ponownie lub skontaktuj się z pomocą techniczną, jeśli problem się powtarza."
     },
     "checkoutFailureBanner": {
       "message": "Nie można ukończyć płatności. Nie dokonano opłaty.",
@@ -4098,7 +4107,7 @@
           "2": "Polilinie warunków drogowych mogą upraszczać złożoną geometrię autostrad."
         },
         "related": {
-          "0": "Ostrzeżenia przed gwałtowną pogodą (NWS, ECCC, WMO SWIC)",
+          "0": "Ostrzeżenia pogodowe",
           "1": "Status aktualności danych"
         }
       },
@@ -4114,7 +4123,7 @@
           "2": "Wpisy bez mapowalnej istotności są odrzucane, a nie dopisywane. Chodzi o semantykę CAP i koloru Alberty, status ewakuacji Kolumbii Brytyjskiej albo istotność CAP SaskAlert. Kolor albo poziom w podsumowaniu SaskAlert nie jest traktowany jako istotność CAP."
         },
         "related": {
-          "0": "Ostrzeżenia przed gwałtowną pogodą (NWS, ECCC, WMO SWIC)",
+          "0": "Ostrzeżenia pogodowe",
           "1": "warstwa Zdarzenia naturalne",
           "2": "Status aktualności danych"
         }
@@ -4147,7 +4156,7 @@
         },
         "related": {
           "0": "Okna warstwy Zdarzenia naturalne",
-          "1": "Ostrzeżenia przed gwałtowną pogodą (NWS, ECCC, WMO SWIC)",
+          "1": "Ostrzeżenia pogodowe",
           "2": "Sygnały przyrodnicze w raporcie wywiadowczym"
         }
       },
@@ -4200,5 +4209,14 @@
         "0": "Przewodnik po warstwach"
       }
     }
+  },
+  "ukmto": {
+    "unavailable": "Dane UKMTO są niedostępne.",
+    "empty": "UKMTO nie zwróciło żadnych incydentów.",
+    "stale": "Nieaktualne dane źródłowe. Ostatnia kontrola",
+    "current": "Źródło sprawdzone",
+    "reportedClaims": "Raporty wydawcy. Twierdzenia mogą nadal być badane.",
+    "occurred": "Incydent",
+    "reported": "Opublikowano"
   }
 }

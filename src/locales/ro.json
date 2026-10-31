@@ -494,7 +494,8 @@
     "fearGreed": "Frică și lacómie",
     "marketBreadth": "Amploarea pieței",
     "climateNews": "Știri despre climă",
-    "fx": "Cursuri de schimb valutar"
+    "fx": "Cursuri de schimb valutar",
+    "ukmtoIncidents": "Incidente UKMTO"
   },
   "commands": {
     "prefixes": {
@@ -1295,7 +1296,7 @@
         "ucdpEvents": "Evenimente de conflict armat",
         "displacementFlows": "Fluxuri de deplasare",
         "climateAnomalies": "Anomalii climatice",
-        "weatherAlerts": "Alerte de vreme severă (NWS, ECCC, WMO SWIC)",
+        "weatherAlerts": "Alerte meteo",
         "strategicWaterways": "Căi navigabile strategice",
         "economicCenters": "Centre Economice",
         "criticalMinerals": "Minerale critice",
@@ -1317,9 +1318,9 @@
         "radiationSpike": "Vârf de radiații",
         "radiationElevated": "Radiații ridicate",
         "canadaRoads": "Canada Roads",
-        "canadaAlerts": "Canada Alerts (AB + BC + SK)",
+        "canadaAlerts": "Canada Alerts",
         "notamAirspace": "Restricții de spațiu aerian NOTAM",
-        "no2Activity": "Activitate industrială (NO2)"
+        "no2Activity": "Activitate industrială"
       },
       "tooltip": {
         "earthquake": "Cutremur",
@@ -2587,7 +2588,15 @@
       "renewalFailedDesc": "Nu am putut verifica reînnoirea abonamentului tău. Gestionează facturarea sau contactează asistența dacă problema persistă.",
       "manageBilling": "Gestionează facturarea",
       "lapsedDesc": "Abonamentul tău Pro s-a încheiat. Reabonează-te pentru a recâștiga accesul premium.",
-      "resubscribe": "Reabonare"
+      "resubscribe": "Reabonare",
+      "billingEmailBouncedMessage": "E-mailurile de facturare către {{email}} sunt respinse. Actualizează adresa de e-mail pentru facturare ca să primești chitanțe și alerte de plată.",
+      "fixBillingEmail": "Corectează e-mailul de facturare",
+      "billingEmailLabel": "E-mail de facturare nou",
+      "save": "Salvează",
+      "billingEmailUpdated": "E-mailul de facturare a fost schimbat în {{email}}. De acum, chitanțele și alertele de plată vor ajunge acolo.",
+      "billingEmailInvalid": "Introdu o adresă de e-mail validă.",
+      "billingEmailSuppressed": "Nu putem livra nici la această adresă. Încearcă alta.",
+      "billingEmailUpdateFailed": "Nu am putut actualiza e-mailul de facturare. Încearcă din nou sau contactează asistența dacă problema persistă."
     },
     "checkoutFailureBanner": {
       "message": "Plata nu a putut fi finalizată. Nu a fost făcută nicio încărcare.",
@@ -4078,7 +4087,7 @@
           "2": "Poliliniile de stare a drumului pot simplifica geometria complexă a autostrăzilor."
         },
         "related": {
-          "0": "Alerte de vreme severă (NWS, ECCC, WMO SWIC)",
+          "0": "Alerte meteo",
           "1": "Starea de actualitate a datelor"
         }
       },
@@ -4094,7 +4103,7 @@
           "2": "Intrările fără o severitate care poate fi pusă pe hartă sunt eliminate, nu inventate. Este vorba de semantica CAP și de culoare din Alberta, de starea de evacuare din Columbia Britanică sau de severitatea CAP SaskAlert. Culoarea sau nivelul din rezumatul SaskAlert nu sunt tratate ca severitate CAP."
         },
         "related": {
-          "0": "Alerte de vreme severă (NWS, ECCC, WMO SWIC)",
+          "0": "Alerte meteo",
           "1": "strat Evenimente naturale",
           "2": "Starea de actualitate a datelor"
         }
@@ -4127,7 +4136,7 @@
         },
         "related": {
           "0": "Ferestre pop-up ale stratului Evenimente naturale",
-          "1": "Alerte de vreme severă (NWS, ECCC, WMO SWIC)",
+          "1": "Alerte meteo",
           "2": "Semnale naturale în rezumatul informativ"
         }
       },
@@ -4180,5 +4189,14 @@
         "0": "Ghid de straturi"
       }
     }
+  },
+  "ukmto": {
+    "unavailable": "Datele UKMTO nu sunt disponibile.",
+    "empty": "UKMTO nu a returnat incidente.",
+    "stale": "Date sursă învechite. Ultima verificare",
+    "current": "Sursă verificată",
+    "reportedClaims": "Rapoarte ale editorului. Afirmațiile pot fi încă investigate.",
+    "occurred": "Incident",
+    "reported": "Publicat"
   }
 }

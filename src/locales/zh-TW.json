@@ -490,7 +490,8 @@
     "consumerPrices": "消費者價格",
     "marketBreadth": "市場廣度",
     "climateNews": "氣候新聞",
-    "fx": "外匯匯率"
+    "fx": "外匯匯率",
+    "ukmtoIncidents": "UKMTO事件"
   },
   "commands": {
     "prefixes": {
@@ -1289,7 +1290,7 @@
         "ucdpEvents": "UCDP事件",
         "displacementFlows": "流離失所流向",
         "climateAnomalies": "氣候異常",
-        "weatherAlerts": "惡劣天氣預警（NWS、ECCC、WMO SWIC）",
+        "weatherAlerts": "天氣預警",
         "strategicWaterways": "戰略水道",
         "economicCenters": "經濟中心",
         "criticalMinerals": "關鍵礦產",
@@ -1311,9 +1312,9 @@
         "radiationSpike": "輻射峰值",
         "radiationElevated": "輻射升高",
         "canadaRoads": "Canada 道路",
-        "canadaAlerts": "加拿大警報（AB + BC + SK）",
+        "canadaAlerts": "加拿大警報",
         "notamAirspace": "NOTAM 空域限制",
-        "no2Activity": "工業活動（NO2）"
+        "no2Activity": "工業活動"
       },
       "tooltip": {
         "earthquake": "地震",
@@ -2567,7 +2568,15 @@
       "renewalFailedDesc": "我們無法核實您的訂閱續訂。請管理賬單，如問題持續請聯絡支援。",
       "manageBilling": "管理賬單",
       "lapsedDesc": "您的 Pro 訂閱已結束。重新訂閱以恢復進階存取權限。",
-      "resubscribe": "重新訂閱"
+      "resubscribe": "重新訂閱",
+      "billingEmailBouncedMessage": "傳送至 {{email}} 的賬單郵件被退回。請更新您的賬單郵箱，以便收到收據和付款提醒。",
+      "fixBillingEmail": "修正賬單郵箱",
+      "billingEmailLabel": "新的賬單郵箱",
+      "save": "儲存",
+      "billingEmailUpdated": "賬單郵箱已更新為 {{email}}。此後收據和付款提醒將傳送至該郵箱。",
+      "billingEmailInvalid": "請輸入有效的電子郵箱地址。",
+      "billingEmailSuppressed": "我們也無法向該地址送達郵件。請換一個地址。",
+      "billingEmailUpdateFailed": "無法更新您的賬單郵箱。請重試，如果仍然失敗，請聯絡支援團隊。"
     },
     "checkoutFailureBanner": {
       "message": "支付無法完成。未進行任何扣款。",
@@ -4038,7 +4047,7 @@
           "2": "路況折線可能簡化複雜的公路幾何。"
         },
         "related": {
-          "0": "惡劣天氣預警（NWS、ECCC、WMO SWIC）",
+          "0": "天氣預警",
           "1": "資料新鮮度狀態"
         }
       },
@@ -4054,7 +4063,7 @@
           "2": "沒有可對映嚴重程度的條目（艾伯塔CAP與顏色語義、不列顛哥倫比亞疏散狀態，或SaskAlert的CAP嚴重程度）會被丟棄，而不會被編造。SaskAlert摘要中的顏色或級別不視為CAP嚴重程度。"
         },
         "related": {
-          "0": "惡劣天氣預警（NWS、ECCC、WMO SWIC）",
+          "0": "天氣預警",
           "1": "自然事件圖層",
           "2": "資料新鮮度狀態"
         }
@@ -4087,7 +4096,7 @@
         },
         "related": {
           "0": "自然事件圖層彈窗",
-          "1": "惡劣天氣預警（NWS、ECCC、WMO SWIC）",
+          "1": "天氣預警",
           "2": "國家簡報的自然訊號"
         }
       },
@@ -4140,5 +4149,14 @@
         "0": "圖層指南"
       }
     }
+  },
+  "ukmto": {
+    "unavailable": "UKMTO資料不可用。",
+    "empty": "UKMTO未返回任何事件。",
+    "stale": "來源資料已過時。上次檢查",
+    "current": "來源已檢查",
+    "reportedClaims": "釋出方報告。相關說法可能仍在調查中。",
+    "occurred": "事件",
+    "reported": "釋出"
   }
 }

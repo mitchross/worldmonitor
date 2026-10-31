@@ -148,6 +148,7 @@ const MAP = [
   [/:\/api\/intelligence\/v1\/list-wsb-tickers$/, { cap: 'markets.wsb' }],
   [/:\/api\/intelligence\/v1\/classify-event$/,           { cap: 'news.classification' }],
   [/:\/api\/news\/v1\/list-media-perspective$/,          { cap: 'news.media_perspective' }],
+  [/:\/api\/news\/v1\/list-news-pool$/,                   { cap: 'news.pool' }],
   [/:\/api\/intelligence\/v1\/deduct-situation$/,         { cap: 'intel.deduction' }],
   [/:\/api\/intelligence\/v1\/(search-intel-history|get-intel-timeline|get-similar-events)$/, { cap: 'intel.memory' }],
   // get-country-coverage (#7526) is the agent-facing sibling of the country
@@ -157,7 +158,8 @@ const MAP = [
   [/:\/api\/intelligence\/v1\/(get-country-intel-brief|get-regime-history|get-country-coverage)$/, { cap: 'intel.country_brief' }],
   [/:\/api\/intelligence\/v1\/(get-regional-snapshot|get-regional-brief)$/,   { cap: 'intel.regional' }],
   [/:\/api\/resilience\/v1\//,                            { cap: 'resilience.scores' }],
-  [/:\/api\/scorecard\/v1\//,                             { cap: 'resilience.scores', note: 'five-factor scorecards' }],
+  // Five-factor scorecard (/api/scorecard/v1/) went free (#9742) — no gate
+  // rule is produced for it any more, so it carries no capability here.
   [/:\/api\/supply-chain\/v1\/(get-country-chokepoint-index|get-bypass-options)$/, { cap: 'supplychain.chokepoints' }],
   [/:\/api\/supply-chain\/v1\/(get-route-explorer-lane|get-route-impact)$/,        { cap: 'supplychain.routes' }],
   [/:\/api\/supply-chain\/v1\/(get-country-cost-shock|get-multi-sector-cost-shock|get-sector-dependency|get-country-products)$/, { cap: 'supplychain.costshock' }],

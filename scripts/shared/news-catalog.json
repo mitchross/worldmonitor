@@ -128,7 +128,9 @@
         "ipo",
         "producthunt",
         "hardware",
-        "outages"
+        "outages",
+        "thinktanks",
+        "podcasts"
       ],
       "finance": [
         "markets",
@@ -144,7 +146,8 @@
         "fin-regulation",
         "institutional",
         "analysis",
-        "gccNews"
+        "gccNews",
+        "nq-news"
       ],
       "commodity": [
         "commodity-news",
@@ -165,8 +168,21 @@
         "nature",
         "inspiring",
         "community"
+      ],
+      "energy": [
+        "live-news",
+        "energy",
+        "supply-chain"
       ]
     }
+  },
+  "gateExempt": {
+    "energy": [
+      "supply-chain"
+    ],
+    "finance": [
+      "nq-news"
+    ]
   },
   "categoryNotes": [
     {
@@ -2429,7 +2445,8 @@
         {
           "edition": "tech",
           "category": "tech",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 9
         }
       ]
     },
@@ -2591,7 +2608,8 @@
         {
           "edition": "finance",
           "category": "markets",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 8
         }
       ]
     },
@@ -2966,6 +2984,11 @@
           "edition": "ondemand",
           "category": "nq-news",
           "browserOrder": 2
+        },
+        {
+          "edition": "finance",
+          "category": "nq-news",
+          "serverOrder": 2
         }
       ]
     },
@@ -4343,7 +4366,8 @@
         {
           "edition": "energy",
           "category": "live-news",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 2
         }
       ]
     },
@@ -4466,13 +4490,14 @@
     },
     {
       "name": "CSIS",
-      "url": "https://news.google.com/rss/search?q=site:csis.org&hl=en&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=site:csis.org+when:7d&hl=en&gl=US&ceid=US:en",
       "type": "defense",
       "placements": [
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 11
+          "browserOrder": 11,
+          "serverOrder": 25
         }
       ]
     },
@@ -5876,12 +5901,14 @@
         {
           "edition": "energy",
           "category": "live-news",
-          "browserOrder": 0
+          "browserOrder": 0,
+          "serverOrder": 0
         },
         {
           "edition": "energy",
           "category": "energy",
-          "browserOrder": 0
+          "browserOrder": 0,
+          "serverOrder": 0
         }
       ]
     },
@@ -5898,12 +5925,14 @@
         {
           "edition": "energy",
           "category": "live-news",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 1
         },
         {
           "edition": "energy",
           "category": "energy",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 1
         }
       ]
     },
@@ -5965,7 +5994,8 @@
         {
           "edition": "energy",
           "category": "energy",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 8
         }
       ]
     },
@@ -6396,7 +6426,8 @@
         {
           "edition": "finance",
           "category": "economic",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 1
         }
       ]
     },
@@ -6929,7 +6960,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 94
         }
       ]
     },
@@ -6941,7 +6973,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 93
         }
       ]
     },
@@ -6953,7 +6986,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 83
         }
       ]
     },
@@ -6965,7 +6999,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 10
+          "browserOrder": 10,
+          "serverOrder": 86
         }
       ]
     },
@@ -6977,7 +7012,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 11
+          "browserOrder": 11,
+          "serverOrder": 91
         }
       ]
     },
@@ -6989,19 +7025,21 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 12
+          "browserOrder": 12,
+          "serverOrder": 92
         }
       ]
     },
     {
       "name": "Corriere della Sera",
-      "url": "https://www.corriere.it/rss/homepage.xml",
+      "url": "https://news.google.com/rss/search?q=site:corriere.it+when:1d&hl=it&gl=IT&ceid=IT:it",
       "lang": "it",
       "placements": [
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 16
+          "browserOrder": 16,
+          "serverOrder": 87
         }
       ]
     },
@@ -7013,7 +7051,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 17
+          "browserOrder": 17,
+          "serverOrder": 99
         }
       ]
     },
@@ -7025,7 +7064,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 19
+          "browserOrder": 19,
+          "serverOrder": 95
         }
       ]
     },
@@ -7037,7 +7077,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 20
+          "browserOrder": 20,
+          "serverOrder": 90
         }
       ]
     },
@@ -7049,7 +7090,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 22
+          "browserOrder": 22,
+          "serverOrder": 89
         }
       ]
     },
@@ -7061,7 +7103,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 23
+          "browserOrder": 23,
+          "serverOrder": 100
         }
       ]
     },
@@ -7076,7 +7119,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 29
+          "browserOrder": 29,
+          "serverOrder": 85
         }
       ]
     },
@@ -7088,7 +7132,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 30
+          "browserOrder": 30,
+          "serverOrder": 88
         }
       ]
     },
@@ -7103,7 +7148,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 72
+          "browserOrder": 72,
+          "serverOrder": 84
         }
       ]
     },
@@ -7115,7 +7161,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 75
+          "browserOrder": 75,
+          "serverOrder": 96
         }
       ]
     },
@@ -7126,7 +7173,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 76
+          "browserOrder": 76,
+          "serverOrder": 101
         }
       ]
     },
@@ -7137,7 +7185,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 77
+          "browserOrder": 77,
+          "serverOrder": 97
         }
       ]
     },
@@ -7148,7 +7197,8 @@
         {
           "edition": "full",
           "category": "europe",
-          "browserOrder": 78
+          "browserOrder": 78,
+          "serverOrder": 98
         }
       ]
     },
@@ -7159,7 +7209,8 @@
         {
           "edition": "full",
           "category": "middleeast",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 29
         }
       ]
     },
@@ -7170,7 +7221,8 @@
         {
           "edition": "full",
           "category": "middleeast",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 30
         }
       ]
     },
@@ -7181,7 +7233,8 @@
         {
           "edition": "full",
           "category": "middleeast",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 31
         }
       ]
     },
@@ -7193,40 +7246,44 @@
         {
           "edition": "full",
           "category": "middleeast",
-          "browserOrder": 16
+          "browserOrder": 16,
+          "serverOrder": 28
         }
       ]
     },
     {
       "name": "CDC",
-      "url": "https://news.google.com/rss/search?q=site:cdc.gov+OR+CDC+health&hl=en-US&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=site:cdc.gov+OR+CDC+health+when:7d&hl=en-US&gl=US&ceid=US:en",
       "placements": [
         {
           "edition": "full",
           "category": "gov",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 11
         }
       ]
     },
     {
       "name": "FEMA",
-      "url": "https://news.google.com/rss/search?q=site:fema.gov+OR+FEMA+emergency&hl=en-US&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=site:fema.gov+OR+FEMA+emergency+when:7d&hl=en-US&gl=US&ceid=US:en",
       "placements": [
         {
           "edition": "full",
           "category": "gov",
-          "browserOrder": 9
+          "browserOrder": 9,
+          "serverOrder": 13
         }
       ]
     },
     {
       "name": "DHS",
-      "url": "https://news.google.com/rss/search?q=site:dhs.gov+OR+\"Homeland+Security\"&hl=en-US&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=site:dhs.gov+OR+\"Homeland+Security\"+when:3d&hl=en-US&gl=US&ceid=US:en",
       "placements": [
         {
           "edition": "full",
           "category": "gov",
-          "browserOrder": 10
+          "browserOrder": 10,
+          "serverOrder": 12
         }
       ]
     },
@@ -7237,13 +7294,15 @@
         {
           "edition": "full",
           "category": "thinktanks",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 8
         },
         {
           "edition": "intel",
           "category": "intel",
           "browserOrder": 18,
-          "type": "research"
+          "type": "research",
+          "serverOrder": 24
         }
       ],
       "notes": [
@@ -7257,19 +7316,21 @@
         {
           "edition": "full",
           "category": "thinktanks",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 10
         }
       ]
     },
     {
       "name": "Brookings",
-      "url": "https://news.google.com/rss/search?q=site:brookings.edu&hl=en&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=site:brookings.edu+when:7d&hl=en&gl=US&ceid=US:en",
       "type": "research",
       "placements": [
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 19
+          "browserOrder": 19,
+          "serverOrder": 26
         }
       ]
     },
@@ -7280,19 +7341,21 @@
         {
           "edition": "full",
           "category": "thinktanks",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 11
         }
       ]
     },
     {
       "name": "Carnegie",
-      "url": "https://news.google.com/rss/search?q=site:carnegieendowment.org&hl=en&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=site:carnegieendowment.org+when:7d&hl=en&gl=US&ceid=US:en",
       "type": "research",
       "placements": [
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 20
+          "browserOrder": 20,
+          "serverOrder": 28
         }
       ]
     },
@@ -7306,7 +7369,8 @@
         {
           "edition": "full",
           "category": "thinktanks",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 9
         }
       ]
     },
@@ -7320,7 +7384,8 @@
         {
           "edition": "full",
           "category": "thinktanks",
-          "browserOrder": 9
+          "browserOrder": 9,
+          "serverOrder": 12
         }
       ]
     },
@@ -7332,13 +7397,14 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 23
+          "browserOrder": 23,
+          "serverOrder": 39
         }
       ]
     },
     {
       "name": "FPRI",
-      "url": "https://www.fpri.org/feed/",
+      "url": "https://news.google.com/rss/search?q=site:fpri.org+when:7d&hl=en-US&gl=US&ceid=US:en",
       "notes": [
         "FPRI - Foreign Policy Research Institute (US foreign policy)"
       ],
@@ -7346,7 +7412,8 @@
         {
           "edition": "full",
           "category": "thinktanks",
-          "browserOrder": 10
+          "browserOrder": 10,
+          "serverOrder": 6
         }
       ]
     },
@@ -7360,7 +7427,8 @@
         {
           "edition": "full",
           "category": "thinktanks",
-          "browserOrder": 11
+          "browserOrder": 11,
+          "serverOrder": 7
         }
       ]
     },
@@ -7371,7 +7439,8 @@
         {
           "edition": "full",
           "category": "crisis",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 3
         }
       ]
     },
@@ -7383,7 +7452,8 @@
         {
           "edition": "full",
           "category": "africa",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 33
         }
       ]
     },
@@ -7394,7 +7464,8 @@
         {
           "edition": "full",
           "category": "latam",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 21
         }
       ]
     },
@@ -7405,7 +7476,8 @@
         {
           "edition": "full",
           "category": "latam",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 24
         }
       ]
     },
@@ -7417,7 +7489,8 @@
         {
           "edition": "full",
           "category": "latam",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 23
         }
       ]
     },
@@ -7429,7 +7502,8 @@
         {
           "edition": "full",
           "category": "latam",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 19
         }
       ]
     },
@@ -7441,7 +7515,8 @@
         {
           "edition": "full",
           "category": "latam",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 17
         }
       ]
     },
@@ -7453,18 +7528,24 @@
         {
           "edition": "full",
           "category": "latam",
-          "browserOrder": 9
+          "browserOrder": 9,
+          "serverOrder": 18
         }
       ]
     },
     {
       "name": "La Silla Vacía",
       "url": "https://www.lasillavacia.com/rss",
+      "lang": "es",
+      "browser": {
+        "lang": null
+      },
       "placements": [
         {
           "edition": "full",
           "category": "latam",
-          "browserOrder": 10
+          "browserOrder": 10,
+          "serverOrder": 20
         }
       ]
     },
@@ -7475,7 +7556,8 @@
         {
           "edition": "full",
           "category": "latam",
-          "browserOrder": 15
+          "browserOrder": 15,
+          "serverOrder": 22
         }
       ]
     },
@@ -7486,7 +7568,8 @@
         {
           "edition": "full",
           "category": "latam",
-          "browserOrder": 16
+          "browserOrder": 16,
+          "serverOrder": 16
         }
       ]
     },
@@ -7497,30 +7580,33 @@
         {
           "edition": "full",
           "category": "asia",
-          "browserOrder": 11
+          "browserOrder": 11,
+          "serverOrder": 48
         }
       ]
     },
     {
       "name": "India News Network",
-      "url": "https://news.google.com/rss/search?q=India+diplomacy+foreign+policy+news&hl=en&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=India+diplomacy+foreign+policy+news+when:3d&hl=en&gl=US&ceid=US:en",
       "placements": [
         {
           "edition": "full",
           "category": "asia",
-          "browserOrder": 13
+          "browserOrder": 13,
+          "serverOrder": 47
         }
       ]
     },
     {
       "name": "Thai PBS",
-      "url": "https://news.google.com/rss/search?q=Thai+PBS+World+news&hl=en&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=Thai+PBS+World+news+when:2d&hl=en&gl=US&ceid=US:en",
       "lang": "th",
       "placements": [
         {
           "edition": "full",
           "category": "asia",
-          "browserOrder": 22
+          "browserOrder": 22,
+          "serverOrder": 49
         }
       ]
     },
@@ -7532,7 +7618,8 @@
         {
           "edition": "full",
           "category": "asia",
-          "browserOrder": 24
+          "browserOrder": 24,
+          "serverOrder": 50
         }
       ]
     },
@@ -7544,7 +7631,8 @@
         {
           "edition": "full",
           "category": "asia",
-          "browserOrder": 26
+          "browserOrder": 26,
+          "serverOrder": 45
         }
       ]
     },
@@ -7558,7 +7646,8 @@
         {
           "edition": "full",
           "category": "asia",
-          "browserOrder": 27
+          "browserOrder": 27,
+          "serverOrder": 44
         }
       ]
     },
@@ -7569,7 +7658,8 @@
         {
           "edition": "full",
           "category": "asia",
-          "browserOrder": 28
+          "browserOrder": 28,
+          "serverOrder": 46
         }
       ]
     },
@@ -7580,7 +7670,8 @@
         {
           "edition": "full",
           "category": "energy",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 3
         }
       ]
     },
@@ -7591,7 +7682,8 @@
         {
           "edition": "tech",
           "category": "tech",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 8
         }
       ]
     },
@@ -7602,7 +7694,8 @@
         {
           "edition": "tech",
           "category": "tech",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 7
         }
       ]
     },
@@ -7613,7 +7706,8 @@
         {
           "edition": "tech",
           "category": "tech",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 5
         }
       ]
     },
@@ -7624,7 +7718,8 @@
         {
           "edition": "tech",
           "category": "tech",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 6
         }
       ]
     },
@@ -7635,7 +7730,8 @@
         {
           "edition": "tech",
           "category": "ai",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 8
         }
       ]
     },
@@ -7646,7 +7742,8 @@
         {
           "edition": "tech",
           "category": "ai",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 7
         }
       ]
     },
@@ -7657,7 +7754,8 @@
         {
           "edition": "tech",
           "category": "ai",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 6
         }
       ]
     },
@@ -7668,7 +7766,8 @@
         {
           "edition": "tech",
           "category": "ai",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 4
         }
       ]
     },
@@ -7679,7 +7778,8 @@
         {
           "edition": "tech",
           "category": "ai",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 5
         }
       ]
     },
@@ -7690,7 +7790,8 @@
         {
           "edition": "tech",
           "category": "ai",
-          "browserOrder": 9
+          "browserOrder": 9,
+          "serverOrder": 9
         }
       ]
     },
@@ -7701,7 +7802,8 @@
         {
           "edition": "tech",
           "category": "startups",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 7
         }
       ]
     },
@@ -7712,7 +7814,8 @@
         {
           "edition": "tech",
           "category": "startups",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 3
         }
       ]
     },
@@ -7723,7 +7826,8 @@
         {
           "edition": "tech",
           "category": "startups",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 8
         }
       ]
     },
@@ -7734,7 +7838,8 @@
         {
           "edition": "tech",
           "category": "startups",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 9
         }
       ]
     },
@@ -7745,7 +7850,8 @@
         {
           "edition": "tech",
           "category": "startups",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 5
         }
       ]
     },
@@ -7756,7 +7862,8 @@
         {
           "edition": "tech",
           "category": "startups",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 6
         }
       ]
     },
@@ -7767,7 +7874,8 @@
         {
           "edition": "tech",
           "category": "startups",
-          "browserOrder": 9
+          "browserOrder": 9,
+          "serverOrder": 4
         }
       ]
     },
@@ -7778,7 +7886,8 @@
         {
           "edition": "tech",
           "category": "vcblogs",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 7
         }
       ]
     },
@@ -7789,7 +7898,8 @@
         {
           "edition": "tech",
           "category": "vcblogs",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 8
         }
       ]
     },
@@ -7800,18 +7910,20 @@
         {
           "edition": "tech",
           "category": "vcblogs",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 6
         }
       ]
     },
     {
       "name": "FwdStart Newsletter",
-      "url": "/api/fwdstart",
+      "url": "https://news.google.com/rss/search?q=site:fwdstart.me+when:7d&hl=en-US&gl=US&ceid=US:en",
       "placements": [
         {
           "edition": "tech",
           "category": "vcblogs",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 5
         }
       ]
     },
@@ -7822,7 +7934,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 30
         }
       ]
     },
@@ -7833,7 +7946,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 21
         }
       ]
     },
@@ -7844,7 +7958,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 26
         }
       ]
     },
@@ -7855,7 +7970,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 9
         }
       ]
     },
@@ -7869,7 +7985,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 11
         }
       ]
     },
@@ -7880,7 +7997,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 9
+          "browserOrder": 9,
+          "serverOrder": 6
         }
       ]
     },
@@ -7891,7 +8009,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 10
+          "browserOrder": 10,
+          "serverOrder": 12
         }
       ]
     },
@@ -7905,7 +8024,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 11
+          "browserOrder": 11,
+          "serverOrder": 17
         }
       ]
     },
@@ -7916,7 +8036,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 12
+          "browserOrder": 12,
+          "serverOrder": 18
         }
       ]
     },
@@ -7927,7 +8048,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 13
+          "browserOrder": 13,
+          "serverOrder": 25
         }
       ]
     },
@@ -7941,7 +8063,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 14
+          "browserOrder": 14,
+          "serverOrder": 20
         }
       ]
     },
@@ -7952,7 +8075,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 15
+          "browserOrder": 15,
+          "serverOrder": 19
         }
       ]
     },
@@ -7963,7 +8087,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 17
+          "browserOrder": 17,
+          "serverOrder": 32
         }
       ]
     },
@@ -7974,7 +8099,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 18
+          "browserOrder": 18,
+          "serverOrder": 14
         }
       ]
     },
@@ -7985,7 +8111,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 19
+          "browserOrder": 19,
+          "serverOrder": 15
         }
       ]
     },
@@ -7999,7 +8126,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 20
+          "browserOrder": 20,
+          "serverOrder": 27
         }
       ]
     },
@@ -8010,7 +8138,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 21
+          "browserOrder": 21,
+          "serverOrder": 31
         }
       ]
     },
@@ -8021,7 +8150,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 22
+          "browserOrder": 22,
+          "serverOrder": 16
         }
       ]
     },
@@ -8035,21 +8165,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 23
-        }
-      ]
-    },
-    {
-      "name": "LAVCA (LATAM)",
-      "url": "https://news.google.com/rss/search?q=site:lavca.org+when:7d&hl=en-US&gl=US&ceid=US:en",
-      "notes": [
-        "Latin America"
-      ],
-      "placements": [
-        {
-          "edition": "tech",
-          "category": "regionalStartups",
-          "browserOrder": 24
+          "browserOrder": 23,
+          "serverOrder": 29
         }
       ]
     },
@@ -8060,7 +8177,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 25
+          "browserOrder": 25,
+          "serverOrder": 22
         }
       ]
     },
@@ -8071,7 +8189,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 26
+          "browserOrder": 26,
+          "serverOrder": 28
         }
       ]
     },
@@ -8082,7 +8201,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 27
+          "browserOrder": 27,
+          "serverOrder": 10
         }
       ]
     },
@@ -8093,7 +8213,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 28
+          "browserOrder": 28,
+          "serverOrder": 13
         }
       ]
     },
@@ -8104,7 +8225,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 30
+          "browserOrder": 30,
+          "serverOrder": 7
         }
       ]
     },
@@ -8115,7 +8237,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 31
+          "browserOrder": 31,
+          "serverOrder": 8
         }
       ]
     },
@@ -8129,7 +8252,8 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 32
+          "browserOrder": 32,
+          "serverOrder": 23
         }
       ]
     },
@@ -8140,18 +8264,24 @@
         {
           "edition": "tech",
           "category": "regionalStartups",
-          "browserOrder": 33
+          "browserOrder": 33,
+          "serverOrder": 24
         }
       ]
     },
     {
       "name": "GitHub Trending",
       "url": "https://mshibanami.github.io/GitHubTrendingRSS/daily/all.xml",
+      "channelDated": true,
+      "linkHosts": [
+        "github.com"
+      ],
       "placements": [
         {
           "edition": "tech",
           "category": "github",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 2
         }
       ]
     },
@@ -8162,7 +8292,8 @@
         {
           "edition": "tech",
           "category": "github",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 4
         }
       ]
     },
@@ -8173,7 +8304,8 @@
         {
           "edition": "tech",
           "category": "github",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 1
         }
       ]
     },
@@ -8184,7 +8316,8 @@
         {
           "edition": "tech",
           "category": "github",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 3
         }
       ]
     },
@@ -8195,7 +8328,8 @@
         {
           "edition": "tech",
           "category": "ipo",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 2
         }
       ]
     },
@@ -8206,7 +8340,8 @@
         {
           "edition": "tech",
           "category": "funding",
-          "browserOrder": 0
+          "browserOrder": 0,
+          "serverOrder": 1
         }
       ]
     },
@@ -8217,7 +8352,8 @@
         {
           "edition": "tech",
           "category": "funding",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 2
         }
       ]
     },
@@ -8228,7 +8364,8 @@
         {
           "edition": "tech",
           "category": "funding",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 3
         }
       ]
     },
@@ -8239,7 +8376,8 @@
         {
           "edition": "tech",
           "category": "security",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 3
         }
       ]
     },
@@ -8250,7 +8388,8 @@
         {
           "edition": "tech",
           "category": "security",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 2
         }
       ]
     },
@@ -8261,7 +8400,8 @@
         {
           "edition": "tech",
           "category": "policy",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 4
         }
       ]
     },
@@ -8275,18 +8415,8 @@
         {
           "edition": "tech",
           "category": "policy",
-          "browserOrder": 4
-        }
-      ]
-    },
-    {
-      "name": "Euractiv Digital",
-      "url": "https://news.google.com/rss/search?q=site:euractiv.com+digital+OR+tech+when:7d&hl=en-US&gl=US&ceid=US:en",
-      "placements": [
-        {
-          "edition": "tech",
-          "category": "policy",
-          "browserOrder": 5
+          "browserOrder": 4,
+          "serverOrder": 6
         }
       ]
     },
@@ -8297,7 +8427,8 @@
         {
           "edition": "tech",
           "category": "policy",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 5
         }
       ]
     },
@@ -8311,7 +8442,8 @@
         {
           "edition": "tech",
           "category": "policy",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 3
         }
       ]
     },
@@ -8325,7 +8457,8 @@
         {
           "edition": "tech",
           "category": "policy",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 8
         }
       ]
     },
@@ -8339,7 +8472,8 @@
         {
           "edition": "tech",
           "category": "policy",
-          "browserOrder": 9
+          "browserOrder": 9,
+          "serverOrder": 7
         }
       ]
     },
@@ -8353,7 +8487,8 @@
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 0
+          "browserOrder": 0,
+          "serverOrder": 0
         }
       ]
     },
@@ -8364,18 +8499,20 @@
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 1
         }
       ]
     },
     {
       "name": "MIT Tech Policy",
-      "url": "https://news.google.com/rss/search?q=%22Tech+Policy+Press%22&hl=en&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=%22Tech+Policy+Press%22+when:7d&hl=en&gl=US&ceid=US:en",
       "placements": [
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 2
         }
       ]
     },
@@ -8386,18 +8523,20 @@
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 3
         }
       ]
     },
     {
       "name": "AI Now Institute",
-      "url": "https://news.google.com/rss/search?q=%22AI+Now+Institute%22&hl=en&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=%22AI+Now+Institute%22+when:7d&hl=en&gl=US&ceid=US:en",
       "placements": [
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 4
         }
       ]
     },
@@ -8411,7 +8550,8 @@
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 5
         }
       ]
     },
@@ -8422,7 +8562,8 @@
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 6
         }
       ]
     },
@@ -8433,7 +8574,8 @@
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 7
         }
       ]
     },
@@ -8447,7 +8589,8 @@
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 8
         }
       ]
     },
@@ -8458,7 +8601,8 @@
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 9
+          "browserOrder": 9,
+          "serverOrder": 9
         }
       ]
     },
@@ -8469,7 +8613,8 @@
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 10
+          "browserOrder": 10,
+          "serverOrder": 10
         }
       ]
     },
@@ -8480,7 +8625,8 @@
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 11
+          "browserOrder": 11,
+          "serverOrder": 11
         }
       ]
     },
@@ -8494,18 +8640,20 @@
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 12
+          "browserOrder": 12,
+          "serverOrder": 12
         }
       ]
     },
     {
       "name": "DigiChina",
-      "url": "https://news.google.com/rss/search?q=DigiChina+Stanford+China+technology&hl=en&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=DigiChina+Stanford+China+technology+when:7d&hl=en&gl=US&ceid=US:en",
       "placements": [
         {
           "edition": "tech",
           "category": "thinktanks",
-          "browserOrder": 13
+          "browserOrder": 13,
+          "serverOrder": 13
         }
       ]
     },
@@ -8516,7 +8664,8 @@
         {
           "edition": "tech",
           "category": "finance",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 2
         }
       ]
     },
@@ -8527,18 +8676,20 @@
         {
           "edition": "tech",
           "category": "finance",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 3
         }
       ]
     },
     {
       "name": "DevOps.com",
-      "url": "https://devops.com/feed/",
+      "url": "https://news.google.com/rss/search?q=site:devops.com+when:7d&hl=en-US&gl=US&ceid=US:en",
       "placements": [
         {
           "edition": "tech",
           "category": "cloud",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 2
         }
       ]
     },
@@ -8549,7 +8700,8 @@
         {
           "edition": "tech",
           "category": "unicorns",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 2
         }
       ]
     },
@@ -8560,7 +8712,8 @@
         {
           "edition": "tech",
           "category": "unicorns",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 3
         }
       ]
     },
@@ -8571,7 +8724,8 @@
         {
           "edition": "tech",
           "category": "accelerators",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 4
         }
       ]
     },
@@ -8582,7 +8736,8 @@
         {
           "edition": "tech",
           "category": "accelerators",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 2
         }
       ]
     },
@@ -8593,7 +8748,8 @@
         {
           "edition": "tech",
           "category": "accelerators",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 3
         }
       ]
     },
@@ -8607,7 +8763,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 0
+          "browserOrder": 0,
+          "serverOrder": 0
         }
       ]
     },
@@ -8618,7 +8775,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 1
         }
       ]
     },
@@ -8629,7 +8787,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 2
         }
       ]
     },
@@ -8640,7 +8799,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 3
         }
       ]
     },
@@ -8651,7 +8811,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 4
         }
       ]
     },
@@ -8662,7 +8823,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 5
         }
       ]
     },
@@ -8676,7 +8838,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 6
         }
       ]
     },
@@ -8687,7 +8850,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 7
         }
       ]
     },
@@ -8698,7 +8862,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 8
         }
       ]
     },
@@ -8712,7 +8877,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 9
+          "browserOrder": 9,
+          "serverOrder": 9
         }
       ]
     },
@@ -8726,7 +8892,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 10
+          "browserOrder": 10,
+          "serverOrder": 10
         }
       ]
     },
@@ -8737,7 +8904,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 11
+          "browserOrder": 11,
+          "serverOrder": 11
         }
       ]
     },
@@ -8751,7 +8919,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 12
+          "browserOrder": 12,
+          "serverOrder": 12
         }
       ]
     },
@@ -8762,7 +8931,8 @@
         {
           "edition": "tech",
           "category": "podcasts",
-          "browserOrder": 13
+          "browserOrder": 13,
+          "serverOrder": 13
         }
       ]
     },
@@ -8773,7 +8943,8 @@
         {
           "edition": "finance",
           "category": "markets",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 11
         }
       ]
     },
@@ -8784,7 +8955,8 @@
         {
           "edition": "finance",
           "category": "markets",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 9
         }
       ]
     },
@@ -8795,7 +8967,8 @@
         {
           "edition": "finance",
           "category": "markets",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 10
         }
       ]
     },
@@ -8806,7 +8979,8 @@
         {
           "edition": "finance",
           "category": "forex",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 2
         }
       ]
     },
@@ -8817,7 +8991,8 @@
         {
           "edition": "finance",
           "category": "forex",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 1
         }
       ]
     },
@@ -8828,7 +9003,8 @@
         {
           "edition": "finance",
           "category": "bonds",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 2
         }
       ]
     },
@@ -8839,7 +9015,8 @@
         {
           "edition": "finance",
           "category": "bonds",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 1
         }
       ]
     },
@@ -8850,7 +9027,13 @@
         {
           "edition": "finance",
           "category": "commodities",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 2
+        },
+        {
+          "edition": "full",
+          "category": "commodities",
+          "serverOrder": 2
         }
       ]
     },
@@ -8861,7 +9044,13 @@
         {
           "edition": "finance",
           "category": "commodities",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 3
+        },
+        {
+          "edition": "full",
+          "category": "commodities",
+          "serverOrder": 3
         }
       ]
     },
@@ -8872,7 +9061,8 @@
         {
           "edition": "finance",
           "category": "crypto",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 20
         }
       ]
     },
@@ -8883,7 +9073,8 @@
         {
           "edition": "finance",
           "category": "centralbanks",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 4
         }
       ]
     },
@@ -8894,7 +9085,8 @@
         {
           "edition": "finance",
           "category": "centralbanks",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 3
         }
       ]
     },
@@ -8905,7 +9097,8 @@
         {
           "edition": "finance",
           "category": "centralbanks",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 2
         }
       ]
     },
@@ -8916,7 +9109,8 @@
         {
           "edition": "finance",
           "category": "centralbanks",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 5
         }
       ]
     },
@@ -8927,7 +9121,8 @@
         {
           "edition": "finance",
           "category": "economic",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 2
         }
       ]
     },
@@ -8938,7 +9133,8 @@
         {
           "edition": "finance",
           "category": "ipo",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 1
         }
       ]
     },
@@ -8949,7 +9145,8 @@
         {
           "edition": "finance",
           "category": "ipo",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 2
         }
       ]
     },
@@ -8960,7 +9157,8 @@
         {
           "edition": "happy",
           "category": "positive",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 9
         }
       ]
     },
@@ -8971,7 +9169,8 @@
         {
           "edition": "happy",
           "category": "positive",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 4
         }
       ]
     },
@@ -8982,7 +9181,8 @@
         {
           "edition": "happy",
           "category": "positive",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 6
         }
       ]
     },
@@ -8993,7 +9193,8 @@
         {
           "edition": "happy",
           "category": "positive",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 5
         }
       ]
     },
@@ -9004,7 +9205,8 @@
         {
           "edition": "happy",
           "category": "positive",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 7
         }
       ]
     },
@@ -9015,7 +9217,8 @@
         {
           "edition": "happy",
           "category": "positive",
-          "browserOrder": 9
+          "browserOrder": 9,
+          "serverOrder": 8
         }
       ]
     },
@@ -9026,7 +9229,8 @@
         {
           "edition": "happy",
           "category": "science",
-          "browserOrder": 0
+          "browserOrder": 0,
+          "serverOrder": 4
         }
       ]
     },
@@ -9037,18 +9241,20 @@
         {
           "edition": "happy",
           "category": "science",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 6
         }
       ]
     },
     {
       "name": "New Scientist",
-      "url": "https://www.newscientist.com/feed/home/",
+      "url": "https://news.google.com/rss/search?q=site:newscientist.com+when:3d&hl=en-US&gl=US&ceid=US:en",
       "placements": [
         {
           "edition": "happy",
           "category": "science",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 7
         }
       ]
     },
@@ -9059,7 +9265,8 @@
         {
           "edition": "happy",
           "category": "science",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 5
         }
       ]
     },
@@ -9070,7 +9277,8 @@
         {
           "edition": "happy",
           "category": "nature",
-          "browserOrder": 0
+          "browserOrder": 0,
+          "serverOrder": 2
         }
       ]
     },
@@ -9081,7 +9289,8 @@
         {
           "edition": "happy",
           "category": "nature",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 3
         }
       ]
     },
@@ -9092,7 +9301,8 @@
         {
           "edition": "happy",
           "category": "inspiring",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 2
         }
       ]
     },
@@ -9106,7 +9316,8 @@
         {
           "edition": "commodity",
           "category": "gold-silver",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 7
         }
       ]
     },
@@ -9117,7 +9328,8 @@
         {
           "edition": "commodity",
           "category": "gold-silver",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 8
         }
       ]
     },
@@ -9128,7 +9340,8 @@
         {
           "edition": "commodity",
           "category": "gold-silver",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 6
         }
       ]
     },
@@ -9142,7 +9355,8 @@
         {
           "edition": "commodity",
           "category": "gold-silver",
-          "browserOrder": 8
+          "browserOrder": 8,
+          "serverOrder": 5
         }
       ]
     },
@@ -9153,7 +9367,8 @@
         {
           "edition": "energy",
           "category": "live-news",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 3
         }
       ]
     },
@@ -9164,7 +9379,8 @@
         {
           "edition": "energy",
           "category": "live-news",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 4
         }
       ]
     },
@@ -9175,7 +9391,8 @@
         {
           "edition": "energy",
           "category": "live-news",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 5
         }
       ]
     },
@@ -9186,7 +9403,8 @@
         {
           "edition": "energy",
           "category": "live-news",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 6
         }
       ]
     },
@@ -9197,7 +9415,8 @@
         {
           "edition": "energy",
           "category": "energy",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 2
         }
       ]
     },
@@ -9208,7 +9427,8 @@
         {
           "edition": "energy",
           "category": "energy",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 3
         }
       ]
     },
@@ -9219,7 +9439,8 @@
         {
           "edition": "energy",
           "category": "energy",
-          "browserOrder": 4
+          "browserOrder": 4,
+          "serverOrder": 4
         }
       ]
     },
@@ -9230,7 +9451,8 @@
         {
           "edition": "energy",
           "category": "energy",
-          "browserOrder": 5
+          "browserOrder": 5,
+          "serverOrder": 5
         }
       ]
     },
@@ -9241,7 +9463,8 @@
         {
           "edition": "energy",
           "category": "energy",
-          "browserOrder": 6
+          "browserOrder": 6,
+          "serverOrder": 6
         }
       ]
     },
@@ -9252,7 +9475,8 @@
         {
           "edition": "energy",
           "category": "energy",
-          "browserOrder": 7
+          "browserOrder": 7,
+          "serverOrder": 7
         }
       ]
     },
@@ -9263,7 +9487,8 @@
         {
           "edition": "energy",
           "category": "supply-chain",
-          "browserOrder": 0
+          "browserOrder": 0,
+          "serverOrder": 0
         }
       ]
     },
@@ -9274,7 +9499,8 @@
         {
           "edition": "energy",
           "category": "supply-chain",
-          "browserOrder": 1
+          "browserOrder": 1,
+          "serverOrder": 1
         }
       ]
     },
@@ -9285,7 +9511,8 @@
         {
           "edition": "energy",
           "category": "supply-chain",
-          "browserOrder": 2
+          "browserOrder": 2,
+          "serverOrder": 2
         }
       ]
     },
@@ -9296,7 +9523,8 @@
         {
           "edition": "energy",
           "category": "supply-chain",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 3
         }
       ]
     },
@@ -9308,6 +9536,11 @@
           "edition": "ondemand",
           "category": "nq-news",
           "browserOrder": 0
+        },
+        {
+          "edition": "finance",
+          "category": "nq-news",
+          "serverOrder": 0
         }
       ]
     },
@@ -9319,6 +9552,11 @@
           "edition": "ondemand",
           "category": "nq-news",
           "browserOrder": 1
+        },
+        {
+          "edition": "finance",
+          "category": "nq-news",
+          "serverOrder": 1
         }
       ]
     },
@@ -9330,6 +9568,11 @@
           "edition": "ondemand",
           "category": "nq-news",
           "browserOrder": 3
+        },
+        {
+          "edition": "finance",
+          "category": "nq-news",
+          "serverOrder": 3
         }
       ]
     },
@@ -9341,6 +9584,11 @@
           "edition": "ondemand",
           "category": "nq-news",
           "browserOrder": 4
+        },
+        {
+          "edition": "finance",
+          "category": "nq-news",
+          "serverOrder": 4
         }
       ]
     },
@@ -9352,7 +9600,8 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 3
+          "browserOrder": 3,
+          "serverOrder": 35
         }
       ]
     },
@@ -9364,7 +9613,8 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 10
+          "browserOrder": 10,
+          "serverOrder": 42
         }
       ]
     },
@@ -9379,7 +9629,8 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 12
+          "browserOrder": 12,
+          "serverOrder": 29
         }
       ]
     },
@@ -9391,7 +9642,8 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 13
+          "browserOrder": 13,
+          "serverOrder": 30
         }
       ]
     },
@@ -9403,19 +9655,21 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 17
+          "browserOrder": 17,
+          "serverOrder": 37
         }
       ]
     },
     {
       "name": "FAS",
-      "url": "https://news.google.com/rss/search?q=site:fas.org+nuclear+weapons+security&hl=en&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=site:fas.org+when:30d&hl=en-US&gl=US&ceid=US:en",
       "type": "research",
       "placements": [
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 21
+          "browserOrder": 21,
+          "serverOrder": 33
         }
       ]
     },
@@ -9427,7 +9681,8 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 22
+          "browserOrder": 22,
+          "serverOrder": 38
         }
       ]
     },
@@ -9439,7 +9694,8 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 24
+          "browserOrder": 24,
+          "serverOrder": 43
         }
       ]
     },
@@ -9451,7 +9707,8 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 25
+          "browserOrder": 25,
+          "serverOrder": 34
         }
       ]
     },
@@ -9463,7 +9720,8 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 26
+          "browserOrder": 26,
+          "serverOrder": 41
         }
       ]
     },
@@ -9475,7 +9733,8 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 27
+          "browserOrder": 27,
+          "serverOrder": 27
         }
       ]
     },
@@ -9487,19 +9746,21 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 28
+          "browserOrder": 28,
+          "serverOrder": 36
         }
       ]
     },
     {
       "name": "Ransomware.live",
-      "url": "https://www.ransomware.live/rss.xml",
+      "url": "https://news.google.com/rss/search?q=site:ransomware.live+when:7d&hl=en-US&gl=US&ceid=US:en",
       "type": "cyber",
       "placements": [
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 33
+          "browserOrder": 33,
+          "serverOrder": 40
         }
       ]
     },
@@ -9511,7 +9772,8 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 35
+          "browserOrder": 35,
+          "serverOrder": 32
         }
       ]
     },
@@ -9523,7 +9785,8 @@
         {
           "edition": "intel",
           "category": "intel",
-          "browserOrder": 43
+          "browserOrder": 43,
+          "serverOrder": 31
         }
       ]
     }
