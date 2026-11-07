@@ -129,6 +129,14 @@ function aviationBreakerCacheMinutes(name: string): number {
   return evalNumberExpression(match[1]) / 60_000;
 }
 
+function registryCronIntervalMinutes(service: string): number {
+  const registry = JSON.parse(readSource('scripts/railway-services.json')) as Array<{ service: string; cronSchedule?: string | null }>;
+  const cron = registry.find((entry) => entry.service === service)?.cronSchedule;
+  const match = cron?.match(/^\*\/([0-9]+) \* \* \* \*$/);
+  assert.ok(match, `scripts/railway-services.json must register ${service} with a */N minute cron, saw ${cron}`);
+  return Number(match[1]);
+}
+
 function maxStaleMin(path: string, seedDomain: string): number {
   const source = readSource(path);
   const match = source.match(new RegExp(`runSeed\\(\\s*['"][^'"]+['"]\\s*,\\s*['"]${seedDomain}['"][\\s\\S]*?maxStaleMin:\\s*([^,\\n}]+)`));
@@ -231,10 +239,14 @@ describe('layer explanation metadata', () => {
   });
 
   test('curated freshness text is a data contract against seeder and runtime cadence sources', () => {
-    const naturalCadenceMin = maxStaleMin('scripts/seed-natural-events.mjs', 'events') / 3;
+    // The cadence is the registered Railway cron of the sole producer.
+    const naturalCadenceMin = registryCronIntervalMinutes('seed-natural-events');
+    const naturalStaleMin = healthMaxStale('naturalEvents');
+    assert.equal(maxStaleMin('scripts/seed-natural-events.mjs', 'events'), naturalStaleMin, 'the seeder and health share one natural stale budget');
+    assert.ok(naturalStaleMin > naturalCadenceMin * 2, 'two missed natural runs must stay inside the health budget');
     const naturalTtlMin = constNumber('scripts/seed-natural-events.mjs', 'CACHE_TTL') / 60;
-    assert.equal(naturalTtlMin, naturalCadenceMin * 6, 'natural TTL must keep the documented 6x cadence buffer');
-    assertDuration(renderedFreshnessText('natural'), /every\s+([0-9]+)\s+(hour)s?/i, naturalCadenceMin, 'natural event seed cadence');
+    assert.ok(naturalTtlMin > naturalStaleMin, 'natural data must outlive its health stale budget so staleness alarms before expiry');
+    assertDuration(renderedFreshnessText('natural'), /every\s+([0-9]+)\s+(minute)s?/i, naturalCadenceMin, 'natural event seed cadence');
 
     assertDuration(renderedFreshnessText('weather'), /every\s+([0-9]+)\s+(minute)s?/i, relayConstMinutes('WEATHER_SEED_INTERVAL_MS'), 'weather relay seed cadence');
     assertDuration(renderedFreshnessText('weather'), /([0-9]+)-\s*(minute)\s+freshness budget/i, healthMaxStale('weatherAlerts'), 'weather health freshness budget');
@@ -296,10 +308,11 @@ describe('layer explanation metadata', () => {
   });
 
   test('freshness contract assertions fail on stale copied cadence values', () => {
-    const staleNaturalText = renderedFreshnessText('natural').replace('3 hours', '12 hours');
+    const staleNaturalText = renderedFreshnessText('natural').replace('30 minutes', '180 minutes');
+    assert.notEqual(staleNaturalText, renderedFreshnessText('natural'), 'the stale-copy fixture must change the cadence');
 
     assert.throws(
-      () => assertDuration(staleNaturalText, /every\s+([0-9]+)\s+(hour)s?/i, maxStaleMin('scripts/seed-natural-events.mjs', 'events') / 3, 'natural event seed cadence'),
+      () => assertDuration(staleNaturalText, /every\s+([0-9]+)\s+(minute)s?/i, registryCronIntervalMinutes('seed-natural-events'), 'natural event seed cadence'),
       /natural event seed cadence must match authoritative freshness\/cadence source/,
     );
   });
@@ -340,7 +353,7 @@ describe('layer explanation metadata', () => {
   test('weather explanation discloses NWS, ECCC, and WMO SWIC coverage', () => {
     const weather = copyBlock('weather');
 
-    assert.equal(LAYER_REGISTRY.weather.fallbackLabel, 'Severe Weather Alerts (NWS, ECCC, WMO SWIC)');
+    assert.equal(LAYER_REGISTRY.weather.fallbackLabel, 'Weather Alerts');
     assert.match(weather.source, /National Weather Service \(NWS\)/i);
     assert.match(weather.source, /Environment and Climate Change Canada \(ECCC\)/i);
     assert.match(weather.source, /WMO Severe Weather Information Centre \(SWIC\)/i);
@@ -361,7 +374,7 @@ describe('layer explanation metadata', () => {
   test('canadaAlerts explanation discloses Alberta, B.C., and Saskatchewan coverage', () => {
     const canadaAlerts = copyBlock('canadaAlerts');
 
-    assert.equal(LAYER_REGISTRY.canadaAlerts.fallbackLabel, 'Canada Alerts (AB + BC + SK)');
+    assert.equal(LAYER_REGISTRY.canadaAlerts.fallbackLabel, 'Canada Alerts');
     assert.match(canadaAlerts.source, /Alberta Emergency Alert/i);
     assert.match(canadaAlerts.source, /OGL-BC Evacuation Orders and Alerts/i);
     assert.match(canadaAlerts.source, /SaskAlert/i);
@@ -382,6 +395,23 @@ describe('layer explanation metadata', () => {
       .map(([key]) => key);
 
     assert.deepEqual(new Set(curated), declared);
+  });
+
+  // Picker labels are short Title Case names; source and coverage detail
+  // belongs in the explanation card behind the (i) button.
+  test('layer picker labels are short Title Case names without parentheticals', () => {
+    const lowercaseWords = new Set(['of', 'and']);
+    const layerLabels = lookupLocale(enLocale, 'components.deckgl.layers') as Record<string, string>;
+    for (const def of Object.values(LAYER_REGISTRY)) {
+      for (const label of [def.fallbackLabel, layerLabels[def.i18nSuffix]]) {
+        if (label === undefined) continue;
+        assert.doesNotMatch(label, /[(（]/, `${def.key} label "${label}" must not carry a parenthetical`);
+        for (const word of label.split(' ')) {
+          if (lowercaseWords.has(word)) continue;
+          assert.doesNotMatch(word, /^\p{Ll}/u, `${def.key} label "${label}" must be Title Case`);
+        }
+      }
+    }
   });
 });
 

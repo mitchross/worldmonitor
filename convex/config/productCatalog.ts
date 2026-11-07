@@ -390,26 +390,28 @@ const API_BUSINESS_FEATURES: PlanFeatures = {
   dataExport: true,
 };
 
-// Enterprise is sold as "Unlimited API requests" under fair use. The daily
-// numbers below are circuit breakers against a leaked key, not plan limits:
-// every one is at least 2.5× the largest self-serve plan, and the high-usage
-// alarm (server/_shared/high-usage-alarm.ts) pages at a quarter of each. An
-// unknown Dodo product also resolves here (FALLBACK_PLAN_KEY in
-// payments/subscriptionHelpers.ts), so "unlimited" was reachable without a
-// sales contract. Pinned by tests/high-usage-alarm.test.mts.
+// Enterprise is sold by contract. These numbers are the contract default —
+// 10,000 requests a day and 300 a minute, the same as API Business, with MCP
+// charged to the REST budget — and apply to every Enterprise user outside a
+// pooled enterprise account. Larger allowances are set per contract, not here.
+// An unknown Dodo product also resolves here (FALLBACK_PLAN_KEY in
+// payments/subscriptionHelpers.ts), so this must stay a finite, sellable
+// default. The read-time merge (lib/entitlements.ts) applies these numbers to
+// stored Enterprise rows too. Pinned by tests/high-usage-alarm.test.mts and
+// convex/__tests__/entitlement-merge-enterprise.test.ts.
 const ENTERPRISE_FEATURES: PlanFeatures = {
   tier: 3,
   historyDays: 365,
   maxDashboards: -1,
   apiAccess: true,
-  apiRateLimit: 1000,
-  apiDailyAllowance: 100_000,
+  apiRateLimit: 300,
+  apiDailyAllowance: 10_000,
   planLimits: {
-    apiRequestsPerDay: 100_000,
-    apiBurstRequestsPerMinute: 1000,
-    mcpCallsPerDay: 25_000,
-    dashboardAiCallsPerDay: 25_000,
-    mcpBurstRequestsPerMinute: 1000,
+    apiRequestsPerDay: 10_000,
+    apiBurstRequestsPerMinute: 300,
+    mcpCallsPerDay: SHARED_API_BUDGET,
+    dashboardAiCallsPerDay: 10_000,
+    mcpBurstRequestsPerMinute: 300,
     desktopKeyRequestsPerDay: 0,
     desktopKeyBurstPerMinute: 0,
   },
@@ -491,10 +493,8 @@ export const PRODUCT_CATALOG: Record<string, CatalogEntry> = {
   },
 
   pro_business_monthly: {
-    // PLACEHOLDER — no such product exists in Dodo. Replaced with the real
-    // product ID before launch (activation runbook, plan 2026-07-25-001).
-    // Reaching checkout with this ID is a launch-sequencing bug, not a
-    // supported path.
+    // Live Dodo product "Pro Business Monthly" (USD 49.99/month), created
+    // 2026-07-25 under the activation runbook (plan 2026-07-25-001).
     dodoProductId: "pdt_0NjyFDbhURh2oROgPIU3G",
     planKey: "pro_business_monthly",
     displayName: "Pro Business Monthly",
@@ -517,13 +517,15 @@ export const PRODUCT_CATALOG: Record<string, CatalogEntry> = {
     currentForCheckout: true,
     // Pro and Pro Business are separate Dodo products, not a
     // subscription-updatable collection — the customer portal cannot perform
-    // the change, so the plan-limit CTA must not point at it.
+    // the change, so the plan-limit CTA must not point at it. Pro subscribers
+    // upgrade in place through the change-plan API instead
+    // (runProBusinessUpgrade in payments/billing.ts).
     canChangePlanSelfServe: false,
     publicVisible: true,
   },
 
   pro_business_annual: {
-    // PLACEHOLDER — see pro_business_monthly.
+    // Live Dodo product "Pro Business Yearly" (USD 449.99/year), created 2026-07-26.
     dodoProductId: "pdt_0Nk072fxPUcHWivZRtlQW",
     planKey: "pro_business_annual",
     displayName: "Pro Business Annual",
@@ -548,6 +550,7 @@ export const PRODUCT_CATALOG: Record<string, CatalogEntry> = {
     tierGroup: "api_starter",
     features: API_STARTER_FEATURES,
     marketingFeatures: [
+      "Full Pro dashboard included (1 named user)",
       "REST API + official SDKs (npm, PyPI, RubyGems, Go)",
       "License / API key included",
       "Real-time data streams",
@@ -555,7 +558,7 @@ export const PRODUCT_CATALOG: Record<string, CatalogEntry> = {
       "1,000 requests/day included (REST + MCP combined; a live MCP call counts as 2-3)",
       "Webhook notifications",
     ],
-    highlightFeatures: ["Commercial license — for your organization"],
+    highlightFeatures: ["Commercial use — internal only, not customer-facing"],
     selfServe: true,
     highlighted: false,
     currentForCheckout: true,
@@ -600,7 +603,7 @@ export const PRODUCT_CATALOG: Record<string, CatalogEntry> = {
     // API Business is the paid Embed/OEM tier, so its bundled seats may go to
     // corporate addresses at any domain. The server still rejects free or
     // disposable addresses and enforces the four-invite cap.
-    highlightFeatures: ["Commercial license — for your customers"],
+    highlightFeatures: ["Commercial use — in your customer-facing products"],
     // Published + self-serve since #4945 (bet B4): the tier existed in the
     // billing system but was invisible on every pricing surface and had
     // zero customers. Starter→Business upgrades for existing subscribers
@@ -642,14 +645,14 @@ export const PRODUCT_CATALOG: Record<string, CatalogEntry> = {
     features: ENTERPRISE_FEATURES,
     marketingFeatures: [
       "Everything in Pro + API",
-      "Unlimited API requests",
+      "10,000 API requests a day, more by contract",
       "Dedicated support",
       "Custom integrations",
-      "SLA guarantee",
+      "SLA guarantee (by contract)",
       "On-premise option",
       "Data processing agreement (DPA)",
       "Purchase-order billing",
-      "SAML SSO, SCIM",
+      "SAML SSO and SCIM (by contract)",
       "Custom security and privacy settings",
       "Fully white-labeled — with or without revenue sharing",
     ],

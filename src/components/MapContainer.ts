@@ -5,6 +5,9 @@
  * Supports an optional 3D globe mode (globe.gl) selectable from Settings.
  */
 import { isMobileDevice } from '@/utils';
+import type { UkmtoMapIncident } from '../../shared/ukmto-incidents';
+import type { ListUkmtoIncidentsResponse } from '@/generated/client/worldmonitor/maritime/v1/service_client';
+import './ukmto-incidents.css';
 import { markLcpDebug } from '@/utils/lcp-debug';
 import {
   isLayerToggleAllowed,
@@ -232,6 +235,8 @@ export class MapContainer {
   private cachedCanadaAlerts: CanadaAlert[] | null = null;
   private cachedOutages: InternetOutage[] | null = null;
   private cachedAisDisruptions: AisDisruptionEvent[] | null = null;
+  private cachedUkmtoIncidents: UkmtoMapIncident[] | null = null;
+  private cachedUkmtoSnapshot: ListUkmtoIncidentsResponse | null = null;
   private cachedAisDensity: AisDensityZone[] | null = null;
   private cachedCableAdvisories: CableAdvisory[] | null = null;
   private cachedRepairShips: RepairShip[] | null = null;
@@ -703,8 +708,13 @@ export class MapContainer {
     console.log('[MapContainer] Initializing deck.gl map (desktop mode)');
     try {
       markLcpDebug('wm:map:deck-init-start');
-      await loadMapLibreCss();
-      const { DeckGLMap } = await import('./DeckGLMap');
+      // The MapLibre stylesheet chunk and the DeckGL renderer chunk are
+      // independent, and both are needed before the first map paint. Fetching
+      // them together removes one serialized round trip from the critical path.
+      const [, { DeckGLMap }] = await Promise.all([
+        loadMapLibreCss(),
+        import('./DeckGLMap'),
+      ]);
       if (!this.isCurrentRendererInit(token)) return;
       this.prepareRendererDom('deckgl-mode');
       this.deckGLMap = new DeckGLMap(this.container, {
@@ -829,6 +839,8 @@ export class MapContainer {
     if (this.cachedCanadaAlerts) this.setCanadaAlerts(this.cachedCanadaAlerts);
     if (this.cachedOutages) this.setOutages(this.cachedOutages);
     if (this.cachedAisDisruptions != null && this.cachedAisDensity != null) this.setAisData(this.cachedAisDisruptions, this.cachedAisDensity);
+    if (this.cachedUkmtoIncidents != null) this.setUkmtoIncidents(this.cachedUkmtoIncidents);
+    if (this.cachedUkmtoSnapshot != null) this.renderUkmtoStatus();
     if (this.cachedCableAdvisories != null && this.cachedRepairShips != null) this.setCableActivity(this.cachedCableAdvisories, this.cachedRepairShips);
     if (this.cachedCableHealth) this.setCableHealth(this.cachedCableHealth);
     if (this.cachedProtests) this.setProtests(this.cachedProtests);
@@ -1086,6 +1098,7 @@ export class MapContainer {
       sanitized = sanitizeLockedLayers(sanitized, false);
     }
     this.initialState = { ...this.initialState, layers: sanitized };
+    this.renderUkmtoStatus(sanitized.ais);
     this.emergencyLayer.setEnabled(!this.useGlobe && sanitized.aircraftEmergencies === true);
     this.notamAirspaceLayer.setEnabled(this.useDeckGL && sanitized.flights === true);
     if (this.useGlobe) { this.globeMap?.setLayers(sanitized); return; }
@@ -1171,6 +1184,37 @@ export class MapContainer {
     } else {
       this.svgMap?.setAisData(disruptions, density);
     }
+  }
+
+  public setUkmtoIncidents(incidents: UkmtoMapIncident[]): void {
+    this.cachedUkmtoIncidents = incidents;
+    if (this.useGlobe) this.globeMap?.setUkmtoIncidents(incidents);
+    else if (this.useDeckGL) this.deckGLMap?.setUkmtoIncidents(incidents);
+    else this.svgMap?.setUkmtoIncidents(incidents);
+  }
+
+  public setUkmtoSnapshot(snapshot: ListUkmtoIncidentsResponse): void {
+    this.cachedUkmtoSnapshot = snapshot;
+    this.setUkmtoIncidents(snapshot.incidents.map(item => ({ ...item, stale: snapshot.stale })));
+    this.renderUkmtoStatus();
+  }
+
+  private renderUkmtoStatus(enabled = this.getState().layers.ais): void {
+    let status = this.container.querySelector<HTMLDivElement>('.ukmto-map-status');
+    const snapshot = this.cachedUkmtoSnapshot;
+    if (!snapshot || !enabled) {
+      status?.remove();
+      return;
+    }
+    if (!status) {
+      status = document.createElement('div');
+      status.className = 'ukmto-map-status';
+      status.setAttribute('role', 'status');
+      this.container.appendChild(status);
+    }
+    const key = !snapshot.dataAvailable ? 'unavailable' : snapshot.stale ? 'stale' : snapshot.incidents.length === 0 ? 'empty' : 'current';
+    const checked = snapshot.fetchedAt ? ` · ${new Date(snapshot.fetchedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC` : '';
+    status.textContent = `UKMTO · ${t(`ukmto.${key}`)}${checked}`;
   }
 
   public setCableActivity(advisories: CableAdvisory[], repairShips: RepairShip[]): void {
@@ -1276,6 +1320,8 @@ export class MapContainer {
     if (this.useGlobe) { this.globeMap?.setDisplacementFlows(flows); return; }
     if (this.useDeckGL) {
       this.deckGLMap?.setDisplacementFlows(flows);
+    } else {
+      this.svgMap?.setDisplacementFlows(flows);
     }
   }
 
@@ -1289,12 +1335,14 @@ export class MapContainer {
     }
   }
 
-  // IDMC event points, deck.gl only like the DTM and cross-border layers.
+  // IDMC event points are supported by both 2D renderers.
   public setDisplacementEvents(data: DisplacementEventsData): void {
     this.cachedDisplacementEvents = data;
     if (this.useGlobe) return;
     if (this.useDeckGL) {
       this.deckGLMap?.setDisplacementEvents(data);
+    } else {
+      this.svgMap?.setDisplacementEvents(data);
     }
   }
 
@@ -1304,6 +1352,8 @@ export class MapContainer {
     if (this.useGlobe) return;
     if (this.useDeckGL) {
       this.deckGLMap?.setInternalDisplacement(data);
+    } else {
+      this.svgMap?.setInternalDisplacement(data);
     }
   }
 
@@ -1521,6 +1571,7 @@ export class MapContainer {
   public setOnLayerChange(callback: (layer: keyof MapLayers, enabled: boolean, source: 'user' | 'programmatic') => void): void {
     this.cachedOnLayerChange = callback;
     const notify = (layer: keyof MapLayers, enabled: boolean, source: 'user' | 'programmatic'): void => {
+      if (layer === 'ais') this.renderUkmtoStatus(enabled);
       if (layer === 'aircraftEmergencies') this.emergencyLayer.setEnabled(!this.useGlobe && enabled);
       if (layer === 'flights') this.notamAirspaceLayer.setEnabled(this.useDeckGL && enabled);
       callback(layer, enabled, source);
@@ -1783,6 +1834,13 @@ export class MapContainer {
     this.deckGLMap?.highlightRoute(routeIds);
   }
 
+  public highlightLane(
+    lane: { routeId: string; path: [number, number][]; chokepointIds: string[] },
+    occluder?: { left: number; right: number },
+  ): void {
+    this.deckGLMap?.highlightLane(lane, occluder);
+  }
+
   public clearHighlightedRoute(): void {
     this.deckGLMap?.clearHighlightedRoute();
   }
@@ -1894,6 +1952,8 @@ export class MapContainer {
     this.cachedCanadaAlerts = null;
     this.cachedOutages = null;
     this.cachedAisDisruptions = null;
+    this.cachedUkmtoIncidents = null;
+    this.cachedUkmtoSnapshot = null;
     this.cachedAisDensity = null;
     this.cachedCableAdvisories = null;
     this.cachedRepairShips = null;

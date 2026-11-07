@@ -31,6 +31,7 @@ import {
   postCreateCheckout,
 } from './checkout-transport';
 import { createTimeoutSignal } from './timeout-signal';
+import { IN_PLACE_UPGRADE_SOURCE_PLANS, runProBusinessUpgradeFlow } from './pro-business-upgrade';
 import {
   checkoutRetryAtMs,
   checkoutRetryRemainingSeconds,
@@ -392,6 +393,7 @@ async function doCheckout(
   if (_phase.kind === 'rate_limited') setPhase({ kind: 'idle' });
   if (checkoutInFlight) return false;
   checkoutInFlight = true;
+  let redirecting = false;
   const checkoutContext = resolveCheckoutContext({
     surface: options.checkoutAttribution ? 'mission-preview' : 'dashboard',
     attribution: options.checkoutAttribution,
@@ -490,7 +492,7 @@ async function doCheckout(
         // may spend longer than that reading the dialog before clicking.
         // Using a stale `token` would 401 at /customer-portal.
         const planKey = err?.subscription?.planKey;
-        showProDuplicateSubscriptionDialog({
+        const showGuidedDuplicateDialog = (): void => showProDuplicateSubscriptionDialog({
           planDisplayName: resolveProPlanDisplayName(planKey),
           // Picks the guided cancel-then-rebuy copy for the Pro → Pro Business
           // pairing; every other pairing keeps the portal line.
@@ -513,6 +515,30 @@ async function doCheckout(
           },
           onDismiss: () => { /* stay on /pro */ },
         });
+        // An active Pro moves to Pro Business in place (prorated Dodo plan
+        // change); the guided dialog stays the fallback when no preview comes back.
+        if (
+          PRO_BUSINESS_PRODUCT_IDS.has(productId) &&
+          typeof planKey === 'string' &&
+          IN_PLACE_UPGRADE_SOURCE_PLANS.has(planKey)
+        ) {
+          void runProBusinessUpgradeFlow({
+            apiBase: API_BASE,
+            planDisplayName: resolveProPlanDisplayName(planKey),
+            getToken: getAuthToken,
+            getUserId: async () => (await ensureClerk().catch(() => null))?.user?.id ?? null,
+            openPortal: () => {
+              const reservedWin = prereserveBillingPortalTab();
+              void getAuthToken().then((freshToken) => {
+                if (freshToken) void openBillingPortal(freshToken, reservedWin);
+                else if (reservedWin && !reservedWin.closed) reservedWin.close();
+              });
+            },
+            fallback: showGuidedDuplicateDialog,
+          });
+        } else {
+          showGuidedDuplicateDialog();
+        }
         Sentry.captureMessage('Duplicate subscription checkout attempt', {
           level: 'info',
           tags: { surface: 'pro-marketing', code: 'duplicate_subscription' },
@@ -590,6 +616,7 @@ async function doCheckout(
     // the primary flow. The overlay Initialize/onEvent machinery above is left
     // dormant pending removal.
     window.location.assign(hostedCheckoutUrl);
+    redirecting = true;
 
     return true;
   } catch (err) {
@@ -611,10 +638,36 @@ async function doCheckout(
     showCheckoutErrorToast();
     return false;
   } finally {
-    checkoutInFlight = false;
-    unmountCheckoutInterstitial();
-    if (_phase.kind === 'creating_checkout') setPhase({ kind: 'idle' });
+    if (redirecting) holdCheckoutUntilNavigation();
+    else releaseCheckout();
   }
+}
+
+function releaseCheckout(): void {
+  checkoutInFlight = false;
+  unmountCheckoutInterstitial();
+  if (_phase.kind === 'creating_checkout') setPhase({ kind: 'idle' });
+}
+
+// `location.assign` only starts navigation: this page stays clickable until
+// Dodo's page loads, often 1-3 s later. Releasing the guard on return let a
+// second click create a second Dodo session. Hold the guard, spinner and
+// interstitial until the page is gone; release when the buyer comes back
+// through the back-forward cache, or when the navigation never happened
+// (stopped, blocked) so the CTA cannot stay dead.
+const REDIRECT_HOLD_MS = 15_000;
+
+function holdCheckoutUntilNavigation(): void {
+  const release = () => {
+    clearTimeout(timer);
+    window.removeEventListener('pageshow', onPageShow);
+    releaseCheckout();
+  };
+  const onPageShow = (event: PageTransitionEvent) => {
+    if (event.persisted) release();
+  };
+  window.addEventListener('pageshow', onPageShow);
+  const timer = setTimeout(release, REDIRECT_HOLD_MS);
 }
 
 // Dodo's hosted-checkout origins. Redirect mode (#4449) navigates the top

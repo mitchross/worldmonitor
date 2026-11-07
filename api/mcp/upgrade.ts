@@ -58,6 +58,13 @@ export type McpDenial =
       limit: number;
       /** True when REST requests spend this same budget. */
       sharedWithRestApi: boolean;
+      /**
+       * Set only for an Enterprise contract account's pool: the contract
+       * allowance, while `limit` is the safety limit (allowance × breaker
+       * multiple) that tripped. A contract has no self-serve step up, so the
+       * denial carries no upgrade advice and ignores `upgradeFrom`.
+       */
+      allowance?: number;
       upgradeFrom?: string;
     };
 
@@ -86,6 +93,7 @@ export type McpStructuredDenial =
       upgradeUrl: string;
       limit: number;
       sharedWithRestApi: boolean;
+      allowance?: number;
     } & McpCheckoutHint);
 
 const UPGRADEABLE_REASONS: ReadonlySet<McpDenial['reason']> = new Set<McpUpgradeableReason>([
@@ -96,6 +104,7 @@ const UPGRADEABLE_REASONS: ReadonlySet<McpDenial['reason']> = new Set<McpUpgrade
 
 function checkoutHint(denial: McpDenial): McpCheckoutHint {
   if (!UPGRADEABLE_REASONS.has(denial.reason) || denial.upgradeFrom === undefined) return {};
+  if (denial.reason === 'quota-exceeded' && denial.allowance !== undefined) return {};
   const recommendedPlan = recommendedPlanFor(denial.upgradeFrom);
   if (recommendedPlan === undefined) return {};
   return denial.upgradeFrom === 'free' ? { recommendedPlan, checkoutTool: START_UPGRADE_TOOL } : { recommendedPlan };
@@ -142,10 +151,82 @@ const DENIAL_COPY: Record<McpStaticDenialReason, { message: string; nextStep: st
   },
 };
 
+/**
+ * Auth-layer messages that carry a call to buy. Exported so auth.ts builds
+ * them and host-policy.ts can recognise them on the way out to ChatGPT.
+ */
+export const SUBSCRIPTION_LAPSED_MESSAGE =
+  'Subscription lapsed. Re-authenticating will not help — resubscribe to restore access.';
+export const API_PLAN_REQUIRED_MESSAGE =
+  'API access subscription required. MCP with an API key needs an active API plan; a desktop key or a Pro-only account cannot use it. Upgrade at https://worldmonitor.app/pricing.';
+
+/**
+ * Copy for hosts whose app rules forbid promoting an upgrade (ChatGPT, see
+ * host-policy.ts). It states what the current plan covers and points at the
+ * plans page; it never tells the agent to subscribe or buy. Messages that
+ * already only state a fact are left as they are.
+ */
+export const INFORM_ONLY_MESSAGES: ReadonlyMap<string, string> = new Map([
+  [SUBSCRIPTION_LAPSED_MESSAGE, 'Subscription lapsed. Re-authenticating will not help.'],
+  [API_PLAN_REQUIRED_MESSAGE, 'API access subscription required. MCP with an API key needs an active API plan; a desktop key or a Pro-only account cannot use it.'],
+]);
+
+const INFORM_ONLY_NEXT_STEP: Record<McpStaticDenialReason, string> = {
+  'no-account':
+    'Connect via OAuth (see the WWW-Authenticate header) to sign in with a free account, '
+    + 'or call get_sources, which needs no credential. The upgrade URL describes the plans.',
+  'allowance-exhausted':
+    'The free-account allowance resets at the next UTC day. '
+    + 'The upgrade URL describes the plans with a higher daily limit.',
+  'upgrade-required':
+    'This tool is not included in the current plan. The free allowance covers cached-data tools only, '
+    + 'so call one of those. The upgrade URL describes the plans that include this tool.',
+  'lapsed-subscription':
+    'The subscription is no longer active. The existing credential stays valid — '
+    + 're-authenticating will not restore access. The upgrade URL describes the plans.',
+};
+
+/**
+ * `nextStep` on a contract account's safety-limit denial. It already promotes
+ * nothing, so inform-only hosts get the same text.
+ */
+const ACCOUNT_SAFETY_LIMIT_NEXT_STEP =
+  "This account's members share one daily budget across REST API requests and MCP calls, "
+  + 'and it reached the safety limit set by the contract. Requests resume at the next UTC day. '
+  + "Contact the account's administrator if the account needs a higher limit.";
+
+/** `nextStep` for an inform-only host, from the denial's own `data`. */
+export function informOnlyNextStep(data: { reason: McpDenialReason; sharedWithRestApi?: boolean; allowance?: unknown }): string {
+  if (data.reason !== 'quota-exceeded') return INFORM_ONLY_NEXT_STEP[data.reason];
+  if (typeof data.allowance === 'number') return ACCOUNT_SAFETY_LIMIT_NEXT_STEP;
+  return data.sharedWithRestApi
+    ? 'This allowance is shared with your REST API requests, so REST traffic spends it too — '
+      + 'the exhaustion may not be your tool calls. It resets at the next UTC day; '
+      + 'the upgrade URL describes the plans with a higher daily limit.'
+    : 'The allowance resets at the next UTC day. The upgrade URL describes the plans with a higher daily limit.';
+}
+
 export function buildMcpStructuredDenial(denial: McpDenial): {
   message: string;
   data: McpStructuredDenial;
 } {
+  if (denial.reason === 'quota-exceeded' && denial.allowance !== undefined) {
+    // Same facts as the REST "Daily safety limit reached" 429
+    // (server/_shared/account-rate-limit.ts): `limit` is the safety limit,
+    // `allowance` the contract allowance. `upgradeUrl` stays only because
+    // every structured denial carries it; nothing here points at it.
+    return {
+      message: `This account's daily safety limit was reached (${denial.limit}/day). Resets at next UTC midnight.`,
+      data: {
+        reason: denial.reason,
+        nextStep: ACCOUNT_SAFETY_LIMIT_NEXT_STEP,
+        upgradeUrl: MCP_UPGRADE_URL,
+        limit: denial.limit,
+        allowance: denial.allowance,
+        sharedWithRestApi: denial.sharedWithRestApi,
+      },
+    };
+  }
   if (denial.reason === 'quota-exceeded') {
     return {
       // Byte-identical to the copy this denial has always carried, because

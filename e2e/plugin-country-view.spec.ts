@@ -125,7 +125,7 @@ async function installCountryHost(page: Page, fullExposure = false, initialOpenE
       return {};
     }
     if (method === 'ui/initialize') return { hostCapabilities: { serverTools: {}, openLinks: {}, updateModelContext: {} }, hostContext: { theme: 'dark' } };
-    if (method === 'ui/update-model-context') { contexts.push(JSON.parse(params.content![0].text)); return {}; }
+    if (method === 'ui/update-model-context') { contexts.push(JSON.parse(params.content![0]!.text)); return {}; }
     if (method === 'ui/open-link') { links.push(params.url!); return {}; }
     if (method !== 'tools/call') return {};
     calls.push(params);
@@ -841,7 +841,7 @@ test('refresh keeps prior observations and delayed country work cannot repaint a
   await expect(housing).toContainText('2026-Q1');
   const original = await facts.getByText('Controlled facts observed 2026-10-01.', { exact: true }).elementHandle();
   const housingText = await housing.textContent();
-  let previousNotice: Awaited<ReturnType<typeof facts.elementHandle>> = null;
+  let previousNotice: Awaited<ReturnType<typeof facts.elementHandle>> | null = null;
   for (const failure of ['First', 'Second', 'Third']) {
     host.fail();
     await frame.getByRole('button', { name: 'Refresh country', exact: true }).click();
@@ -940,6 +940,7 @@ test('decision calculations and their JSON download use the authenticated host s
   const host = await installCountryHost(page);
   const frame = page.frameLocator('iframe');
   await expect(frame.locator('[data-brief-section=facts]')).toContainText('Washington, D.C.');
+  await frame.locator('.cdp-more-actions > summary').click();
   await frame.getByRole('button', { name: 'Decision brief', exact: true }).click();
   const output = frame.getByRole('region', { name: 'Decision brief', exact: true });
   await output.getByRole('button', { name: 'Capture / refresh both' }).click();
