@@ -4,12 +4,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { gzipSync, gunzipSync } from 'node:zlib';
-import { mergeSanctionEntries, SEMA_SOURCE, SANCTIONS_SOURCE_VERSION, sanctionsListContentMeta } from '../scripts/_sema-sanctions.mjs';
-import { CSL_ROW_ID, CSL_SOURCES } from '../scripts/_csl-sanctions.mjs';
+import { mergeSanctionEntries, SEMA_SOURCE, SEMA_TIMEOUT_MS, SANCTIONS_SOURCE_VERSION, sanctionsListContentMeta } from '../scripts/_sema-sanctions.mjs';
+import { CSL_ROW_ID, CSL_SOURCES, CSL_TIMEOUT_MS } from '../scripts/_csl-sanctions.mjs';
 import { projectCountrySanctions } from '../shared/country-sanctions-signals.mjs';
 import { __testing__ as health } from '../api/health.js';
 import { readSeedSnapshot, verifySeedKey, runSeed, writeExtraKeyWithMeta } from '../scripts/_seed-utils.mjs';
 import { buildEnvelope } from '../scripts/_seed-envelope-source.mjs';
+import { withSeedLockFence } from './helpers/seed-lock-fence.mjs';
 
 const source = readFileSync('scripts/seed-sanctions-pressure.mjs', 'utf8');
 const pure = source.replace(/^import\s.*$/gm, '').replace(/loadEnvFile\([^)]+\);/, '').split('async function fetchSource')[0];
@@ -39,7 +40,7 @@ async function publish({ successes = ['SDN', 'CONSOLIDATED', SEMA_SOURCE, 'CSL']
   const context = vm.createContext({
     console: { log() {}, warn() {} }, Buffer, gzipSync, gunzipSync,
     Date: class extends Date { static now() { return clock; } },
-    SEMA_SOURCE, mergeSanctionEntries, sanctionsListContentMeta, projectCountrySanctions, buildSanctionsChanges,
+    SEMA_SOURCE, SEMA_TIMEOUT_MS, CSL_TIMEOUT_MS, mergeSanctionEntries, sanctionsListContentMeta, projectCountrySanctions, buildSanctionsChanges,
     SANCTIONS_SOURCE_VERSION, SANCTIONS_MAX_CONTENT_AGE_MIN: 43200,
     readSeedSnapshot: async key => {
       if (readError) throw new Error('synthetic cache read failure');
@@ -488,13 +489,13 @@ async function withLocalRedis(run) {
     if (op === 'EXPIRE' || op === 'EVAL') return 1;
     throw new Error(`unexpected fixture command ${op}`);
   }
-  globalThis.fetch = async (url, init = {}) => {
+  globalThis.fetch = withSeedLockFence(async (url, init = {}) => {
     assert.equal(new URL(url).hostname, 'sanctions-redis.test', 'no real network allowed');
     const match = String(url).match(/\/get\/([^/?#]+)$/);
     if (match) return Response.json({ result: store.get(decodeURIComponent(match[1])) ?? null });
     const body = JSON.parse(init.body);
     return Response.json(Array.isArray(body[0]) ? body.map(c => ({ result: command(c) })) : { result: command(body) });
-  };
+  });
   try { return await run({ store, logs }); }
   finally {
     globalThis.fetch = original.fetch;
@@ -673,13 +674,13 @@ it('keeps old canonical metadata and state when the canonical SET fails after so
     const oldState = store.get('sanctions:pressure:state:v1');
     const next = await publish({ clock: now + 6 * 3600000, io: { verifySeedKey, writeExtraKeyWithMeta } });
     const fixtureFetch = globalThis.fetch;
-    globalThis.fetch = async (url, init = {}) => {
+    globalThis.fetch = withSeedLockFence(async (url, init = {}) => {
       const command = init.body ? JSON.parse(init.body) : null;
       if (command?.[0] === 'SET' && command[1] === 'sanctions:pressure:v1') {
         return new Response('fixture canonical write failure', { status: 400 });
       }
       return fixtureFetch(url, init);
-    };
+    });
     await assert.rejects(runSeed('sanctions', 'pressure', 'sanctions:pressure:v1', async () => next.data, next.options),
       /HTTP 400/);
     assert.equal(store.get('sanctions:pressure:v1'), oldCanonical);

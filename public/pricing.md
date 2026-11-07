@@ -57,7 +57,7 @@ These subscription licenses cover the hosted Service and its outputs. They are s
 - License: Commercial license included — use WorldMonitor for client work, internal tools and reporting
 - Limits: 25 custom dashboards, 2,500 dashboard-AI requests/day, MCP + SDK 250 calls/day
 - Support: Priority support
-- Note: Pro and Pro Business are separate products, not a self-serve plan change. To move up, cancel Pro in the billing portal and start the Pro Business checkout; your Pro access runs to the end of the term you already paid for.
+- Upgrading from Pro: an active Pro subscription that is not set to cancel upgrades in place. Choose Pro Business while signed in at https://www.worldmonitor.app/pro or in the dashboard. The existing subscription moves to Pro Business: you see today's charge before you confirm, and the billing period restarts on the upgrade day. If that payment fails, it stays on Pro. A Pro subscription set to cancel must be resumed in the billing portal first; if the in-place preview is unavailable, checkout shows the cancel-then-subscribe steps instead.
 
 ## API Starter
 
@@ -65,7 +65,7 @@ These subscription licenses cover the hosted Service and its outputs. They are s
 - Annual price: $899.99/year
 - Annual savings: about 25 percent versus monthly billing
 - Best for: Developers and teams that want programmatic access to World Monitor intelligence data
-- Includes: REST API access, license / API key creation (the `wm_` key used by the desktop app and API), structured JSON, cache headers, OpenAPI docs, real-time data streams and webhook notifications
+- Includes: the full Pro dashboard for one named user, REST API access, license / API key creation (the `wm_` key used by the desktop app and API), structured JSON, cache headers, OpenAPI docs, real-time data streams and webhook notifications
 - License: Commercial license for your organization — build internal tools and reporting on the data; redistributing it to your own customers requires API Business
 - Starter limit: 1,000 requests/day (REST + MCP combined; a live MCP call counts as 2-3)
 - Starter webhooks: 5 webhook rules
@@ -86,7 +86,8 @@ These subscription licenses cover the hosted Service and its outputs. They are s
 - Price: Custom
 - Contact: enterprise@worldmonitor.app
 - Best for: Governments, institutions, trading desks, SOCs, risk consultancies and organizations that need shared monitoring or deployment control
-- Includes: Everything in Pro and API, team workspaces, SSO/MFA/RBAC, dedicated support, white-label and embeddable panels, Android TV app, SIEM/connectors, bulk export and managed deployment options
+- Includes: Everything in Pro and API, team workspaces, dedicated support, white-label and embeddable panels, bulk export and managed deployment options
+- By contract: SLA guarantee, SAML SSO and SCIM, SSO/MFA/RBAC, an Android TV app, and SIEM and data connectors
 - Deployment options: Cloud, dedicated cloud tenant, on-premises or air-gapped
 - Security: AES-256 encrypted notification channels, audit trail, private MCP options and organization controls
 
@@ -156,6 +157,7 @@ These subscription licenses cover the hosted Service and its outputs. They are s
       "price_usd_monthly": 99.99,
       "price_usd_yearly": 899.99,
       "features": [
+        "full Pro dashboard (1 named user)",
         "REST API",
         "license / API key included",
         "1,000 requests/day starter limit (REST + MCP combined; a live MCP call counts as 2-3)",
@@ -163,7 +165,7 @@ These subscription licenses cover the hosted Service and its outputs. They are s
         "webhooks",
         "structured JSON",
         "OpenAPI docs",
-        "commercial license — for your organization"
+        "commercial license — internal use in your organization, not customer-facing products"
       ]
     },
     {
@@ -185,12 +187,12 @@ These subscription licenses cover the hosted Service and its outputs. They are s
       "price": "Custom",
       "contact": "enterprise@worldmonitor.app",
       "features": [
-        "SSO/MFA/RBAC",
         "team workspaces",
         "white-label",
         "on-premises",
         "air-gapped",
-        "dedicated support"
+        "dedicated support",
+        "SSO/MFA/RBAC (by contract)"
       ]
     }
   ]

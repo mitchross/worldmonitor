@@ -20,6 +20,7 @@ import { getCorsHeaders } from './_cors.js';
 import { captureSilentError } from './_sentry-edge.js';
 import { renderBillingVerificationDenial } from '../server/_shared/entitlement-check';
 import { resolvePremiumCallerIdentity } from '../server/_shared/premium-check';
+import { DESKTOP_KEY_CLIENT_ERROR } from '../server/_shared/desktop-key-principal';
 import { chargeDesktopKeyBudget, desktopKeyBudgetResponse } from '../server/_shared/desktop-key-meter';
 import { checkRateLimit } from '../server/_shared/rate-limit';
 import { runRedisPipeline } from '../server/_shared/redis';
@@ -28,6 +29,7 @@ import { reportHighUsageIfCrossed } from '../server/_shared/high-usage-alarm';
 import { assembleAnalystContext } from '../server/worldmonitor/intelligence/v1/chat-analyst-context';
 import { buildAnalystMessages } from '../server/worldmonitor/intelligence/v1/chat-analyst-prompt';
 import { buildActionEvents } from '../server/worldmonitor/intelligence/v1/chat-analyst-actions';
+import { withPriceGrounding } from '../server/worldmonitor/intelligence/v1/chat-analyst-grounding';
 import { callLlmReasoningStream } from '../server/_shared/llm';
 import { getAiRoutingDecisionForUser, toLlmRoutingPolicy } from '../server/_shared/ai-routing-policy';
 import { sanitizeForPrompt } from '../server/_shared/llm-sanitize.js';
@@ -163,7 +165,7 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, 405, corsHeaders);
+    return json({ error: 'Method not allowed' }, 405, { ...corsHeaders, Allow: 'POST, OPTIONS' });
   }
 
   // Top-level error boundary. An edge function must never let an exception
@@ -197,6 +199,10 @@ export default async function handler(req: Request): Promise<Response> {
       // Matches api/latest-brief.ts, which has always answered 401 here.
       if (premiumIdentity.unauthenticated) {
         return json({ error: 'UNAUTHENTICATED' }, 401, corsHeaders);
+      }
+      // The owner has Pro; a script reusing their desktop key needs an API plan.
+      if (premiumIdentity.desktopClientDenied) {
+        return json({ error: DESKTOP_KEY_CLIENT_ERROR }, 403, corsHeaders);
       }
       return json({ error: 'Pro subscription required' }, 403, corsHeaders);
     }
@@ -296,14 +302,18 @@ export default async function handler(req: Request): Promise<Response> {
     const prevUserTurn = history.filter((m) => m.role === 'user').slice(-1)[0]?.content ?? '';
     const retrievalQuery = prevUserTurn ? `${query} ${prevUserTurn}` : query;
 
-    const context = await assembleAnalystContext(geoContext, domainFocus, retrievalQuery);
+    // Chat turns are the caller's own text: a restricted account streams only
+    // from its allowed providers (ai-routing-policy.ts). The routing lookup
+    // reads only the caller, so it runs alongside the context reads instead of
+    // adding its round trip before the first streamed token.
+    const [context, routingDecision] = await Promise.all([
+      assembleAnalystContext(geoContext, domainFocus, retrievalQuery),
+      getAiRoutingDecisionForUser(premiumIdentity.userId),
+    ]);
     // Instructions in the system prompt, feed-derived context in the final user
     // turn next to the question: untrusted text never shares the system role.
     const messages = buildAnalystMessages({ context, domainFocus, history, query });
-
-    // Chat turns are the caller's own text: a restricted account streams only
-    // from its allowed providers (ai-routing-policy.ts).
-    const routingPolicy = toLlmRoutingPolicy(await getAiRoutingDecisionForUser(premiumIdentity.userId));
+    const routingPolicy = toLlmRoutingPolicy(routingDecision);
     const llmStream = callLlmReasoningStream({
       messages,
       routingPolicy,
@@ -325,13 +335,32 @@ export default async function handler(req: Request): Promise<Response> {
     // Always prepend a meta event so the client knows which sources are live
     // and whether context is degraded — before the first token arrives.
     // Optionally follows with an action event for visual/chart queries.
-    const stream = prependSseEvents(
-      [
-        { meta: { sources: context.activeSources, degraded: context.degraded } },
-        ...buildActionEvents(query).map((a) => ({ action: a })),
-      ],
-      llmStream,
-      rollbackUnservedQuota,
+    //
+    // Outermost, a price the answer states must appear in the user turn (the
+    // live-context block plus the question): on 2026-10-27 the analyst gave an
+    // "$80" Brent level that nothing in its context supported. Streamed tokens
+    // cannot be retracted, so an unsupported figure gets a visible caveat before
+    // the terminal event and is reported here so the miss rate is observable.
+    // The quota wrapper stays directly on the provider stream: whether answer
+    // content was served is judged on the raw bytes, with no stage in between.
+    const groundText = messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n');
+    const stream = withPriceGrounding(
+      prependSseEvents(
+        [
+          { meta: { sources: context.activeSources, degraded: context.degraded } },
+          ...buildActionEvents(query).map((a) => ({ action: a })),
+        ],
+        llmStream,
+        rollbackUnservedQuota,
+      ),
+      groundText,
+      (prices) => {
+        console.warn(`[chat-analyst] answer stated prices absent from the live context: ${prices.join(', ')}`);
+        void captureSilentError(new Error(`chat-analyst answer stated unsupported price(s): ${prices.join(', ')}`), {
+          tags: { route: 'api/chat-analyst', step: 'price-grounding' },
+          fingerprint: ['api/chat-analyst', 'price-grounding'],
+        });
+      },
     );
 
     return new Response(stream, {

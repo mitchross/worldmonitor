@@ -1,9 +1,9 @@
 // @ts-expect-error — JS module, no declaration file
 import { getClientRateLimitKey } from '../_rate-limit.js';
 // @ts-expect-error — JS module, no declaration file
-import { timingSafeIncludes, sha256Hex } from '../_crypto.js';
-import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
+import { getOperatorKeys, timingSafeIncludes, sha256Hex } from '../_crypto.js';
+import { loadUpstashRatelimit } from '../_upstash-ratelimit.js';
+import { upstashRedisOptions } from '../_upstash-redis-options.js';
 import { checkBootstrapUserApiKeyRateLimit, validateBootstrapUserApiKey } from '../_user-api-key.js';
 import { redirectDisplayHost } from './_redirect-uri.js';
 import { clientAllowsRedirectUri, clientDisplayInfo, describeClientFailure, isClientMetadataDocumentId, resolveOAuthClient } from './_client-metadata.js';
@@ -48,13 +48,14 @@ export function resolveAuthorizationIssuer(req) {
 }
 
 let _rl = null;
-function getRatelimit() {
+async function getRatelimit() {
   if (_rl) return _rl;
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
+  const { Ratelimit, Redis } = await loadUpstashRatelimit();
   _rl = new Ratelimit({
-    redis: new Redis({ url, token }),
+    redis: new Redis(upstashRedisOptions(url, token)),
     limiter: Ratelimit.slidingWindow(10, '60 s'),
     prefix: 'rl:oauth-authorize',
     analytics: false,
@@ -213,7 +214,8 @@ ${clientHostLine}${localhostWarn}
 <hr>
 <p class="scope-label">Read-only access to</p>
 <ul class="scope-list">
-<li>Real-time news &amp; events from 778 attributed providers</li>
+<li>Intelligence data from 846 attributed providers</li>
+<li>Real-time news &amp; events</li>
 <li>Live flight tracking &amp; AIS vessel positions</li>
 <li>Weather alerts, earthquakes &amp; natural disasters</li>
 <li>Geopolitical risk indicators &amp; conflict data</li>
@@ -280,7 +282,7 @@ export default async function handler(req) {
   }
 
   if (method === 'GET' || method === 'POST') {
-    const rl = getRatelimit();
+    const rl = await getRatelimit();
     if (rl) {
       try {
         const { success } = await rl.limit(`ip:${getClientRateLimitKey(req)}`);
@@ -403,7 +405,7 @@ export default async function handler(req) {
     }
 
     // Validate API key
-    const validKeys = (process.env.WORLDMONITOR_VALID_KEYS || '').split(',').filter(Boolean);
+    const validKeys = getOperatorKeys();
     const enterpriseKey = await timingSafeIncludes(api_key, validKeys);
     let userKey = null;
     if (!enterpriseKey && api_key.startsWith('wm_')) {

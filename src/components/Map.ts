@@ -1,4 +1,6 @@
+import { createTimeoutSignal } from '@/services/timeout-signal';
 import * as d3 from 'd3';
+import { UKMTO_SOURCE_URL, ukmtoIncidentLabel, type UkmtoMapIncident } from '../../shared/ukmto-incidents';
 import * as topojson from 'topojson-client';
 import { escapeHtml } from '@/utils/sanitize';
 import { getCSSColor } from '@/utils';
@@ -43,8 +45,9 @@ import { mountWebcamPinButton } from '@/services/webcams/pinned-store';
 import type { WebcamEntry, WebcamCluster } from '@/generated/client/worldmonitor/webcam/v1/service_client';
 import { tokenizeForMatch, matchKeyword, findMatchingKeywords } from '@/utils/keyword-match';
 import { MapPopup } from './MapPopup';
-import type { CrossBorderData, CrossBorderPoint } from '@/services/displacement';
+import type { CrossBorderData, CrossBorderPoint, DisplacementFlow, DisplacementEventsData, InternalDisplacementData } from '@/services/displacement';
 import { createCrossBorderMarker, crossBorderMarkerOffsets } from './cross-border-marker';
+import { createDisplacementMarker, displacementFlowMarkers, displacementEventMarkers, internalDisplacementMarkers, type DisplacementMarker } from './displacement-marker';
 import type { GetChokepointStatusResponse } from '@/services/supply-chain';
 import type { AcledConflictEvent } from '@/generated/client/worldmonitor/conflict/v1/service_client';
 import {
@@ -202,6 +205,7 @@ export class MapComponent {
   private radiationObservations: RadiationObservation[] = [];
   private outages: InternetOutage[] = [];
   private aisDisruptions: AisDisruptionEvent[] = [];
+  private ukmtoIncidents: UkmtoMapIncident[] = [];
   private aisDensity: AisDensityZone[] = [];
   private cableAdvisories: CableAdvisory[] = [];
   private repairShips: RepairShip[] = [];
@@ -217,6 +221,9 @@ export class MapComponent {
   private militaryVesselClusters: MilitaryVesselCluster[] = [];
   private naturalEvents: NaturalEvent[] = [];
   private crossBorderPoints: CrossBorderPoint[] = [];
+  private displacementFlows: DisplacementMarker[] = [];
+  private internalDisplacement: DisplacementMarker[] = [];
+  private displacementEvents: DisplacementMarker[] = [];
   private firmsFireData: Array<{ lat: number; lon: number; brightness: number; frp: number; confidence: number; region: string; acq_date: string; daynight: string }> = [];
   private techEvents: TechEventMarker[] = [];
   private techActivities: TechHubActivity[] = [];
@@ -313,6 +320,11 @@ export class MapComponent {
   // interaction. The effective value is set in the constructor (= !this.isMobile);
   // false here documents the mobile-off default.
   private mobileLabelVisibilityArmed = false;
+  // Last container size the ResizeObserver reported (0 until the first
+  // observation, and again while hidden). onContainerResized() tells a later
+  // layout change apart from the initial paint with it (#4547).
+  private observedContainerWidth = 0;
+  private observedContainerHeight = 0;
   // All container/document interaction listeners are registered with this signal so
   // destroy() can remove them in one shot. The container node is reused across
   // renderer switches (MapContainer keeps one element and rebuilds MapComponent on it),
@@ -405,24 +417,11 @@ export class MapComponent {
   }
 
   private setupResizeObserver(): void {
-    let lastWidth = 0;
-    let lastHeight = 0;
     this.resizeObserver = new ResizeObserver((entries) => {
       if (this.isResizing) return;
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
-        if (width === lastWidth && height === lastHeight) continue;
-        lastWidth = width;
-        lastHeight = height;
-        // Record zero-size (hidden) transitions too, not just visible sizes.
-        // getKnownContainerSize() falls back to a live read whenever the cache
-        // is zero, so recording the hide keeps render()'s zero-size skip intact
-        // and lets a reveal center off current dimensions instead of the last
-        // visible ones (#5022 review). Only a visible size is worth rendering.
-        this.rememberContainerSize({ width, height });
-        if (width > 0 && height > 0) {
-          this.resize();
-        }
+        this.onContainerResized(width, height);
       }
     });
     this.resizeObserver.observe(this.container);
@@ -434,6 +433,51 @@ export class MapComponent {
       }
     };
     document.addEventListener('visibilitychange', this.boundVisibilityHandler);
+  }
+
+  /**
+   * One ResizeObserver observation of the map container.
+   *
+   * Records zero-size (hidden) transitions too, not just visible sizes:
+   * getKnownContainerSize() falls back to a live read whenever the cache is
+   * zero, so recording the hide keeps render()'s zero-size skip intact and lets
+   * a reveal center off current dimensions instead of the last visible ones
+   * (#5022 review). Only a visible size is worth rendering.
+   *
+   * #4547: a layout change after first paint (device rotation, split view, a
+   * desktop-width window resize on a touch device) re-lays the overlays out
+   * through the scheduled render → applyTransform(), but on mobile that pass
+   * skips label-overlap thinning until the first direct interaction, so the
+   * labels stayed stacked on the new geometry until the user touched the map.
+   * A WIDTH change from a previously visible size arms thinning; the render
+   * this schedules then does the one label pass. The first observation
+   * (no previous width) is the initial paint the deferral exists for, and a
+   * height-only change is what the mobile URL bar produces on every scroll,
+   * so neither may arm it. A reveal after a hide starts from width 0 again and
+   * is likewise not a layout change.
+   */
+  private onContainerResized(width: number, height: number): void {
+    if (width === this.observedContainerWidth && height === this.observedContainerHeight) return;
+    const previousWidth = this.observedContainerWidth;
+    const previousHeight = this.observedContainerHeight;
+    this.observedContainerWidth = width;
+    this.observedContainerHeight = height;
+    this.rememberContainerSize({ width, height });
+    if (width > 0 && height > 0) {
+      if (previousWidth > 0 && previousHeight > 0 && width !== previousWidth) this.armMobileLabelVisibilityForLayoutChange();
+      this.resize();
+    }
+  }
+
+  /**
+   * Arms mobile label thinning without running a pass itself: the caller has a
+   * render scheduled, and that render's applyTransform() owns the pass.
+   * resumeMobileLabelVisibility() is the interaction-driven twin that measures
+   * immediately because no render follows a pan or pinch.
+   */
+  private armMobileLabelVisibilityForLayoutChange(): void {
+    if (!this.isMobile || this.mobileLabelVisibilityArmed) return;
+    this.mobileLabelVisibilityArmed = true;
   }
 
   public setIsResizing(value: boolean): void {
@@ -988,9 +1032,17 @@ export class MapComponent {
     return legend;
   }
 
+  // A collapsed map (phones start with the map section hidden) has no size, so
+  // render() draws nothing and there is no base layer to verify yet. Reads the
+  // cached size like render() so a visible map takes no forced reflow (#5017).
+  private isCollapsed(): boolean {
+    const { width, height } = this.getKnownContainerSize();
+    return width === 0 || height === 0;
+  }
+
   private runHealthCheck(): void {
     const svgNode = this.svg.node();
-    if (!svgNode) return;
+    if (!svgNode || this.isCollapsed()) return;
 
     // Verify base layer exists and has content
     const baseGroup = svgNode.querySelector('.map-base');
@@ -1234,9 +1286,10 @@ export class MapComponent {
     this.container.style.cursor = 'grab';
   }
 
-  private async loadMapData(): Promise<void> {
+  private async loadMapData(attempt = 0): Promise<void> {
+    if (this.destroyed) return;
     try {
-      const worldResponse = await fetch(worldTopologyUrl(this.isMobile));
+      const worldResponse = await fetch(worldTopologyUrl(this.isMobile), { signal: createTimeoutSignal(15_000) });
       this.worldData = await worldResponse.json();
       if (this.worldData) {
         const countries = topojson.feature(
@@ -1250,6 +1303,10 @@ export class MapComponent {
       // Re-render after layout stabilizes to catch full container width.
       this.scheduleRender();
     } catch (e) {
+      if (attempt < 2) {
+        await new Promise(resolve => setTimeout(resolve, Math.round(500 * 2 ** attempt * (0.5 + Math.random() * 0.5))));
+        return this.loadMapData(attempt + 1);
+      }
       console.error('Failed to load map data:', e);
     }
   }
@@ -1946,6 +2003,7 @@ export class MapComponent {
     if (layers.waterways) add('waterways', STRATEGIC_WATERWAYS);
     if (layers.ais) {
       add('ais', this.aisDisruptions);
+      add('ais', this.filterByTime(this.ukmtoIncidents, item => item.occurredAt));
       add('ais', PORTS);
     }
     if (layers.cyberThreats && SITE_VARIANT !== 'tech') add('cyberThreats', this.aptGroups);
@@ -1985,7 +2043,12 @@ export class MapComponent {
     if (layers.techHQs) add('techHQs', TECH_HQS);
     if (layers.accelerators) add('accelerators', ACCELERATORS);
     if (layers.techEvents) add('techEvents', this.techEvents);
-    if (layers.displacement) add('displacement', this.crossBorderPoints);
+    if (layers.displacement) {
+      add('displacement', this.crossBorderPoints);
+      for (const markers of [this.displacementFlows, this.internalDisplacement, this.displacementEvents]) {
+        add('displacement', markers, { rank: item => (item as DisplacementMarker).count });
+      }
+    }
     if (layers.stockExchanges) add('stockExchanges', STOCK_EXCHANGES);
     if (layers.financialCenters) add('financialCenters', FINANCIAL_CENTERS);
     if (layers.centralBanks) add('centralBanks', CENTRAL_BANKS);
@@ -2216,8 +2279,38 @@ export class MapComponent {
     const previousTarget = this.overlayAppendTarget;
     this.overlayAppendTarget = fragment;
 
+    // A viewport-only overlay refresh does not clear the dynamic SVG group.
+    this.dynamicLayerGroup?.selectAll('.displacement-route').remove();
     try {
     if (this.state.layers.displacement) {
+      const routeLayer = this.dynamicLayerGroup?.select('.overlays-svg');
+      const path = d3.geoPath().projection(projection);
+      for (const item of [...this.displacementFlows, ...this.internalDisplacement, ...this.displacementEvents]) {
+        if (this.isOverlayMarkerCut(item)) continue;
+        if (item.route) {
+          routeLayer?.append('path')
+            .attr('class', 'displacement-route')
+            .attr('d', path({ type: 'LineString', coordinates: item.route }))
+            .attr('fill', 'none').attr('stroke', item.color)
+            .attr('stroke-width', 2).attr('opacity', 0.7)
+            .attr('vector-effect', 'non-scaling-stroke').style('pointer-events', 'none');
+        }
+        const pos = projection([item.lon, item.lat]);
+        if (!pos) continue;
+        const marker = createDisplacementMarker(item);
+        marker.style.position = 'absolute';
+        marker.style.left = `${pos[0]}px`;
+        marker.style.top = `${pos[1]}px`;
+        marker.style.transform = 'translate(-50%, -50%) scale(var(--marker-scale, 1))';
+        marker.addEventListener('click', event => {
+          event.stopPropagation();
+          const rect = marker.getBoundingClientRect();
+          const containerRect = this.container.getBoundingClientRect();
+          this.popup.show({ type: 'displacement', data: item,
+            x: rect.left - containerRect.left + rect.width / 2, y: rect.top - containerRect.top });
+        });
+        this.appendOverlay(marker);
+      }
       const offsets = crossBorderMarkerOffsets(this.crossBorderPoints);
       for (const point of this.crossBorderPoints) {
         if (this.isOverlayMarkerCut(point)) continue;
@@ -2268,6 +2361,22 @@ export class MapComponent {
     if (this.state.layers.ais) {
       this.renderAisDisruptions(projection);
       this.renderPorts(projection);
+      this.filterByTime(this.ukmtoIncidents, item => item.occurredAt).forEach(item => {
+        if (!item.location || this.isOverlayMarkerCut(item)) return;
+        const pos = projection([item.location.longitude, item.location.latitude]);
+        if (!pos) return;
+        const marker = document.createElement('a');
+        marker.className = 'ais-disruption-marker ukmto-marker';
+        marker.style.left = `${pos[0]}px`;
+        marker.style.top = `${pos[1]}px`;
+        marker.textContent = '⚓';
+        marker.title = `${ukmtoIncidentLabel(item)}\n${item.description}`;
+        marker.setAttribute('aria-label', ukmtoIncidentLabel(item));
+        marker.href = UKMTO_SOURCE_URL;
+        marker.target = '_blank';
+        marker.rel = 'noopener noreferrer';
+        this.appendOverlay(marker);
+      });
     }
 
     // APT groups — rendered only when cyberThreats layer is active, loaded lazily
@@ -4989,6 +5098,7 @@ export class MapComponent {
   }
 
   private ensureBaseLayerIntact(): void {
+    if (this.isCollapsed()) return;
     // Query DOM directly instead of relying on cached d3 selection
     const svgNode = this.svg.node();
     const domBaseGroup = svgNode?.querySelector('.map-base');
@@ -5076,6 +5186,11 @@ export class MapComponent {
     this.render();
   }
 
+  public setUkmtoIncidents(incidents: UkmtoMapIncident[]): void {
+    this.ukmtoIncidents = incidents;
+    this.render();
+  }
+
   public setCableActivity(advisories: CableAdvisory[], repairShips: RepairShip[]): void {
     this.cableAdvisories = advisories;
     this.repairShips = repairShips;
@@ -5132,6 +5247,21 @@ export class MapComponent {
 
   public setCrossBorderArrivals(data: CrossBorderData): void {
     this.crossBorderPoints = [...data.points, ...(data.deaths ?? [])];
+    this.render();
+  }
+
+  public setDisplacementFlows(flows: DisplacementFlow[]): void {
+    this.displacementFlows = displacementFlowMarkers(flows);
+    this.render();
+  }
+
+  public setInternalDisplacement(data: InternalDisplacementData): void {
+    this.internalDisplacement = internalDisplacementMarkers(data);
+    this.render();
+  }
+
+  public setDisplacementEvents(data: DisplacementEventsData): void {
+    this.displacementEvents = displacementEventMarkers(data);
     this.render();
   }
 

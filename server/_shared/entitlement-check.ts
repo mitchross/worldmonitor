@@ -125,6 +125,24 @@ export interface CachedEntitlements {
     };
   };
   validUntil: number;
+  /**
+   * Enterprise contract account (convex/enterpriseAccounts.ts), present only
+   * while the user is an active member of a LIVE contract — whichever source
+   * won the entitlement recompute. Its members share these pooled limits.
+   * Absent for everyone else; consumers must not infer membership from
+   * `planKey === 'enterprise'` (a comp can produce that without an account).
+   */
+  account?: {
+    id: string;
+    /** Pooled REST requests per UTC day across all members. */
+    dailyAllowance: number;
+    /** Pooled requests per minute across all members. */
+    perMinuteBurst: number;
+    /** Multiple of the allowance at which a hard stop trips (default 5). */
+    breakerMultiple: number;
+    monthlyInputTokens: number;
+    monthlyOutputTokens: number;
+  };
   billingStatus?: BillingVerificationStatus;
   retryAfterSeconds?: number;
   renewalVerificationFreshness?: {
@@ -212,16 +230,16 @@ const ENDPOINT_ENTITLEMENTS: Record<string, number> = {
   '/api/resilience/v1/get-food-stocks': 1,
   '/api/resilience/v1/get-demographics-capability': 1,
   '/api/resilience/v1/get-resilience-indicators': 1,
-  '/api/scorecard/v1/get-five-factor-scorecard': 1,
-  '/api/scorecard/v1/list-five-factor-scorecards': 1,
-  '/api/scorecard/v1/get-bloc-scorecard': 1,
+  // The five-factor scorecard (food, energy, demographics, technology, defense
+  // bands) went free (#9742): a calm per-country capability check should not
+  // sit behind Pro. Its sibling resilience routes above stay gated.
   // Physical-vs-paper metals (#6436 series, #6448 index), mineral production
   // concentration (#6439), arms-supplier dependency (#6438) and commodity
   // supply vulnerability (#6449). Each shipped ungated because the issues
   // scoped ingestion + exposure and never named an access tier; the audit that
   // produced this block found all seven serving full payloads to an anonymous
   // wms_ session. They belong beside their siblings above: the same seeded
-  // derived-analytics product the resilience and scorecard routes sell.
+  // derived-analytics product the resilience routes sell.
   '/api/market/v1/get-physical-premiums': 1,
   '/api/market/v1/get-physical-divergence-index': 1,
   '/api/supply-chain/v1/get-mineral-production': 1,
@@ -230,6 +248,7 @@ const ENDPOINT_ENTITLEMENTS: Record<string, number> = {
   '/api/supply-chain/v1/get-chokepoint-dependencies': 1,
   '/api/supply-chain/v1/list-vulnerability-rankings': 1,
   '/api/news/v1/list-media-perspective': 1,
+  '/api/news/v1/list-news-pool': 1,
 };
 
 const CONVEX_INTERNAL_ENTITLEMENTS_PATH = '/api/internal-entitlements';
@@ -643,12 +662,12 @@ async function _getEntitlementsImpl(
       // `{allowance: 'mcp'}` — same counter and same ceiling as the correct
       // `{allowance: 'api', counter: 'mcp'}`, but one unit per call instead of
       // the per-tool weight, so those callers under-pay until the entry ages
-      // out. Below Enterprise, no plan pairs `apiAccess` with a NUMERIC
-      // mcpCallsPerDay (the API tiers carry the marker), so that pairing
-      // identifies a pre-marker entry exactly. Enterprise (tier 3) carries a
-      // numeric fair-use ceiling and must stay cacheable.
+      // out. No current plan pairs `apiAccess` with a NUMERIC mcpCallsPerDay
+      // (every apiAccess plan, Enterprise included, carries the marker), so
+      // that pairing identifies a pre-marker entry exactly. That includes an
+      // Enterprise entry cached before Enterprise moved onto the marker
+      // (100k REST, a dedicated 25k MCP ceiling).
       const legacySharedBudgetShape = ent.features.apiAccess === true
-        && ent.features.tier < 3
         && typeof ent.features.planLimits?.mcpCallsPerDay === 'number';
       // Fourth instance, opt-in (plan 2026-10-25-001): a Pro entry written
       // before `desktopKeyAccess` existed satisfies every check above, and the
