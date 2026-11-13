@@ -144,6 +144,12 @@ World Monitor 同时为智能体、脚本和浏览器而构建：
 
 ---
 
+## 支持
+
+World Monitor 的 Web 应用和 API 运行在 [Vercel](https://vercel.com?utm_source=worldmonitor&utm_medium=referral&utm_campaign=worldmonitor) 上。感谢 Vercel 对本项目的慷慨支持。
+
+---
+
 ## 数据源
 
 WorldMonitor 汇聚来自地缘政治、金融、能源、气候、航空、网络、军事、基础设施和新闻情报领域的外部上游主机。精选信息流和新鲜度监控详情，请参阅完整的[数据源目录](https://www.worldmonitor.app/docs/zh/data-sources)，其中说明提供商、信息流层级和采集方法。
@@ -175,7 +181,7 @@ npm run build:full       # Production build
 
 完整的代码许可证请参阅 [LICENSE](LICENSE)，通俗语言摘要请参阅 [docs/zh/license.mdx](docs/zh/license.mdx)。对于需要非 AGPL 条款的团队，可选择商业许可。
 
-版权所有 (C) 2024-2026 Elie Habib。保留所有权利。
+版权所有 (C) 2026 Elie Habib。保留所有权利。
 
 ---
 

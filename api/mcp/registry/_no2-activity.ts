@@ -3,8 +3,7 @@
 // sees exactly what the route serves; this module maps arguments to the
 // route's query, compacts each record to the fields agents read, and attaches
 // the method constants the methodVersion pins.
-import { COUNTRY_ARG_HINT, echoCountryInput } from '../_country-args';
-import { resolveCountryCode } from '../../../shared/country-code-resolve';
+import { COUNTRY_ARG_HINT, echoCountryInput, resolveCountryArg } from '../_country-args';
 import { buildAuthHeaders } from '../auth';
 import { RpcValidationError } from '../billing-denial';
 import { assertMcpToolFetchOk, fetchMcpDownstream } from '../downstream';
@@ -109,7 +108,7 @@ function queryFor(params: Record<string, unknown>): URLSearchParams {
   const query = new URLSearchParams();
   const rawCountry = params.country_code;
   if (rawCountry !== undefined && rawCountry !== null && rawCountry !== '') {
-    const resolved = resolveCountryCode(rawCountry);
+    const resolved = resolveCountryArg(rawCountry);
     if (!resolved) {
       throw new RpcValidationError(OPERATION, [{
         field: 'country_code',
@@ -157,16 +156,16 @@ export const NO2_ACTIVITY_TOOL: RpcToolDef = {
     properties: {
       country_code: {
         type: 'string',
-        description: `Optional. ${COUNTRY_ARG_HINT} Returns the country region and every cluster inside it; clusters spanning several countries (gulf-states, rotterdam-antwerp) carry no code.`,
+        description: `Country to read. ${COUNTRY_ARG_HINT} Returns the country region and every cluster inside it; clusters spanning several countries (gulf-states, rotterdam-antwerp) carry no code.`,
       },
       region_id: {
         type: 'string',
-        description: 'Optional registry id, for example "country-cn" or "yangtze-river-delta". Combine with the other filters as AND.',
+        description: 'Registry id of one region, for example "country-cn" or "yangtze-river-delta" (the id field of a returned region). Combines with the other filters as AND.',
       },
       kind: {
         type: 'string',
         enum: Object.keys(KIND_ARG),
-        description: 'Optional. "country" for country polygons, "cluster" for named industrial clusters; omit for both.',
+        description: 'Region type: whole-country polygons or named industrial clusters such as yangtze-river-delta. Omitted: both types.',
       },
     },
     required: [],

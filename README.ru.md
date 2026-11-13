@@ -146,6 +146,12 @@ World Monitor рассчитан и на агентов/скрипты, и на 
 
 ---
 
+## Поддержка
+
+Веб-приложение и API World Monitor работают на [Vercel](https://vercel.com?utm_source=worldmonitor&utm_medium=referral&utm_campaign=worldmonitor). Спасибо Vercel за щедрую поддержку проекта.
+
+---
+
 ## Источники данных
 
 WorldMonitor агрегирует атрибутированные исходные источники по геополитике, финансам, энергетике, климату, авиации, кибербезопасности, военной сфере, инфраструктуре и новостной разведке. Курируемые ленты и группы источников с отслеживанием актуальности — в полном [каталоге источников данных](https://www.worldmonitor.app/docs/data-sources) (провайдер, уровень ленты, лицензионный статус, метод сбора).
@@ -177,7 +183,7 @@ npm run build:full       # продакшен-сборка
 
 Полный текст: [LICENSE](LICENSE). Кратко: [docs/license.mdx](docs/license.mdx). Коммерческое лицензирование доступно как альтернатива для условий вне AGPL.
 
-Copyright (C) 2024-2026 Elie Habib. All rights reserved.
+Copyright (C) 2026 Elie Habib. All rights reserved.
 
 ---
 
