@@ -5,6 +5,7 @@ import { mergeCanonicalFeeds } from './feed-resolution';
 import {
   browserCategoryFeeds,
   browserIntelSources,
+  digestEditionsForCategory,
   type BrowserCatalogFeed,
 } from '../../shared/news-catalog-browser';
 import { BROWSER_NEWS_CATALOG as BROWSER_CATALOG } from './news-catalog.browser.generated';
@@ -24,6 +25,11 @@ function proxied(feed: BrowserCatalogFeed): Feed {
     ? proxyCatalogUrl(feed.url)
     : Object.fromEntries(Object.entries(feed.url).map(([lang, href]) => [lang, proxyCatalogUrl(href)]));
   return { ...feed, url };
+}
+
+/** Editions whose server digest carries `category` (for cross-edition panels). */
+export function digestEditionsFor(category: string): string[] {
+  return digestEditionsForCategory(BROWSER_CATALOG, category);
 }
 
 function browserFeeds(edition: string): Record<string, Feed[]> {
@@ -396,6 +402,9 @@ export const MAJOR_PUBLISHER_DEFAULT_SOURCES = [
  */
 export const BBC_UK_DEFAULT_SOURCES = ['BBC UK'] as const;
 
+/** German defaults, available as explicit opt-ins in every UI language. */
+export const GERMAN_RSS_SOURCES = ['Deutschlandfunk', 'ZDFheute'] as const;
+
 /**
  * The Science panel's sources (2026-10-17 audit). The panel is opt-in, but its
  * sources are EN default-on so it has content when enabled. The free-tier cap
@@ -523,6 +532,16 @@ export const REGIONAL_FEED_ROLLOUT_STAGES = [
   },
   {
     introducedNames: [...SCIENCE_DEFAULT_SOURCES],
+    protectedNames: [
+      ...FRONTLINE_EUROPE_PROTECTED_SOURCES,
+      ...REGIONAL_FEED_ROLLOUT_DEFAULT_SOURCES,
+      ...CANADA_EN_DEFAULT_SOURCES,
+      ...CRISIS_FLOOR_EN_DEFAULT_SOURCES,
+      ...CRISIS_FLOOR_STRATEGIC_DEFAULT_SOURCES,
+    ],
+  },
+  {
+    introducedNames: [...GERMAN_RSS_SOURCES],
     protectedNames: [
       ...FRONTLINE_EUROPE_PROTECTED_SOURCES,
       ...REGIONAL_FEED_ROLLOUT_DEFAULT_SOURCES,

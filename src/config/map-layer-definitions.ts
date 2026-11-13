@@ -72,7 +72,7 @@ export const LAYER_REGISTRY: Record<keyof MapLayers, LayerDefinition> = {
   pipelines:                def('pipelines',                '&#128738;', 'pipelines',                'Pipelines'),
   datacenters:              def('datacenters',              '&#128421;', 'aiDataCenters',            'AI Data Centers'),
   military:                 def('military',                 '&#9992;',   'militaryActivity',         'Military Activity'),
-  aircraftEmergencies:       def('aircraftEmergencies',       '&#9888;',   'aircraftEmergencies',      'Aircraft emergencies', ['svg', 'deck']),
+  aircraftEmergencies:       def('aircraftEmergencies',       '&#9888;',   'aircraftEmergencies',      'Aircraft Emergencies', ['svg', 'deck']),
   ais:                      def('ais',                      '&#128674;', 'shipTraffic',              'Ship Traffic'),
   tradeRoutes:              def('tradeRoutes',              '&#9875;',   'tradeRoutes',              'Trade Routes'),
   flights:                  def('flights',                  '&#9992;',   'flightDelays',             'Aviation'),
@@ -80,9 +80,9 @@ export const LAYER_REGISTRY: Record<keyof MapLayers, LayerDefinition> = {
   ucdpEvents:               def('ucdpEvents',               '&#9876;',   'ucdpEvents',               'Armed Conflict Events'),
   displacement:             def('displacement',             '&#128101;', 'displacementFlows',        'Displacement Flows'),
   climate:                  def('climate',                  '&#127787;', 'climateAnomalies',         'Climate Anomalies'),
-  weather:                  def('weather',                  '&#9928;',   'weatherAlerts',            'Severe Weather Alerts (NWS, ECCC, WMO SWIC)'),
-  canadaRoads:              def('canadaRoads',              '&#128679;', 'canadaRoads',              'Canada Roads (Ontario, Alberta, Manitoba, Toronto, BC)', ['deck']),
-  canadaAlerts:             def('canadaAlerts',             '&#9888;',   'canadaAlerts',             'Canada Alerts (AB + BC + SK)', ['deck']),
+  weather:                  def('weather',                  '&#9928;',   'weatherAlerts',            'Weather Alerts'),
+  canadaRoads:              def('canadaRoads',              '&#128679;', 'canadaRoads',              'Canada Roads', ['deck']),
+  canadaAlerts:             def('canadaAlerts',             '&#9888;',   'canadaAlerts',             'Canada Alerts', ['deck']),
   outages:                  def('outages',                  '&#128225;', 'internetOutages',          'Internet Disruptions'),
   cyberThreats:             def('cyberThreats',             '&#128737;', 'cyberThreats',             'Cyber Threats'),
   natural:                  def('natural',                  '&#127755;', 'naturalEvents',            'Natural Events'),
@@ -95,12 +95,13 @@ export const LAYER_REGISTRY: Record<keyof MapLayers, LayerDefinition> = {
   // the SVG/mobile fallback has no CII paint path, so this is deck + globe,
   // NOT svg. Previously mislabeled `['flat']`, which wrongly kept it out of
   // the globe layer picker even though GlobeMap renders it (#6773 / R8).
-  ciiChoropleth:            def('ciiChoropleth',            '&#127758;', 'ciiChoropleth',            'Country instability', ['deck', 'globe'], _desktop ? 'enhanced' : undefined),
+  ciiChoropleth:            def('ciiChoropleth',            '&#127758;', 'ciiChoropleth',            'Country Instability', ['deck', 'globe'], _desktop ? 'enhanced' : undefined),
   // DeckGLMap owns the resilience choropleth; only DeckGL has a paint path.
-  resilienceScore:          def('resilienceScore',          '&#128200;', 'resilienceScore',          'Resilience', ['deck'], 'locked'),
+  resilienceScore:          def('resilienceScore',          '&#128200;', 'resilienceScore',          'Country Resilience', ['deck'], 'locked'),
   dayNight:                 def('dayNight',                 '&#127763;', 'dayNight',                 'Day/Night', ['svg', 'deck']),
   sanctions:                def('sanctions',                '&#128683;', 'sanctions',                'Sanctions', ['svg', 'deck']),
-  no2Activity:              def('no2Activity',              '&#127981;', 'no2Activity',              'Industrial activity (NO2)', ['deck']),
+  no2Activity:              def('no2Activity',              '&#127981;', 'no2Activity',              'Industrial Activity', ['deck']),
+  reservoirLevels:          def('reservoirLevels',          '&#128167;', 'reservoirLevels',          'Water Levels'),
   startupHubs:              def('startupHubs',              '&#128640;', 'startupHubs',              'Startup Hubs', ['svg', 'deck']),
   techHQs:                  def('techHQs',                  '&#127970;', 'techHQs',                  'Tech HQs', ['svg', 'deck']),
   accelerators:             def('accelerators',             '&#9889;',   'accelerators',             'Accelerators', ['svg', 'deck']),
@@ -147,6 +148,7 @@ export const V1_LAYER_EXPLANATION_KEYS = [
   'cyberThreats',
   'hotspots',
   'no2Activity',
+  'reservoirLevels',
 ] as const satisfies readonly (keyof MapLayers)[];
 
 export const LAYER_EXPLANATIONS: Partial<Record<keyof MapLayers, LayerExplanation>> = {
@@ -165,6 +167,7 @@ export const LAYER_EXPLANATIONS: Partial<Record<keyof MapLayers, LayerExplanatio
   cyberThreats: { key: 'cyberThreats', coverage: 'curated', evidence: ['docs/data-sources.mdx', 'docs/architecture.mdx', 'scripts/seed-cyber-threats.mjs', 'server/worldmonitor/cyber/v1/list-cyber-threats.ts'] },
   hotspots: { key: 'hotspots', coverage: 'curated', evidence: ['docs/data-sources.mdx', 'docs/architecture.mdx', 'src/config/geo.ts', 'src/services/hotspot-escalation.ts'] },
   no2Activity: { key: 'no2Activity', coverage: 'curated', evidence: ['scripts/seed-no2-activity.mjs', 'scripts/shared/no2-activity.mjs', 'api/health.js', 'server/worldmonitor/economic/v1/get-no2-activity.ts'] },
+  reservoirLevels: { key: 'reservoirLevels', coverage: 'curated', evidence: ['docs/data-sources.mdx', 'scripts/_reservoir-levels.mjs', 'scripts/seed-reservoir-levels.mjs', 'tests/reservoir-levels-validation.test.mjs', 'server/worldmonitor/climate/v1/list-reservoir-levels.ts'] },
 };
 
 const VARIANT_LAYER_ORDER: Record<MapVariant, Array<keyof MapLayers>> = {
@@ -176,7 +179,7 @@ const VARIANT_LAYER_ORDER: Record<MapVariant, Array<keyof MapLayers>> = {
     'ucdpEvents', 'displacement', 'climate', 'weather', 'canadaRoads', 'canadaAlerts',
     'outages', 'cyberThreats', 'natural', 'fires',
     'waterways', 'economic', 'minerals', 'gpsJamming',
-    'satellites', 'ciiChoropleth', 'resilienceScore', 'sanctions', 'no2Activity', 'dayNight', 'webcams',
+    'satellites', 'ciiChoropleth', 'resilienceScore', 'sanctions', 'no2Activity', 'reservoirLevels', 'dayNight', 'webcams',
     'diseaseOutbreaks',
   ],
   tech: [
@@ -205,7 +208,7 @@ const VARIANT_LAYER_ORDER: Record<MapVariant, Array<keyof MapLayers>> = {
     'pipelines', 'storageFacilities', 'fuelShortages', 'waterways', 'commodityPorts', 'commodityHubs',
     'ais', 'liveTankers', 'tradeRoutes', 'minerals',
     // Energy-adjacent context
-    'sanctions', 'fires', 'climate', 'weather', 'canadaRoads', 'outages', 'natural', 'canadaAlerts',
+    'sanctions', 'fires', 'climate', 'reservoirLevels', 'weather', 'canadaRoads', 'outages', 'natural', 'canadaAlerts',
     'resilienceScore', 'dayNight',
   ],
 };
@@ -517,6 +520,14 @@ export const LAYER_SYNONYMS: Record<string, Array<keyof MapLayers>> = {
   gulf: ['gulfInvestments'],
   gcc: ['gulfInvestments'],
   sanction: ['sanctions'],
+  reservoir: ['reservoirLevels'],
+  reservoirs: ['reservoirLevels'],
+  dam: ['reservoirLevels'],
+  dams: ['reservoirLevels'],
+  lake: ['reservoirLevels'],
+  lakes: ['reservoirLevels'],
+  water: ['reservoirLevels'],
+  hydropower: ['reservoirLevels'],
   no2: ['no2Activity'],
   emissions: ['no2Activity'],
   pollution: ['no2Activity'],
