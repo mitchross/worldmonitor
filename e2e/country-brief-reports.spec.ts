@@ -2,11 +2,41 @@ import type { Locator, Page, TestInfo } from '@playwright/test';
 import { test, expect } from './country-brief-fixtures';
 import { readFile } from 'node:fs/promises';
 import { installDecisionBriefData, installCommodityBriefData } from './country-brief-design-fixtures';
+import { evidenceScreenshot } from './evidence-screenshot';
+
+for (const action of ['Create story', 'Decision brief']) {
+  test(`${action} returns focus to a disclosure closed during loading`, async ({ page, countryBrief }) => {
+    void countryBrief;
+    await installDecisionBriefData(page);
+    await page.goto('/dashboard?country=DE');
+    const panel = page.locator('#country-deep-dive-panel');
+    await expect(panel).toHaveAttribute('aria-hidden', 'false');
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    let pending = false;
+    await page.route('**/src/components/CountryBriefOutput.ts*', async route => {
+      pending = true;
+      await held;
+      await route.continue();
+    });
+    const summary = panel.locator('.cdp-more-actions > summary');
+    await summary.click();
+    await panel.getByRole('button', { name: action, exact: true }).click();
+    await expect.poll(() => pending).toBe(true);
+    await summary.click();
+    release();
+    await panel.getByRole('button', { name: '← Back to brief', exact: true }).click();
+    await expect(summary).toBeFocused();
+  });
+}
 
 // Split from country-brief.spec.ts so the CI smoke shards can balance: that
 // file alone was 387 of shard 1's 390 test-seconds. Same fixture, same
 // recording policy.
-const recording = process.env.CI ? 'on-first-retry' : 'retain-on-failure';
+// Recording every test was most of this file's runtime (#8347), so CI records
+// nothing and a failure leaves its error, screenshot and evidence files.
+// Locally, failures keep a trace and video.
+const recording = process.env.CI ? 'off' : 'retain-on-failure';
 test.use({ trace: recording, video: recording, serviceWorkers: 'block' });
 for (const mobile of [false, true]) {
   test(`operational worksheet ${mobile ? 'mobile' : 'desktop'} edits day 8/day 10 and imports actual downloads`, async ({ page, countryBrief }, testInfo) => {
@@ -16,6 +46,7 @@ for (const mobile of [false, true]) {
     await page.goto(`/dashboard?country=DE${mobile ? '' : '&expanded=1'}`);
     const panel = page.locator('#country-deep-dive-panel');
     await expect(panel).toHaveAttribute('aria-hidden', 'false');
+    if (await panel.locator('.cdp-more-actions').getAttribute('open') === null) await panel.locator('.cdp-more-actions > summary').click();
     await panel.getByRole('button', { name: 'Decision brief', exact: true }).click();
     const output = panel.getByRole('region', { name: 'Decision brief', exact: true });
     const form = output.getByRole('region', { name: 'Operational what-if worksheet', exact: true });
@@ -25,7 +56,7 @@ for (const mobile of [false, true]) {
     await expect(form).toContainText('Labeled example');
     expect(state.requests).toHaveLength(0);
     await form.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath('worksheet-example.png'), fullPage: true });
+    await evidenceScreenshot(page, { path: testInfo.outputPath('worksheet-example.png'), fullPage: true });
     await form.getByRole('button', { name: 'Add alternative delivery', exact: true }).click();
     await expect(form.locator('.operational-result')).toHaveCount(0);
     await expect(form.getByRole('button', { name: 'Export worksheet JSON' })).toBeDisabled();
@@ -36,7 +67,7 @@ for (const mobile of [false, true]) {
     await expect(form.locator('[data-day="10"] td')).toHaveText(['0', '20', '0', '20', '0', '20', '0', '20']);
     await expect(form).toContainText('Delivery cost comparison unavailable');
     await form.locator(mobile ? '.operational-result' : '.operational-header').evaluate(element => element.scrollIntoView({ block: 'start' }));
-    await page.screenshot({ path: testInfo.outputPath('worksheet-day10.png'), fullPage: true });
+    await evidenceScreenshot(page, { path: testInfo.outputPath('worksheet-day10.png'), fullPage: true });
     const event = page.waitForEvent('download');
     await form.getByRole('button', { name: 'Export worksheet JSON' }).click();
     const download = await event;
@@ -76,7 +107,7 @@ for (const mobile of [false, true]) {
         expect(JSON.parse(await exported.locator('#decision-brief-snapshot').textContent() ?? 'null')).toEqual(preview);
         await expect(exported.locator('.operational-summary')).toContainText('Alternative first gap: Day 10');
         await expect(exported.locator('a[href]').first()).toHaveAttribute('href', /https:/);
-        await exported.screenshot({ path: testInfo.outputPath('worksheet-export.png'), fullPage: true });
+        await evidenceScreenshot(exported, { path: testInfo.outputPath('worksheet-export.png'), fullPage: true });
         await exported.close();
       }
     }
@@ -91,6 +122,7 @@ for (const mobile of [false, true]) {
     await page.goto(`/dashboard?country=DE${mobile ? '' : '&expanded=1'}`);
     const panel = page.locator('#country-deep-dive-panel');
     await expect(panel).toHaveAttribute('aria-hidden', 'false');
+    if (await panel.locator('.cdp-more-actions').getAttribute('open') === null) await panel.locator('.cdp-more-actions > summary').click();
     await panel.getByRole('button', { name: 'Decision brief', exact: true }).click();
     const output = panel.getByRole('region', { name: 'Decision brief', exact: true });
     const form = output.getByRole('region', { name: 'Operational what-if worksheet', exact: true });
@@ -135,6 +167,7 @@ for (const mobile of [false, true]) {
     await expect(paper.locator('.operational-result')).toHaveCount(0);
     expect(JSON.parse(await paper.locator('#decision-brief-snapshot').textContent() ?? 'null').operationalWorksheet).toBeNull();
     await output.getByRole('button', { name: '← Back to brief', exact: true }).click();
+    if (await panel.locator('.cdp-more-actions').getAttribute('open') === null) await panel.locator('.cdp-more-actions > summary').click();
     await panel.getByRole('button', { name: 'Decision brief', exact: true }).click();
     await expect(form.locator('.operational-result')).toHaveCount(0);
     await expect(form.getByRole('button', { name: 'Export worksheet JSON' })).toBeDisabled();
@@ -145,11 +178,13 @@ for (const mobile of [false, true]) {
     await expect(form.getByRole('button', { name: 'Export worksheet JSON' })).toBeEnabled();
     await alternativeDemand.fill('10');
     await output.getByRole('button', { name: '← Back to brief', exact: true }).click();
+    if (await panel.locator('.cdp-more-actions').getAttribute('open') === null) await panel.locator('.cdp-more-actions > summary').click();
     await panel.getByRole('button', { name: 'Decision brief', exact: true }).click();
     await expect(form.getByLabel('Alternative daily demand (blank keeps baseline)', { exact: true })).toHaveValue('10');
     await expect(form.locator('.operational-summary')).toContainText('Alternative first gap: None within horizon');
     await form.getByLabel('Daily demand', { exact: true }).fill('');
     await output.getByRole('button', { name: '← Back to brief', exact: true }).click();
+    if (await panel.locator('.cdp-more-actions').getAttribute('open') === null) await panel.locator('.cdp-more-actions > summary').click();
     await panel.getByRole('button', { name: 'Decision brief', exact: true }).click();
     await expect(form.getByLabel('Daily demand', { exact: true })).toHaveValue('');
     await expect(form.locator('.operational-result')).toHaveCount(0);
@@ -166,10 +201,11 @@ for (const mobile of [false, true]) {
     await page.goto('/dashboard?country=DE');
     const panel = page.locator('#country-deep-dive-panel');
     await expect(panel).toHaveAttribute('aria-hidden', 'false');
+    if (await panel.locator('.cdp-more-actions').getAttribute('open') === null) await panel.locator('.cdp-more-actions > summary').click();
     await panel.getByRole('button', { name: 'Decision brief', exact: true }).click();
     const output = panel.getByRole('region', { name: 'Decision brief', exact: true });
     await expect(output).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath('decision-before.png') });
+    await evidenceScreenshot(page, { path: testInfo.outputPath('decision-before.png') });
     for (const mode of ['ready', 'missing', 'mismatch'] as const) {
       state.mode = mode;
       await output.getByRole('button', { name: 'Capture / refresh both' }).click();
@@ -204,10 +240,10 @@ for (const mobile of [false, true]) {
       await expect(exported.locator('body')).toContainText(preview.action.constraint);
       await expect(exported.locator('body')).toContainText(preview.action.trigger);
       for (const ref of preview.action.references) await expect(exported.locator('body')).toContainText(ref);
-      await exported.screenshot({ path: testInfo.outputPath(`${mode}-export.png`), fullPage: true });
+      await evidenceScreenshot(exported, { path: testInfo.outputPath(`${mode}-export.png`), fullPage: true });
       await exported.close();
       await paper.scrollIntoViewIfNeeded();
-      await page.screenshot({ path: testInfo.outputPath(`${mode}-preview.png`) });
+      await evidenceScreenshot(page, { path: testInfo.outputPath(`${mode}-preview.png`) });
       expect(await output.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     }
     expect(state.requests).toHaveLength(6);
@@ -220,6 +256,7 @@ test('decision brief request failures recover and a second country uses its own 
   await page.goto('/dashboard?country=JP');
   const panel = page.locator('#country-deep-dive-panel');
   await expect(panel).toHaveAttribute('aria-hidden', 'false');
+  if (await panel.locator('.cdp-more-actions').getAttribute('open') === null) await panel.locator('.cdp-more-actions > summary').click();
   await panel.getByRole('button', { name: 'Decision brief', exact: true }).click();
   const output = panel.locator('.cdp-output');
   for (const mode of ['denied', 'error'] as const) {
@@ -250,6 +287,7 @@ test('decision brief rejects anonymous entry and ignores delayed responses after
   await page.goto('/dashboard?country=DE');
   const panel = page.locator('#country-deep-dive-panel');
   await expect(panel).toHaveAttribute('aria-hidden', 'false');
+  if (await panel.locator('.cdp-more-actions').getAttribute('open') === null) await panel.locator('.cdp-more-actions > summary').click();
   await panel.getByRole('button', { name: 'Decision brief', exact: true }).click();
   await expect(page.getByText('Decision brief is available on Pro.', { exact: true })).toBeVisible();
   await expect(panel.locator('.cdp-output')).toHaveCount(0);
@@ -264,6 +302,7 @@ test('decision brief rejects anonymous entry and ignores delayed responses after
     await held;
     await route.fallback();
   });
+  if (await panel.locator('.cdp-more-actions').getAttribute('open') === null) await panel.locator('.cdp-more-actions > summary').click();
   await panel.getByRole('button', { name: 'Decision brief', exact: true }).click();
   await panel.getByRole('button', { name: 'Capture / refresh both' }).click();
   await expect.poll(() => pending).toBe(2);
@@ -273,6 +312,7 @@ test('decision brief rejects anonymous entry and ignores delayed responses after
   await page.locator('.search-modal .search-input').fill('Japan');
   await page.locator('.search-result-item[data-index]').filter({ hasText: 'Brief: Japan' }).click();
   await expect(panel.locator('.cdp-country-name')).toHaveText('Japan');
+  if (await panel.locator('.cdp-more-actions').getAttribute('open') === null) await panel.locator('.cdp-more-actions > summary').click();
   await panel.getByRole('button', { name: 'Decision brief', exact: true }).click();
   // Positive control: a real, live, freshly-built output is mounted and waiting for a
   // capture before the stale Germany responses land. Without this the checks below
@@ -309,6 +349,7 @@ test('decision brief clears and stays usable when a selection change aborts a ca
     await held;
     await route.fallback();
   });
+  if (await panel.locator('.cdp-more-actions').getAttribute('open') === null) await panel.locator('.cdp-more-actions > summary').click();
   await panel.getByRole('button', { name: 'Decision brief', exact: true }).click();
   await panel.getByRole('button', { name: 'Capture / refresh both' }).click();
   await expect.poll(() => pending).toBe(2);
@@ -332,6 +373,7 @@ async function openCommodityBrief(page: Page, { mobile, light }: { mobile: boole
   await page.goto(`/dashboard?country=JP${light && !mobile ? '&expanded=1' : ''}`);
   const panel = page.locator('#country-deep-dive-panel');
   await expect(panel).toHaveAttribute('aria-hidden', 'false');
+  if (await panel.locator('.cdp-more-actions').getAttribute('open') === null) await panel.locator('.cdp-more-actions > summary').click();
   await panel.getByRole('button', { name: 'Commodity decision brief', exact: true }).click();
   const output = panel.getByRole('region', { name: 'Commodity decision brief', exact: true });
   await expect(output.getByLabel('Commodity / product', { exact: true })).toHaveValue('helium');
@@ -366,7 +408,7 @@ async function expectCommodityPresentation(page: Page, output: Locator, testInfo
   await expect(details).not.toHaveAttribute('open');
   expect(await output.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   await page.locator('#country-deep-dive-panel .panel-content').evaluate(el => { el.scrollTop = 0; });
-  await page.screenshot({ path: testInfo.outputPath('helium-preview.png') });
+  await evidenceScreenshot(page, { path: testInfo.outputPath('helium-preview.png') });
 }
 
 test('commodity decision brief desktop dark preserves presentation and all commodity exports', async ({ page, countryBrief }, testInfo) => {
@@ -384,7 +426,9 @@ test('commodity decision brief desktop dark preserves presentation and all commo
       await expect(paper).toContainText('hospital helium supplier share');
       await expect(paper.locator('[data-origin="QA"]')).toContainText('Strait of Hormuz');
       expect(snapshot.candidates.find((c: { origin: string }) => c.origin === 'QA').routeState).toBe('exposed');
-      expect(snapshot.candidates.find((c: { origin: string }) => c.origin === 'US').routeState).toBe('unknown');
+      // US-Japan is modeled through both coasts (Panama, not Hormuz).
+      expect(snapshot.candidates.find((c: { origin: string }) => c.origin === 'US').routeState).toBe('not_on_modeled_route');
+      expect(snapshot.candidates.find((c: { origin: string }) => c.origin === 'US').transitChokepoints).toEqual(['panama']);
       await expect(paper.locator('[data-origin="US"]')).toContainText('39.2%');
       await expect(paper).toContainText('999 (Unknown partner');
       // U5: the hub badge sits outside the collapsed details, so it is visible
@@ -392,11 +436,11 @@ test('commodity decision brief desktop dark preserves presentation and all commo
       await expect(paper.locator('[data-origin="NL"]')).toContainText('Possible transit hub');
       await expect(paper.locator('[data-origin="US"]')).not.toContainText('Possible transit hub');
       expect(snapshot.candidates.find((c: { origin: string }) => c.origin === 'NL').transitHub).toBe(true);
-      // NL is the only origin whose modeled route avoids the blocked chokepoint,
-      // so the hub preference (which never crosses route-state tiers) cannot
-      // skip it: the action names NL and says the flag was unavoidable there.
-      expect(snapshot.action.text).toContain("Validate NL's");
-      expect(snapshot.action.text).toContain('Every eligible origin with this route state is flagged a possible transit hub');
+      // US and NL both have modeled routes that avoid the blocked chokepoint.
+      // US holds the larger share and is not a possible hub, so the action
+      // names US; NL keeps its hub flag in the evidence.
+      expect(snapshot.action.text).toContain("Validate US's");
+      expect(snapshot.action.text).not.toContain('Every eligible origin with this route state is flagged');
     } else if (commodity === 'wheat') {
       expect(snapshot.candidates.map((c: { origin: string }) => c.origin)).toEqual(['AU']);
       expect(snapshot.candidates[0].routeState).toBe('unknown');
@@ -430,7 +474,7 @@ test('commodity decision brief desktop dark preserves presentation and all commo
       await expect(exported.locator('[data-origin="NL"]')).toContainText('Supplier scale unavailable');
       await expect(exported.locator('body')).toContainText('39 omitted holding 3.1% combined');
     }
-    await exported.screenshot({ path: testInfo.outputPath(`${commodity}-export.png`), fullPage: true });
+    await evidenceScreenshot(exported, { path: testInfo.outputPath(`${commodity}-export.png`), fullPage: true });
     await exported.close();
     expect(await output.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   }
@@ -457,7 +501,7 @@ for (const { mobile, light } of [
     const exported = await page.context().newPage();
     await exported.setContent(html, { waitUntil: 'domcontentloaded' });
     expect(JSON.parse(await exported.locator('#commodity-brief-snapshot').textContent() ?? 'null')).toEqual(snapshot);
-    await exported.screenshot({ path: testInfo.outputPath('helium-export.png'), fullPage: true });
+    await evidenceScreenshot(exported, { path: testInfo.outputPath('helium-export.png'), fullPage: true });
     await exported.close();
 
     await output.getByLabel('Commodity / product', { exact: true }).selectOption('wheat');
@@ -491,7 +535,7 @@ test('country brief excludes global temporal observations from country signals',
   await expect(signals).not.toContainText('Temporal Anomalies');
   await expect(signals).not.toContainText('Temporal anomalies');
   await expect(panel.locator('#cdp-section-assessment')).toContainText('3 observed temporal anomalies; not attributed to this country');
-  await page.screenshot({ path: testInfo.outputPath('country-global-temporal-scope.png') });
+  await evidenceScreenshot(page, { path: testInfo.outputPath('country-global-temporal-scope.png') });
 });
 
 
@@ -505,7 +549,7 @@ test('country brief shows unavailable temporal evidence after a failed feed read
   const signals = panel.locator('#cdp-section-signals');
   await signals.scrollIntoViewIfNeeded();
   await expect(signals).toContainText('Temporal observations unavailable');
-  await page.screenshot({ path: testInfo.outputPath('country-temporal-unavailable.png') });
+  await evidenceScreenshot(page, { path: testInfo.outputPath('country-temporal-unavailable.png') });
 });
 
 for (const mobile of [false, true]) {
@@ -529,8 +573,7 @@ for (const mobile of [false, true]) {
     await expect(activity.locator('.cdp-china-summary-source-link')).toHaveCount(1);
     expect(await activity.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
     const path = testInfo.outputPath(`china-plain-language-${mobile ? 'mobile' : 'desktop'}.png`);
-    await page.screenshot({ path });
-    await testInfo.attach('China activity with controlled source data', { path, contentType: 'image/png' });
+    await evidenceScreenshot(page, { path }, { testInfo, name: 'China activity with controlled source data' });
   });
 }
 
@@ -538,7 +581,7 @@ test('English panel picker names financial and regional topics in plain language
   void countryBrief;
   await page.goto('/dashboard');
   await page.locator('#unifiedSettingsBtn').click();
-  await page.locator('#us-tab-panels').click();
+  await page.locator('[data-settings-nav="panels"]').click();
   const panels = page.locator('#usPanelToggles');
   await expect(panels).toBeVisible();
   await expect(panels).toContainText('Bitcoin fund flows');
@@ -548,8 +591,7 @@ test('English panel picker names financial and regional topics in plain language
   await page.getByPlaceholder('Filter panels...').fill('Bitcoin');
   await expect(panels.getByText('Bitcoin fund flows', { exact: true })).toBeVisible();
   const path = testInfo.outputPath('english-panel-labels.png');
-  await page.screenshot({ path });
-  await testInfo.attach('English panel names', { path, contentType: 'image/png' });
+  await evidenceScreenshot(page, { path }, { testInfo, name: 'English panel names' });
 });
 
 for (const mobile of [false, true]) {
@@ -579,8 +621,7 @@ for (const mobile of [false, true]) {
     await expect(panel.getByText('0.0%', { exact: true })).toBeVisible();
     await expect(panel).not.toContainText('% Above Stocks');
     const path = testInfo.outputPath(`market-breadth-${mobile ? 'mobile' : 'desktop'}.png`);
-    await panel.screenshot({ path });
-    await testInfo.attach('Controlled market breadth component preview', { path, contentType: 'image/png' });
+    await evidenceScreenshot(panel, { path }, { testInfo, name: 'Controlled market breadth component preview' });
   });
 }
 
@@ -596,7 +637,7 @@ for (const mobile of [false, true]) {
     } else {
       await page.locator('#unifiedSettingsBtn').click();
     }
-    await page.locator('#us-tab-panels').click();
+    await page.locator('[data-settings-nav="panels"]').click();
     const panels = page.locator('#usPanelToggles');
     await expect(panels).toContainText('mtaji wa kufadhili biashara changa');
     const gulf = panels.getByText('Uwekezaji wa Baraza la Ushirikiano la Ghuba', { exact: true });
@@ -604,7 +645,6 @@ for (const mobile of [false, true]) {
     await expect(gulf).toBeVisible();
     await expect(panels).not.toContainText('mtaji wa uhamiaji');
     const path = testInfo.outputPath(`swahili-panel-labels-${mobile ? 'mobile' : 'desktop'}.png`);
-    await page.screenshot({ path });
-    await testInfo.attach('Reviewed Swahili investment labels', { path, contentType: 'image/png' });
+    await evidenceScreenshot(page, { path }, { testInfo, name: 'Reviewed Swahili investment labels' });
   });
 }

@@ -114,7 +114,8 @@ test('unusable, incomplete and moved diff metadata runs every Test job', () => {
   ]) {
     const result = classify(files, options);
     assert.ok(Object.values(result).every((value) => value === 'true'), JSON.stringify({ files: files.slice(0, 2), options, result }));
-    assert.equal(Object.keys(result).length, Object.keys(workflow.jobs.changes.outputs).length);
+    // durations_key is the unit shards' cache lookup, not a path selection.
+    assert.equal(Object.keys(result).length, Object.keys(workflow.jobs.changes.outputs).filter((key) => key !== 'durations_key').length);
   }
 });
 
@@ -210,7 +211,7 @@ test('required variant-smoke aggregate rejects failed, cancelled and unexpected 
     SHARDS_RESULT: '${{ needs.variant-smoke-shards.result }}',
     PRO_WEBMCP_RESULT: '${{ needs.variant-smoke-pro-webmcp.result }}',
   });
-  assert.deepEqual(shards.strategy.matrix.shard, [1, 2, 3, 4]);
+  assert.deepEqual(shards.strategy.matrix.shard, [1, 2, 3, 4, 5, 6, 7, 8]);
   assert.equal(shards.strategy['fail-fast'], false);
   assert.match(
     shards.steps.find((step) => step.run?.includes('npm run test:e2e:ci-smoke:')).run,

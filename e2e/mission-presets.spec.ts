@@ -1,10 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
+import { evidenceScreenshot } from './evidence-screenshot';
 
 const PRESET_KEY = 'worldmonitor-mission-preset-v1';
 const STORAGE_READ_TIMEOUT_MS = 1_500;
 const STORAGE_READ_TIMEOUT = '__wm_storage_read_timeout__';
 const ACTIVE_VARIANT = process.env.VITE_VARIANT || 'full';
-const MISSION_CARD_COUNT = ACTIVE_VARIANT === 'finance' ? 9 : 8;
+// full adds protective-travel (#10512) and finance adds nq-day-trader; other variants offer 8.
+const MISSION_CARD_COUNT = ACTIVE_VARIANT === 'finance' || ACTIVE_VARIANT === 'full' ? 9 : 8;
 const DEFAULT_TRADE_ROUTES = ACTIVE_VARIANT === 'finance' || ACTIVE_VARIANT === 'energy' || ACTIVE_VARIANT === 'commodity';
 
 async function installLocalOnlyNetwork(page: Page): Promise<void> {
@@ -242,7 +244,7 @@ test.describe('mission presets', () => {
     await expect
       .poll(() => readJsonLocalStorage<Record<string, boolean>>(page, 'worldmonitor-layers').then((layers) => layers?.tradeRoutes ?? false))
       .toBe(DEFAULT_TRADE_ROUTES);
-    await page.screenshot({ path: testInfo.outputPath('desktop-mission-reset-capped.png') });
+    await evidenceScreenshot(page, { path: testInfo.outputPath('desktop-mission-reset-capped.png') });
   });
 
   test('mobile mission picker stays in viewport and applies from the mobile menu', async ({ page }, testInfo) => {
@@ -290,6 +292,6 @@ test.describe('mission presets', () => {
       const menu = document.getElementById('mobileMenu');
       return !menu || menu.getBoundingClientRect().right <= 0;
     });
-    await page.screenshot({ path: testInfo.outputPath('mobile-mission-reset-capped.png') });
+    await evidenceScreenshot(page, { path: testInfo.outputPath('mobile-mission-reset-capped.png') });
   });
 });

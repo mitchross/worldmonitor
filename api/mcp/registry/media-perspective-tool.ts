@@ -3,6 +3,7 @@ import { requireCountryCode, resolveCountryFilter } from '../_country-args';
 import { buildAuthHeaders } from '../auth';
 import { RpcValidationError } from '../billing-denial';
 import { assertMcpToolFetchOk, fetchMcpDownstream } from '../downstream';
+import { spokenMediaPerspective } from '../spoken-narrators';
 import { OUTLET_AUDIENCES, OWNERSHIP_CLASSES } from '../../../server/_shared/outlet-profile';
 import { UN_M49_REGION_IDS } from '../../../server/_shared/un-m49-regions';
 
@@ -69,10 +70,10 @@ export const MEDIA_PERSPECTIVE_TOOL: ToolDef = {
     required: ['subject_country'],
     properties: {
       subject_country: { type: 'string', description: 'Country the headlines must mention: ISO alpha-2 code (SA) or name.' },
-      outlet_countries: { type: 'array', maxItems: 30, items: { type: 'string' }, description: 'Only outlets based in these countries (ISO alpha-2 or names). Omit for every country.' },
-      outlet_regions: { type: 'array', maxItems: 5, items: { type: 'string', enum: UN_M49_REGION_IDS }, description: 'Only outlets based in these UN M49 regions (e.g. latin-america-and-the-caribbean, northern-europe; western-asia plus northern-africa for MENA). Their countries join outlet_countries; those without coverage are listed in noCoverageCountries.' },
-      audience: { type: 'string', enum: [...OUTLET_AUDIENCES], description: 'Only outlets writing for this audience. Omit for all.' },
-      window_hours: { type: 'integer', enum: WINDOW_HOURS, description: 'Look-back window in hours. Defaults to 72.' },
+      outlet_countries: { type: 'array', maxItems: 30, items: { type: 'string' }, description: 'Home countries of the outlets to include, as ISO alpha-2 codes or English names; outlet_regions adds more. Omit both for outlets from every country.' },
+      outlet_regions: { type: 'array', maxItems: 5, items: { type: 'string', enum: UN_M49_REGION_IDS }, description: 'UN M49 regions whose outlets to include; each region expands to its member countries, which join outlet_countries, and those with no profiled outlet are listed in noCoverageCountries. For MENA pass western-asia and northern-africa.' },
+      audience: { type: 'string', enum: [...OUTLET_AUDIENCES], description: 'Keep only outlets whose readership is this: domestic writes for its home country, international for a global or foreign readership, diaspora for one foreign country or its diaspora from outside it. Omitted means every audience.' },
+      window_hours: { type: 'integer', enum: WINDOW_HOURS, description: 'Hours back from now that a headline may have been published to be included; omitted means 72.' },
     },
   },
   outputSchema: {
@@ -101,6 +102,7 @@ export const MEDIA_PERSPECTIVE_TOOL: ToolDef = {
     },
   },
   _validateArgs: parseArgs,
+  _spoken: spokenMediaPerspective,
   _fitToBudget(result, budgetBytes) {
     if (!Array.isArray(result.groups)) return result;
     // Trim headlines inside each group, never whole groups: a missing group

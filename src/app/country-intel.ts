@@ -38,8 +38,10 @@ import {
 import {
   canonicalizeCountryCode,
   getCountryAtCoordinates,
+  getCountryNearCoordinates,
   getCountryCentroid,
   hasCountryGeometry,
+  isCountryGeometryLoaded,
   ME_STRIKE_BOUNDS,
   preloadCountryGeometry,
 } from '@/services/country-geometry';
@@ -56,13 +58,15 @@ import { collectStoryData } from '@/services/story-data';
 import { hasPremiumAccess } from '@/services/panel-gating';
 import { getAuthState, subscribeAuthState } from '@/services/auth-state';
 import { onEntitlementChange } from '@/services/entitlements';
-import { showMapContextMenu } from '@/components/MapContextMenu';
+import { showMapContextMenu, type MapContextMenuItem } from '@/components/MapContextMenu';
+import { MapLocateControl } from '@/components/MapLocateControl';
+import { claimMapUrlCentre, releaseMapUrlCentreOnUserMove } from '@/app/orbital-map-focus';
 import { BETA_MODE } from '@/config/beta';
 import { mlWorker } from '@/services/ml-worker';
 import { isHeadlineMemoryEnabled } from '@/services/ai-flow-settings';
 import { t, getCurrentLanguage } from '@/services/i18n';
 import { trackCountrySelected, trackCountryBriefOpened } from '@/services/analytics';
-import { toApiUrl } from '@/services/runtime';
+import { isDesktopRuntime, toApiUrl } from '@/services/runtime';
 import { raceWebMcpAbort, throwIfWebMcpAborted } from '@/services/webmcp';
 import type { StrategicPosturePanel } from '@/components/StrategicPosturePanel';
 import type { NewsItem } from '@/types';
@@ -82,6 +86,9 @@ import { getChinaDecisionSignalsData } from '@/services/china-decision-signals';
 import { CHINA_DECISION_SIGNAL_GROUP_IDS } from '../../shared/china-decision-signals';
 import { showToast as showGlobalToast } from '@/utils/toast';
 import { vesselTypeLabel } from '@/utils/vessel-type-label';
+import { watchOrbitalEvidence, watchOrbitalRoute } from '@/app/orbital-route';
+import { orbitalMapViewFor, setOrbitalMapView } from '@/app/orbital-map-focus';
+import { ORBITAL_WATCH_ENABLED } from '@/config/orbital-watch-flag';
 
 // Iran-events domain sunset (war ended 2026-07). Default OFF: no strikes in the
 // country deep-dive or the AI brief. Set VITE_ENABLE_IRAN_ATTACKS=true to restore.
@@ -148,6 +155,10 @@ type CountryPresentation = {
 };
 
 const AVIATION_SIGNAL_TIMEOUT_MS = 2500;
+/** Town scale: the share grid's 0.01° cell stays well inside the view. */
+const LOCATE_ZOOM = 9;
+// About 5 km: absorbs simplified coastlines without crossing a strait into the neighbour of an outline-less state like Singapore.
+const LOCATE_COAST_TOLERANCE_DEG = 0.05;
 
 export class CountryIntelManager implements AppModule {
   private ctx: AppContext;
@@ -164,6 +175,10 @@ export class CountryIntelManager implements AppModule {
   // entitlement so unrelated auth events (session refresh, prefs sync)
   // don't re-hammer fetchProSections.
   private authUnsubscribe: (() => void) | null = null;
+  private orbitalRouteUnsubscribe: (() => void) | null = null;
+  private locateControl: MapLocateControl | null = null;
+  private orbitalEvidenceUnsubscribe: (() => void) | null = null;
+  private orbitalMapFocusUnsubscribe: (() => void) | null = null;
   private entitlementUnsubscribe: (() => void) | null = null;
   private lastHadPremium = false;
   private currentCountryPresentation: CountryPresentation | null = null;
@@ -195,6 +210,11 @@ export class CountryIntelManager implements AppModule {
       }, 400);
     });
 
+    this.orbitalMapFocusUnsubscribe = setOrbitalMapView(orbitalMapViewFor(() => this.ctx.map));
+    if (ORBITAL_WATCH_ENABLED) {
+      this.orbitalRouteUnsubscribe = watchOrbitalRoute(() => this.ctx.map);
+      this.orbitalEvidenceUnsubscribe = watchOrbitalEvidence(() => this.ctx.map);
+    }
     this.lastHadPremium = hasPremiumAccess(getAuthState());
     const syncPremiumAccess = () => this.handlePremiumAccessTransition(hasPremiumAccess(getAuthState()));
     this.authUnsubscribe = subscribeAuthState(syncPremiumAccess);
@@ -202,6 +222,14 @@ export class CountryIntelManager implements AppModule {
   }
 
   destroy(): void {
+    this.locateControl?.destroy();
+    this.locateControl = null;
+    this.orbitalRouteUnsubscribe?.();
+    this.orbitalRouteUnsubscribe = null;
+    this.orbitalEvidenceUnsubscribe?.();
+    this.orbitalEvidenceUnsubscribe = null;
+    this.orbitalMapFocusUnsubscribe?.();
+    this.orbitalMapFocusUnsubscribe = null;
     this.currentCountryPresentation = null;
     this.briefRequestToken++;
     this.countryController?.dispose();
@@ -250,7 +278,6 @@ export class CountryIntelManager implements AppModule {
 
   private handleCountryBriefOpenError(err: unknown): void {
     console.error('[CountryBrief] Failed to open country brief:', err);
-    this.ctx.map?.setRenderPaused(false);
     this.showToast('Country brief failed to open. Please try again.');
   }
 
@@ -329,9 +356,68 @@ export class CountryIntelManager implements AppModule {
           },
         });
       }
+      if (ORBITAL_WATCH_ENABLED) items.push({
+        label: t('contextMenu.satellitePasses'),
+        action: () => {
+          void import('@/app/orbital-watch').then(({ openOrbitalWatch }) =>
+            openOrbitalWatch({ lat: payload.lat, lon: payload.lon }, document.getElementById('mapContainer'), this.ctx.map));
+        },
+      });
       items.push({ label: t('contextMenu.copyCoordinates'), action: () => navigator.clipboard.writeText(`${payload.lat.toFixed(5)}, ${payload.lon.toFixed(5)}`).catch(() => {}) });
       showMapContextMenu(payload.screenX, payload.screenY, items);
     });
+
+    const map = this.ctx.map;
+    this.locateControl?.destroy();
+    this.locateControl = new MapLocateControl({
+      centre: (point) => {
+        // The URL sync would write the user's own position into the address bar,
+        // which shared links and analytics read. Keep the previous centre there
+        // until the map's centre actually leaves the located point.
+        // A globe or WebGL flight still reads a centre short of the point, so the
+        // claim cannot judge the centre until the flight has landed or stopped.
+        let token: number | null = null;
+        let landed = false;
+        claimMapUrlCentre(
+          () => token === null || map.isViewportActionCurrent(token),
+          { point, read: () => (landed ? map.getCenter() : null) },
+        );
+        token = map.setCenter(point.lat, point.lon, LOCATE_ZOOM);
+        const land = () => { landed = true; };
+        map.whenViewportSettled(token).then(land, land);
+        releaseMapUrlCentreOnUserMove(document.getElementById('mapContainer'));
+      },
+      actions: (point) => this.locatedActions(point),
+    });
+    map.addMapControl(this.locateControl.element);
+  }
+
+  /**
+   * The locate menu. The point is the user's own position cut to the share grid, so
+   * the country comes from the local outlines only, never the reverse-geocode API.
+   */
+  private async locatedActions(point: { lat: number; lon: number }): Promise<MapContextMenuItem[]> {
+    const items: MapContextMenuItem[] = [];
+    // A failed outline load must read as "location unavailable", not as "no country here".
+    await preloadCountryGeometry();
+    // The loader catches its own fetch failure and resolves with no outlines.
+    if (!isCountryGeometryLoaded()) throw new Error('country outlines unavailable');
+    const country = getCountryNearCoordinates(point.lat, point.lon, LOCATE_COAST_TOLERANCE_DEG);
+    if (country) items.push({
+      label: t('contextMenu.openCountryBrief'),
+      action: () => {
+        void this.openCountryBriefByCode(country.code, country.name)
+          .catch((err) => this.handleCountryBriefOpenError(err));
+      },
+    });
+    if (ORBITAL_WATCH_ENABLED) items.push({
+      label: t('contextMenu.imageryEvidenceHere'),
+      action: () => {
+        void import('@/app/orbital-watch').then(({ openOrbitalWatch }) =>
+          openOrbitalWatch(point, document.getElementById('mapContainer'), this.ctx.map, { located: true }));
+      },
+    });
+    return items;
   }
 
   private getCountryController(page: NonNullable<AppContext['countryBriefPage']>): CountryBriefController {
@@ -379,7 +465,6 @@ export class CountryIntelManager implements AppModule {
       // Keep the controller for the next open to cancel; closing must not
       // interrupt WebKit body reads.
       this.ctx.map?.clearCountryHighlight();
-      this.ctx.map?.setRenderPaused(false);
       this.ctx.countryTimeline?.destroy();
       this.ctx.countryTimeline = null;
     });
@@ -395,7 +480,6 @@ export class CountryIntelManager implements AppModule {
       const page = this.ctx.countryBriefPage;
       if (!page) return;
       page.showLoading();
-      this.ctx.map?.setRenderPaused(true);
 
       const localGeo = getCountryAtCoordinates(lat, lon);
       if (localGeo) {
@@ -408,7 +492,6 @@ export class CountryIntelManager implements AppModule {
       if (!this.isCurrentBriefRequest(request)) return;
       if (!geo) {
         page.hide();
-        this.ctx.map?.setRenderPaused(false);
         return;
       }
 
@@ -466,7 +549,6 @@ export class CountryIntelManager implements AppModule {
         if (!showedLoading) page.showLoading();
         showedLoading = true;
       }
-      if (!loadingAlreadyShown) this.ctx.map?.setRenderPaused(true);
       if (opts?.trackAnalytics !== false) trackCountryBriefOpened(code);
 
       const canonicalName = TIER1_COUNTRIES[code] || CountryIntelManager.resolveCountryName(code);
@@ -745,9 +827,14 @@ export class CountryIntelManager implements AppModule {
           } else {
             const lines = this.buildFallbackSignalLines(presentation.score, signals, country, context);
             if (lines.length > 0) {
-              this.ctx.countryBriefPage?.updateBrief({ brief: lines.join('\n'), country, code, fallback: true });
+              this.ctx.countryBriefPage?.updateBrief({ brief: lines.join('\n'), country, code, fallback: true, signalRows: true });
             } else {
-              this.ctx.countryBriefPage?.updateBrief({ brief: '', country, code, error: 'No AI service available. Configure OPENROUTER_API_KEY in Settings for full briefs.' });
+              // Only the desktop app has a Settings field for the key; web
+              // visitors get the page's neutral "unavailable" text.
+              this.ctx.countryBriefPage?.updateBrief({
+                brief: '', country, code,
+                error: isDesktopRuntime() ? 'No AI service available. Configure OPENROUTER_API_KEY in Settings for full briefs.' : undefined,
+              });
             }
           }
         }
@@ -789,14 +876,10 @@ export class CountryIntelManager implements AppModule {
           && !!activePage?.isVisible()
           && (activeCode === '__loading__' || activeCode === '__error__');
         if (failedPresentation || failedLoadingShell) activePage?.hide();
-        if (!this.hasVisibleRealCountryBrief()) this.ctx.map?.setRenderPaused(false);
         this.showToast('Country brief failed to open. Please try again.');
       }
     } finally {
       this.clearBriefRequest(request);
-      if (!pageShown && token === this.briefRequestToken && !this.hasVisibleRealCountryBrief()) {
-        this.ctx.map?.setRenderPaused(false);
-      }
     }
   }
 
@@ -843,12 +926,13 @@ export class CountryIntelManager implements AppModule {
         this.commitCountryScore(presentation, score, signals);
         presentation.signalDetailsPending = true;
         page.updateSignals?.({ ...signals, ...this.getQualifiedMilitaryCounts(code) }, this.buildMilitarySummary(code, name).coverageNotes);
-        // Fallback assessments embed temporal status inline; refresh that copy
+        // Signal-row assessments embed temporal status inline; refresh that copy
         // when chips change so unavailable/zero/global context stays consistent.
-        if (page.isFallbackBrief?.()) {
+        // Local-model prose also carries the Fallback badge but is left alone.
+        if (page.isSignalRowsBrief?.()) {
           const lines = this.buildFallbackSignalLines(score, signals, name, {});
           if (lines.length > 0) {
-            page.updateBrief({ brief: lines.join('\n'), country: name, code, fallback: true });
+            page.updateBrief({ brief: lines.join('\n'), country: name, code, fallback: true, signalRows: true });
           }
         }
         try {
@@ -1214,6 +1298,9 @@ export class CountryIntelManager implements AppModule {
     // than aborting the whole open. Only the cluster-derived counts degrade.
     let clusters: CountrySignalCluster[] = [];
     let clustersAvailable = false;
+    // The aviation read never rejects and does not need the aggregator, so it
+    // starts now instead of waiting behind the aggregator chunk.
+    const aviationDisruptionsPending = this.countryAviationDisruptions(code, country);
     try {
       clusters = (await getSignalAggregator()).getCountryClusters();
       clustersAvailable = true;
@@ -1271,7 +1358,7 @@ export class CountryIntelManager implements AppModule {
 
     const activeStrikes = this.getCountryStrikes(code, hasGeoShape).length;
 
-    const aviationDisruptions = (await this.countryAviationDisruptions(code, country)).length;
+    const aviationDisruptions = (await aviationDisruptionsPending).length;
 
     const ciiData = getCountryData(code);
     const isTier1 = !!TIER1_COUNTRIES[code];
@@ -1563,8 +1650,13 @@ export class CountryIntelManager implements AppModule {
     }
     const posturePanel = this.ctx.panels['strategic-posture'] as StrategicPosturePanel | undefined;
     const postures = posturePanel?.getPostures() || [];
-    const aggregator = await getSignalAggregator();
-    const signals = { ...await this.getCountrySignals(code, name), ...this.selectCountryMilitary(code, name).signalCounts };
+    // getCountrySignals waits on the aggregator chunk too, but it also starts
+    // the aviation read; awaiting both together lets that read overlap.
+    const [aggregator, countrySignals] = await Promise.all([
+      getSignalAggregator(),
+      this.getCountrySignals(code, name),
+    ]);
+    const signals = { ...countrySignals, ...this.selectCountryMilitary(code, name).signalCounts };
     const cluster = aggregator.getCountryClusters().find(c => c.country === code);
     const regional = aggregator.getRegionalConvergence().filter(r => r.countries.includes(code));
     const convergence = cluster ? {
