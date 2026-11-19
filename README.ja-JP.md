@@ -144,6 +144,12 @@ World Monitor はブラウザだけでなく、エージェントやスクリプ
 
 ---
 
+## サポート
+
+World Monitor の Web アプリと API は [Vercel](https://vercel.com?utm_source=worldmonitor&utm_medium=referral&utm_campaign=worldmonitor) 上で稼働しています。プロジェクトへの手厚いご支援に、Vercel に感謝いたします。
+
+---
+
 ## データソース
 
 WorldMonitor は、地政学、金融、エネルギー、気候、航空、サイバー、軍事、インフラ、ニュースインテリジェンスの各分野にわたる外部プロバイダーと API を集約しています。厳選フィードと鮮度モニターで追跡されます。プロバイダー、フィードのティア、収集方法の詳細は [データソースカタログ](https://www.worldmonitor.app/docs/data-sources) を参照してください。
@@ -175,7 +181,7 @@ npm run build:full       # プロダクションビルド
 
 コードライセンスの全文は [LICENSE](LICENSE)、平易な言葉での要約は [docs/license.mdx](docs/license.mdx) を参照してください。AGPL 以外の条件が必要なチーム向けに、商用ライセンスも別途提供しています。
 
-Copyright (C) 2024-2026 Elie Habib. All rights reserved.
+Copyright (C) 2026 Elie Habib. All rights reserved.
 
 ---
 

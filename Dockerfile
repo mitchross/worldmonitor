@@ -8,7 +8,10 @@
 # =============================================================================
 
 # ── Stage 1: Builder ─────────────────────────────────────────────────────────
-FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS builder
+# Runs on the build host's own architecture: everything it hands to later stages
+# (dist/, api/, data/, the sidecar) is plain JS and HTML, and npm ci, tsc and
+# vite crash or crawl under QEMU when a multi-platform build targets arm64.
+FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS builder
 
 WORKDIR /app
 ENV npm_config_install_links=true
@@ -16,7 +19,9 @@ ENV npm_config_install_links=true
 # Install root dependencies (layer-cached until package.json changes)
 COPY package.json package-lock.json ./
 COPY vendor/braces/ ./vendor/braces/
+COPY scripts/vendor/deepmerge/ ./scripts/vendor/deepmerge/
 COPY vendor/stream-json/ ./vendor/stream-json/
+COPY vendor/vercel-og/ ./vendor/vercel-og/
 RUN npm ci --ignore-scripts
 
 # Copy full source
@@ -48,19 +53,18 @@ RUN npm run build:pro
 
 # Build the Vite frontend (outputs to dist/)
 # Skip blog build — blog-site has its own deps not installed here
-# Self-hosted builds set VITE_SELF_HOSTED=true (docker-publish-selfhosted.yml)
-# to unlock Pro-gated panels — there is no billing backend to entitle against.
-ARG VITE_SELF_HOSTED=false
-ENV VITE_SELF_HOSTED=$VITE_SELF_HOSTED
 RUN npx tsc && npx vite build
 # Assert the /pro pages survived the public/ -> dist/ copy (#6898). build:pro
 # succeeding proves public/pro/ exists; it does NOT prove Vite copied it, and
 # docker/nginx.conf's SPA fallback would serve the dashboard shell at 200 for a
 # missing /pro rather than failing visibly.
 RUN test -s dist/pro/index.html && test -s dist/pro/welcome.html
+# docker/nginx.conf's error_page points 5xx at /500.html; if the copy ever
+# breaks, nginx silently falls back to its stock error page.
+RUN test -s dist/500.html
 
 # ── Stage 2: Runtime dependencies ───────────────────────────────────────────
-FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS runtime-deps
+FROM node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS runtime-deps
 
 WORKDIR /app
 
@@ -74,7 +78,7 @@ COPY docker/runtime-package-lock.json ./package-lock.json
 RUN npm ci --omit=dev --omit=optional --ignore-scripts
 
 # ── Stage 3: Runtime ─────────────────────────────────────────────────────────
-FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS final
+FROM node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS final
 
 # nginx + supervisord
 RUN apk add --no-cache nginx supervisor gettext && \
@@ -88,6 +92,8 @@ WORKDIR /app
 COPY --from=builder /app/src-tauri/sidecar/local-api-server.mjs ./local-api-server.mjs
 COPY --from=builder /app/src-tauri/sidecar/package.json ./package.json
 COPY --from=builder /app/shared/llm-health-providers.js ./shared/llm-health-providers.js
+COPY --from=builder /app/shared/desktop-key-access.js ./shared/desktop-key-access.js
+COPY --from=builder /app/shared/selfhost-relay-paths.js ./shared/selfhost-relay-paths.js
 ENV LOCAL_API_RESOURCE_DIR=/app
 
 # Minimal runtime node_modules — required by raw .js handlers that aren't
