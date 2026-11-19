@@ -133,6 +133,8 @@ async function loadWidgetStore(): Promise<WidgetStore> {
     platform: 'browser',
     target: 'es2020',
     write: false,
+    // Fork: isProUser reads VITE_SELF_HOSTED, which only Vite inlines.
+    define: { 'import.meta.env.VITE_SELF_HOSTED': '"false"' },
     plugins: [{
       name: 'widget-store-test-stubs',
       setup(buildApi) {
