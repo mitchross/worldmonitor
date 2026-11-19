@@ -169,6 +169,8 @@ describe('review-PR workflows dispatch Deploy Gate', () => {
 
   it('covers every workflow that opens a PR', () => {
     const opening = readdirSync(workflowsDir)
+      // sync-upstream.yml is fork-only; its sync PR is reviewed by hand.
+      .filter((name) => name !== 'sync-upstream.yml')
       .filter((name) => /\.ya?ml$/.test(name) && readFileSync(resolve(workflowsDir, name), 'utf8').includes('gh pr create'))
       .sort();
     assert.deepEqual(opening, Object.keys(openers).sort());
