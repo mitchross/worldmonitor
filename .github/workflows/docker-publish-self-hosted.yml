@@ -76,8 +76,8 @@ jobs:
   docker:
     # Forks inherit the cron; push, release and manual runs in a fork are left
     # alone (tests/ci-workflow-coverage.test.mts pins the guard on every job of
-    # a scheduled workflow).
-    if: (github.event_name != 'schedule' || github.repository == 'koala73/worldmonitor')
+    # a scheduled workflow). Fork: this publishes to ghcr.io/koala73, so it never runs here.
+    if: (github.event_name != 'schedule' || github.repository == 'koala73/worldmonitor') && github.repository == 'koala73/worldmonitor'
     runs-on: ubuntu-latest
     # A multi-platform build under QEMU can hang, and a hang would otherwise
     # hold this concurrency slot for the six-hour default.
