@@ -6,7 +6,7 @@
 #
 # These are NOT published by upstream — only the frontend-only image (docker/Dockerfile) is.
 
-name: Publish self-hosted Docker images
+name: Publish fork self-hosted Docker images
 
 on:
   push:

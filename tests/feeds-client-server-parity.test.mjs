@@ -167,12 +167,25 @@ describe('feed parity: client vs server (PR #3715 follow-up)', () => {
     'DW News',
   ]);
 
+  // These alert feeds have an intentional browser fallback. Pin both sides
+  // so an unexpected reroute cannot disappear into the historical drift set.
+  const digestOnlyDirect = new Map([
+    ['CNN World', 'https://www.cnn.com/sitemap/news.xml'],
+    ['Ukrinform', 'https://www.ukrinform.net/rss/block-lastnews'],
+    ['Kyiv Independent', 'https://kyivindependent.com/news-archive/rss/'],
+  ]);
+
   it('every NEW shared feed name uses consistent routing (grandfathered drift snapshot)', () => {
     const newDrift = [];
     const resolvedKnown = [];
     for (const [name, c] of client) {
       const s = server.get(name);
       if (!s) continue;
+      if (digestOnlyDirect.has(name)) {
+        assert.ok(c.isGoogleNews, `${name}: revisit fallback when the browser moves to the publisher`);
+        assert.equal(s.snippet, digestOnlyDirect.get(name));
+        continue;
+      }
       if (c.isGoogleNews === s.isGoogleNews) {
         if (KNOWN_DRIFTS.has(name)) resolvedKnown.push(name);
         continue;
@@ -239,6 +252,7 @@ describe('feed parity: client vs server (PR #3715 follow-up)', () => {
   });
 
   const INTENTIONAL_URL_DIVERGENCES = new Map([
+    ['politics:CNN World', 'The digest parses CNN’s news sitemap. The browser fallback parses RSS and Atom.'],
     ['politics:AP News', 'The server digest adds a one-day Google News window.'],
     ['politics:Reuters World', 'The server digest adds a one-day Google News window.'],
     ['us:Reuters US', 'The server digest adds a one-day Google News window.'],
@@ -250,6 +264,7 @@ describe('feed parity: client vs server (PR #3715 follow-up)', () => {
     ['europe:Meduza', 'Locale variants intentionally select language-specific Meduza feeds.'],
     ['europe:Suspilne', 'Locale variants intentionally select language-specific Suspilne feeds.'],
     ['europe:Ukrinform', 'Locale variants intentionally select language-specific Ukrinform feeds.'],
+    ['europe:Kyiv Independent', 'The digest reads the publisher RSS. The browser keeps the Google News search because kyivindependent.com is relay-only (#10937).'],
     ['middleeast:Al Arabiya', 'Locale variants intentionally select language-specific Al Arabiya feeds.'],
     ['middleeast:Al Jazeera', 'Locale variants intentionally select language-specific Al Jazeera feeds.'],
     ['middleeast:Rudaw', 'The client requests the en edition explicitly; the server relies on the default edition.'],
@@ -325,60 +340,8 @@ describe('feed parity: client vs server (PR #3715 follow-up)', () => {
   it('REGRESSION (#6427): new client-only full-variant feeds require a reviewed server decision', () => {
     const clientFullFeeds = extractFullFeedsByCategory('client');
     const serverFullFeeds = extractFullFeedsByCategory('server');
-    const INTENTIONAL_CLIENT_ONLY = new Map([
-      ['europe:El País', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:El Mundo', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:BBC Mundo', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:Bild', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:Der Spiegel', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:Die Zeit', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:Corriere della Sera', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:Repubblica', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:NRC', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:De Telegraaf', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:Dagens Nyheter', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:Svenska Dagbladet', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:BBC Turkce', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:DW Turkish', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:BBC Russian', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:Novaya Gazeta Europe', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:TASS', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:RT', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['europe:RT Russia', 'Locale-specific client catalog entry; the full digest serves its English feed set.'],
-      ['middleeast:Fars News', 'Intentionally client-only regional source.'],
-      ['middleeast:IRNA', 'Intentionally client-only regional source.'],
-      ['middleeast:Mehr News', 'Intentionally client-only regional source.'],
-      ['middleeast:Asharq News', 'Intentionally client-only regional source.'],
-      ['gov:CDC', 'Intentionally client-only catalog source.'],
-      ['gov:FEMA', 'Intentionally client-only catalog source.'],
-      ['gov:DHS', 'Intentionally client-only catalog source.'],
-      ['thinktanks:RAND', 'Intentionally client-only catalog source.'],
-      ['thinktanks:Brookings', 'Intentionally client-only catalog source.'],
-      ['thinktanks:Carnegie', 'Intentionally client-only catalog source.'],
-      ['thinktanks:Responsible Statecraft', 'Intentionally client-only catalog source.'],
-      ['thinktanks:RUSI', 'Intentionally client-only catalog source.'],
-      ['thinktanks:FPRI', 'Intentionally client-only catalog source.'],
-      ['thinktanks:Jamestown', 'Intentionally client-only catalog source.'],
-      ['crisis:UNHCR', 'Intentionally client-only catalog source.'],
-      ['africa:BBC Afrique', 'Intentionally client-only catalog source.'],
-      ['latam:Latin America', 'Intentionally client-only catalog source.'],
-      ['latam:Reuters LatAm', 'Intentionally client-only catalog source.'],
-      ['latam:O Globo', 'Intentionally client-only catalog source.'],
-      ['latam:Folha de S.Paulo', 'Intentionally client-only catalog source.'],
-      ['latam:Brasil Paralelo', 'Intentionally client-only catalog source.'],
-      ['latam:El Tiempo', 'Intentionally client-only catalog source.'],
-      ['latam:La Silla Vacía', 'Intentionally client-only catalog source.'],
-      ['latam:Mexico Security', 'Intentionally client-only catalog source.'],
-      ['latam:AP Mexico', 'Intentionally client-only catalog source.'],
-      ['asia:Indian Express', 'Intentionally client-only catalog source.'],
-      ['asia:India News Network', 'Intentionally client-only catalog source.'],
-      ['asia:Thai PBS', 'Intentionally client-only catalog source.'],
-      ['asia:Tuoi Tre News', 'Intentionally client-only catalog source.'],
-      ['asia:Chosun Ilbo', 'Intentionally client-only catalog source.'],
-      ['asia:ABC News Australia', 'Intentionally client-only catalog source.'],
-      ['asia:Guardian Australia', 'Intentionally client-only catalog source.'],
-      ['energy:Mining & Resources', 'Intentionally client-only catalog source.'],
-    ]);
+    // Empty since U6 batch 4: the full digest fetches every full-variant feed.
+    const INTENTIONAL_CLIENT_ONLY = new Map();
     assertReasonedExceptions(INTENTIONAL_CLIENT_ONLY, 'client-only exception');
     const unreviewed = [];
     for (const key of clientFullFeeds.keys()) {

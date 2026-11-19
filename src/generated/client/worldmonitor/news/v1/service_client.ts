@@ -59,6 +59,7 @@ export interface NewsItem {
   snippet: string;
   tickers: string[];
   credibilityScore: number;
+  linkVerified: boolean;
 }
 
 export interface ThreatClassification {
@@ -97,6 +98,8 @@ export interface DigestCoverage {
   servedStale: boolean;
   staleAgeSeconds: number;
   staleReason: string;
+  itemsConsidered: number;
+  publishersConsidered: number;
 }
 
 export interface ListCountryHeadlinesRequest {
@@ -175,6 +178,55 @@ export interface MediaPerspectiveHeadline {
   framing: string;
   publishedAt: number;
   link: string;
+}
+
+export interface ListNewsPoolRequest {
+  languages: string[];
+  editions: string[];
+  category: string;
+}
+
+export interface ListNewsPoolResponse {
+  items: NewsPoolItem[];
+  cells: NewsPoolCell[];
+  state: string;
+  generatedAt: string;
+}
+
+export interface NewsPoolItem {
+  item?: NewsItem;
+  language: string;
+  editions: string[];
+  category: string;
+}
+
+export interface NewsPoolCell {
+  edition: string;
+  language: string;
+  state: string;
+  items: number;
+  staleAgeSeconds: number;
+  generatedAt: string;
+}
+
+export interface ListSourceItemsRequest {
+  editions: string[];
+  category: string;
+  sources: string[];
+  lang: string;
+}
+
+export interface ListSourceItemsResponse {
+  items: NewsItem[];
+  sources: SourceItemsState[];
+  generatedAt: string;
+}
+
+export interface SourceItemsState {
+  source: string;
+  state: string;
+  edition: string;
+  items: number;
 }
 
 export interface ListLabelChangesRequest {
@@ -302,6 +354,43 @@ export interface ClaimHeadline {
   title: string;
   link: string;
   publishedAt: number;
+}
+
+export interface SearchHeadlinesRequest {
+  query: string;
+  variant: string;
+  lang: string;
+}
+
+export interface SearchHeadlinesResponse {
+  headlines: HeadlineMatch[];
+  searchedHeadlines: number;
+  windowHours: number;
+  state: string;
+  newestServedAt: number;
+}
+
+export interface HeadlineMatch {
+  source: string;
+  title: string;
+  link: string;
+  publishedAt: number;
+  lastServedAt: number;
+}
+
+export interface ListSentAlertsRequest {
+}
+
+export interface ListSentAlertsResponse {
+  alerts: SentAlert[];
+  state: string;
+}
+
+export interface SentAlert {
+  title: string;
+  source: string;
+  link: string;
+  sentAt: number;
 }
 
 export type StoryPhase = "STORY_PHASE_UNSPECIFIED" | "STORY_PHASE_BREAKING" | "STORY_PHASE_DEVELOPING" | "STORY_PHASE_SUSTAINED" | "STORY_PHASE_FADING";
@@ -487,6 +576,61 @@ export class NewsServiceClient {
     return await resp.json() as ListMediaPerspectiveResponse;
   }
 
+  async listNewsPool(req: ListNewsPoolRequest, options?: NewsServiceCallOptions): Promise<ListNewsPoolResponse> {
+    let path = "/api/news/v1/list-news-pool";
+    const params = new URLSearchParams();
+    if (req.languages && req.languages.length > 0) req.languages.forEach(v => params.append("languages", v));
+    if (req.editions && req.editions.length > 0) req.editions.forEach(v => params.append("editions", v));
+    if (req.category != null && req.category !== "") params.set("category", String(req.category));
+    const url = this.baseURL + path + (params.toString() ? "?" + params.toString() : "");
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...this.defaultHeaders,
+      ...options?.headers,
+    };
+
+    const resp = await this.fetchFn(url, {
+      method: "GET",
+      headers,
+      signal: options?.signal,
+    });
+
+    if (!resp.ok) {
+      return this.handleError(resp);
+    }
+
+    return await resp.json() as ListNewsPoolResponse;
+  }
+
+  async listSourceItems(req: ListSourceItemsRequest, options?: NewsServiceCallOptions): Promise<ListSourceItemsResponse> {
+    let path = "/api/news/v1/list-source-items";
+    const params = new URLSearchParams();
+    if (req.editions && req.editions.length > 0) req.editions.forEach(v => params.append("editions", v));
+    if (req.category != null && req.category !== "") params.set("category", String(req.category));
+    if (req.sources && req.sources.length > 0) req.sources.forEach(v => params.append("sources", v));
+    if (req.lang != null && req.lang !== "") params.set("lang", String(req.lang));
+    const url = this.baseURL + path + (params.toString() ? "?" + params.toString() : "");
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...this.defaultHeaders,
+      ...options?.headers,
+    };
+
+    const resp = await this.fetchFn(url, {
+      method: "GET",
+      headers,
+      signal: options?.signal,
+    });
+
+    if (!resp.ok) {
+      return this.handleError(resp);
+    }
+
+    return await resp.json() as ListSourceItemsResponse;
+  }
+
   async listLabelChanges(req: ListLabelChangesRequest, options?: NewsServiceCallOptions): Promise<ListLabelChangesResponse> {
     let path = "/api/news/v1/list-label-changes";
     const params = new URLSearchParams();
@@ -634,6 +778,83 @@ export class NewsServiceClient {
     }
 
     return await resp.json() as SearchClaimHeadlinesResponse;
+  }
+
+  async searchHeadlines(req: SearchHeadlinesRequest, options?: NewsServiceCallOptions): Promise<SearchHeadlinesResponse> {
+    let path = "/api/news/v1/search-headlines";
+    const params = new URLSearchParams();
+    if (req.query != null && req.query !== "") params.set("query", String(req.query));
+    if (req.variant != null && req.variant !== "") params.set("variant", String(req.variant));
+    if (req.lang != null && req.lang !== "") params.set("lang", String(req.lang));
+    const url = this.baseURL + path + (params.toString() ? "?" + params.toString() : "");
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...this.defaultHeaders,
+      ...options?.headers,
+    };
+
+    const resp = await this.fetchFn(url, {
+      method: "GET",
+      headers,
+      signal: options?.signal,
+    });
+
+    if (!resp.ok) {
+      return this.handleError(resp);
+    }
+
+    return await resp.json() as SearchHeadlinesResponse;
+  }
+
+  async searchHeadlineArchive(req: SearchHeadlinesRequest, options?: NewsServiceCallOptions): Promise<SearchHeadlinesResponse> {
+    let path = "/api/news/v1/search-headline-archive";
+    const params = new URLSearchParams();
+    if (req.query != null && req.query !== "") params.set("query", String(req.query));
+    if (req.variant != null && req.variant !== "") params.set("variant", String(req.variant));
+    if (req.lang != null && req.lang !== "") params.set("lang", String(req.lang));
+    const url = this.baseURL + path + (params.toString() ? "?" + params.toString() : "");
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...this.defaultHeaders,
+      ...options?.headers,
+    };
+
+    const resp = await this.fetchFn(url, {
+      method: "GET",
+      headers,
+      signal: options?.signal,
+    });
+
+    if (!resp.ok) {
+      return this.handleError(resp);
+    }
+
+    return await resp.json() as SearchHeadlinesResponse;
+  }
+
+  async listSentAlerts(_req: ListSentAlertsRequest, options?: NewsServiceCallOptions): Promise<ListSentAlertsResponse> {
+    let path = "/api/news/v1/list-sent-alerts";
+    const url = this.baseURL + path;
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...this.defaultHeaders,
+      ...options?.headers,
+    };
+
+    const resp = await this.fetchFn(url, {
+      method: "GET",
+      headers,
+      signal: options?.signal,
+    });
+
+    if (!resp.ok) {
+      return this.handleError(resp);
+    }
+
+    return await resp.json() as ListSentAlertsResponse;
   }
 
   private async handleError(resp: Response): Promise<never> {

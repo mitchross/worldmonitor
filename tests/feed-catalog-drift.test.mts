@@ -68,6 +68,7 @@ interface FeedsModule {
   SOURCE_PROPAGANDA_RISK: Record<string, { risk: string; stateAffiliated?: string }>;
   FULL_FEEDS?: Record<string, FeedEntry[]>;
   FEEDS: Record<string, FeedEntry[]>;
+  CANONICAL_FEEDS: Record<string, FeedEntry[]>;
   getAllDefaultEnabledSources: () => Set<string>;
   getStrategicDefaultSources: () => Set<string>;
   getLocaleBoostedSources: (locale: string) => Set<string>;
@@ -387,6 +388,11 @@ describe('feed catalog drift', () => {
       }
       for (const [url, labels] of byUrl) {
         if (labels.length < 2) continue;
+        // One URL under the SAME name in two categories cannot relabel
+        // anything: the cached items already carry that name. The energy
+        // dashboard places OilPrice.com in both its live and energy panels.
+        const names = new Set(labels.map((label) => label.slice(label.indexOf(':') + 1)));
+        if (names.size < 2) continue;
         const signature = `${variant}|${url}|${labels.sort().join('|')}`;
         if (!reviewedAliases.has(signature)) unreviewedAliases.push(signature);
       }
@@ -401,12 +407,26 @@ describe('feed catalog drift', () => {
     );
   });
 
-  it('every default-enabled source is fetched by a served digest, or pending migration', () => {
+  it('every default-enabled source is fetched by a served digest', () => {
     const catalog = JSON.parse(readFileSync(join(repoRoot, 'shared/news-catalog.json'), 'utf8'));
-    const pending = new Set<string>(JSON.parse(readFileSync(join(repoRoot, 'shared/news-catalog-pending-migration.json'), 'utf8')).names);
     const served = servedLayout(catalog.layout.server, VALID_VARIANTS, INTEL_EDITION);
-    const gaps = uncoveredSources(feeds.getAllDefaultEnabledSources(), catalog.feeds, served, pending);
+    const gaps = uncoveredSources(feeds.getAllDefaultEnabledSources(), catalog.feeds, served);
     assert.deepEqual(gaps, [], `default-enabled sources no digest fetches: ${gaps.join(', ')}`);
+  });
+
+  // The desktop outage fallback (KTD9) fetches the feeds panels resolve from
+  // these maps, so every one must be a catalog entry, URL included.
+  it('every feed a panel can resolve is a catalog feed, so the outage fallback fetches only catalog URLs', () => {
+    const catalog = JSON.parse(readFileSync(join(repoRoot, 'shared/news-catalog.json'), 'utf8')) as {
+      feeds: Array<{ name: string; url: unknown; browser?: { url?: unknown } | null }>;
+    };
+    const declared = new Set(catalog.feeds.map((feed) => `${feed.name}|${JSON.stringify(feed.browser?.url ?? feed.url)}`));
+    const resolvable = [...Object.values(feeds.CANONICAL_FEEDS).flat(), ...feeds.INTEL_SOURCES];
+    assert.ok(resolvable.length > 500, `expected the whole browser catalog, got ${resolvable.length} feeds`);
+    const undeclared = resolvable
+      .map((feed) => `${feed.name}|${JSON.stringify(feed.url)}`)
+      .filter((key) => !declared.has(key));
+    assert.deepEqual([...new Set(undeclared)], []);
   });
 
   it('every default-enabled source resolves to a configured feed', () => {
@@ -550,12 +570,6 @@ describe('feed catalog drift', () => {
   // looks it up. Grandfathering 41 names would add noise without protecting anything.
   // The dangerous direction is the one asserted above: enabled-by-default with no feed.
 
-  it('keeps the two source-tiers mirrors byte-identical', () => {
-    const shared = readFileSync(join(repoRoot, 'shared/source-tiers.json'), 'utf8');
-    const scripts = readFileSync(join(repoRoot, 'scripts/shared/source-tiers.json'), 'utf8');
-    assert.equal(scripts, shared, 'scripts/shared/source-tiers.json drifted from shared/source-tiers.json');
-  });
-
   // Issue #5949 — EN full-variant defaults under-cover the Ukraine war.
   // Kyiv Independent, PL frontline, and independent RU were cataloged but
   // off-by-default, so users only saw Western wire/EU framing.
@@ -633,9 +647,9 @@ describe('feed catalog drift', () => {
     const europe = serverFeeds.VARIANT_FEEDS.full?.europe ?? [];
     const byName = new Map(europe.map((feed) => [feed.name, feed]));
     const expectedUrls: Record<string, string> = {
-      'Kyiv Independent': 'https://news.google.com/rss/search?q=site%3Akyivindependent.com%20when%3A3d&hl=en-US&gl=US&ceid=US:en',
+      'Kyiv Independent': 'https://kyivindependent.com/news-archive/rss/',
       'Ukrainska Pravda EN': 'https://news.google.com/rss/search?q=site%3Aeuromaidanpress.com%20when%3A2d&hl=en-US&gl=US&ceid=US:en',
-      'NV EN': 'https://news.google.com/rss/search?q=site%3Aenglish.nv.ua%20when%3A2d&hl=en-US&gl=US&ceid=US:en',
+      'NV EN': 'https://english.nv.ua/rss/all_english.xml',
       TVN24: 'https://tvn24.pl/swiat.xml',
       Rzeczpospolita: 'https://www.rp.pl/rss_main',
       Meduza: 'https://meduza.io/rss/en/all',

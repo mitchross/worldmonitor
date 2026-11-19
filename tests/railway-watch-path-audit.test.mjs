@@ -1007,9 +1007,24 @@ describe('planned Railway service lifecycle', () => {
       // 359e5bd7-4160-41d6-8792-f4aff20a3006 runs `node seed-no2-activity.mjs`
       // on cron 20 6 * * * with the CDSE credentials. Leaving it planned would
       // exempt a live cron from the watch-path and deploy-drift checks.
+      // seed-bundle-regional-energy (#9842) is deliberately ABSENT now: service
+      // 441a7f0d-b3a7-464a-8328-9638c00c226c runs
+      // `node seed-bundle-regional-energy.mjs` on cron */15 * * * *. Leaving it
+      // planned would exempt a live cron from the watch-path and deploy-drift checks.
+      // seed-comtrade-bilateral-hs4-ext is deliberately ABSENT now: #10939
+      // landed it planned until the Railway service existed, and service
+      // 0d46fcc7-19ec-484f-ab8e-506510205704 now runs
+      // `node seed-comtrade-bilateral-hs4-ext.mjs` on cron 0 6 15 * *. Leaving
+      // it planned would exempt a live cron from the watch-path and
+      // deploy-drift checks, and the fleet guard would refuse the whole fleet.
       'seed-crypto-sectors',
       'seed-market-quotes',
       'seed-service-statuses',
+      // seed-ukmto-incidents (#9832) is deliberately ABSENT now: service
+      // fa702bee-b70c-44de-9aca-9cea889e89fb runs
+      // `node seed-ukmto-incidents.mjs` on cron */30 * * * * against the
+      // hormuz.data-tracking.net republication (#9858). Leaving it planned
+      // would exempt a live cron from the watch-path and deploy-drift checks.
       'seed-weather-alerts',
       // seed-notam-nms (#9637) is deliberately ABSENT now: it landed planned
       // until FAA granted production NMS-API access, and service
@@ -1068,6 +1083,19 @@ describe('planned Railway service lifecycle', () => {
     assert.equal(live.startCommand, 'node seed-country-history.mjs');
     assert.deepEqual(live.requiredEnv, ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN']);
     assert.ok(managedRailwayServices(RAILWAY_SERVICE_REGISTRY).includes(live));
+  });
+
+  it('audit-manages provisioned seed-comtrade-bilateral-hs4-ext', () => {
+    // Service 0d46fcc7-19ec-484f-ab8e-506510205704 exists, so the row must
+    // carry no lifecycle field. Asserting ABSENCE is what stops `planned`
+    // being reinstated to quiet a red gate. The 15th keeps it off the core
+    // run's day of the shared Comtrade quota.
+    const ext = RAILWAY_SERVICE_REGISTRY.find((entry) => entry.service === 'seed-comtrade-bilateral-hs4-ext');
+    assert.ok(ext, 'seed-comtrade-bilateral-hs4-ext must remain in the Railway registry');
+    assert.equal(Object.hasOwn(ext, 'lifecycle'), false);
+    assert.equal(ext.cronSchedule, '0 6 15 * *');
+    assert.deepEqual(ext.requiredEnv, ['COMTRADE_API_KEYS']);
+    assert.ok(managedRailwayServices(RAILWAY_SERVICE_REGISTRY).includes(ext));
   });
 
   it('audit-manages provisioned seed-live-video-resolved', () => {
@@ -1574,6 +1602,7 @@ describe('critical ingestion Railway registry contract', () => {
     ['seed-bundle-derived-signals', '*/5 * * * *'],
     ['seed-bundle-portwatch', '0 */1 * * *'],
     ['seed-bundle-portwatch-port-activity', '0 */12 * * *'],
+    ['seed-natural-events', '*/30 * * * *'],
   ]);
 
   // Closure coverage is DERIVED from the same predicate the audit uses to decide
