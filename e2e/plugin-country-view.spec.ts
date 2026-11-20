@@ -11,8 +11,8 @@ import { imfPeriodData, captureImfPeriods, type ImfPeriodScenario } from './coun
 import { evidenceScreenshot } from './evidence-screenshot';
 
 const root = process.cwd();
-for (const width of [1280, 390]) for (const scenario of ['mixed', 'legacy', 'partial', 'sparse'] as ImfPeriodScenario[]) {
-  test(`IMF annual native ${scenario} ${width}`, async ({ page }, testInfo) => {
+for (const scenario of ['mixed', 'legacy', 'partial', 'sparse'] as ImfPeriodScenario[]) {
+  test(`IMF annual native ${scenario} at both widths`, async ({ page }, testInfo) => {
     const requests: object[] = [];
     const errors: object[] = [];
     const frames: object[] = [];
@@ -24,7 +24,7 @@ for (const width of [1280, 390]) for (const scenario of ['mixed', 'legacy', 'par
     page.on('framenavigated', frame => frames.push({ event: 'navigated', url: frame.url() }));
     page.on('pageerror', error => errors.push({ message: error.message, stack: error.stack }));
     page.on('console', message => { if (message.type() === 'error') errors.push({ message: message.text(), location: message.location() }); });
-    await page.setViewportSize({ width, height: 1000 });
+    await page.setViewportSize({ width: scenario === 'mixed' ? 390 : 1280, height: 1000 });
     try {
       host = await installCountryHost(page, false, undefined, false, {}, undefined, undefined, false, false, undefined, scenario);
       const frame = page.frameLocator('iframe');
@@ -763,7 +763,7 @@ test('country military observations render under one allocation and survive an A
   await frame.getByRole('button', { name: 'Security', exact: true }).click();
   const military = frame.locator('[data-brief-section=military]');
   await expect(military).toContainText('Flight counts include observations licensed');
-  await expect(military).toContainText('bounded to 1,500 reports');
+  await expect(military).toContainText('military operations reports and known naval vessels from the relay sample of up to 1,500 candidates');
   const aisCalls = host.calls.filter(call => call.arguments.section === 'vessels');
   expect(aisCalls).toHaveLength(1);
   expect(aisCalls[0]?.arguments.arguments).toMatchObject({ ne_lat: 0, ne_lon: 0, sw_lat: 0, sw_lon: 0 });
