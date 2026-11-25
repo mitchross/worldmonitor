@@ -7,6 +7,7 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 import sax from 'sax';
 import { ingestSemaEntries, mergeSanctionEntries, ofacRegistrationToIdentifier, parseSemaXml, SEMA_SOURCE, SEMA_TIMEOUT_MS, SANCTIONS_SOURCE_VERSION } from '../scripts/_sema-sanctions.mjs';
 import { CSL_ROW_ID, CSL_SOURCES, CSL_TIMEOUT_MS } from '../scripts/_csl-sanctions.mjs';
+import { URP_ROW_ID, URP_SOURCES } from '../scripts/_us-restricted-sanctions.mjs';
 import { aircraftRegistrationCountry } from '../scripts/shared/aircraft-registration-country.mjs';
 import { countryNameToIso2, COUNTRY_NAME_TO_ISO2, normalizeCountryToken } from '../scripts/shared/country-name-to-iso2.cjs';
 
@@ -31,7 +32,7 @@ const pureSrc = seedSrc
   .replace(/loadEnvFile\([^)]+\);/, '')
   .replace(/async function fetchSource[\s\S]*/, ''); // remove network + runSeed tail
 
-const ctx = vm.createContext({ console, Date, Math, Number, Array, Map, Set, String, RegExp, SEMA_SOURCE, CSL_SOURCES, CSL_ROW_ID, COUNTRY_NAME_TO_ISO2, normalizeCountryToken });
+const ctx = vm.createContext({ console, Date, Math, Number, Array, Map, Set, String, RegExp, SEMA_SOURCE, CSL_SOURCES, CSL_ROW_ID, URP_SOURCES, URP_ROW_ID, COUNTRY_NAME_TO_ISO2, normalizeCountryToken });
 vm.runInContext(pureSrc, ctx);
 
 const {
@@ -102,7 +103,7 @@ it('attributes OFAC vessels by flag and aircraft by registry, leaving unknown, f
   </Sanctions>`;
   const context = vm.createContext({
     console: { log() {}, warn() {} }, sax, TextDecoder, ofacRegistrationToIdentifier,
-    aircraftRegistrationCountry, countryNameToIso2, COUNTRY_NAME_TO_ISO2, normalizeCountryToken, SEMA_SOURCE, CSL_SOURCES, CSL_ROW_ID,
+    aircraftRegistrationCountry, countryNameToIso2, COUNTRY_NAME_TO_ISO2, normalizeCountryToken, SEMA_SOURCE, CSL_SOURCES, CSL_ROW_ID, URP_SOURCES, URP_ROW_ID,
     fetchOfacSourceResponse: async () => new Response(xml),
   });
   const fetchSourceSrc = seedSrc.slice(seedSrc.indexOf('async function fetchSource('), seedSrc.indexOf(fetchPressureSrc));
@@ -123,6 +124,32 @@ it('attributes OFAC vessels by flag and aircraft by registry, leaving unknown, f
   assert.ok(entries.every(entry => entry.countryCodes.length === 0), 'a flag or registry is not a country association');
 });
 
+it('names an OFAC party by its Primary Latin form and keeps other scripts as aliases', async () => {
+  const docName = (status, script, value) => `<DocumentedName DocNameStatusID="${status}"><DocumentedNamePart><NamePartValue ScriptID="${script}">${value}</NamePartValue></DocumentedNamePart></DocumentedName>`;
+  const party = (id, ...names) => `<DistinctParty FixedRef="${id}"><Profile ID="${id}" PartySubTypeID="3"><Identity ID="${id}">
+    <Alias AliasTypeID="1403" Primary="true">${names.join('')}</Alias>
+    <Alias AliasTypeID="1400" Primary="false">${docName('1', '215', `${id} Weak Alias`)}</Alias>
+  </Identity></Profile></DistinctParty>`;
+  const xml = `<Sanctions>
+    <DistinctParties>
+      ${party('59184', docName('1', '215', 'Berkeley Trading LLC'), docName('2', '160', 'بیرکلی للتجارة ذ م م'))}
+      ${party('2', docName('2', '160', 'شركة'), docName('1', '215', 'Sharika Company'))}
+      ${party('3', docName('2', '220', 'Компания'))}
+    </DistinctParties>
+    <SanctionsEntries>${['59184', '2', '3'].map(id => `<SanctionsEntry ID="${id}" ProfileID="${id}"/>`).join('')}</SanctionsEntries>
+  </Sanctions>`;
+  const context = vm.createContext({ console: { log() {}, warn() {} }, sax, TextDecoder,
+    ofacRegistrationToIdentifier, aircraftRegistrationCountry, countryNameToIso2, COUNTRY_NAME_TO_ISO2, normalizeCountryToken, SEMA_SOURCE, CSL_SOURCES, CSL_ROW_ID, URP_SOURCES, URP_ROW_ID,
+    fetchOfacSourceResponse: async () => new Response(xml) });
+  vm.runInContext(`${pureSrc}\n${seedSrc.slice(seedSrc.indexOf('async function fetchSource('), seedSrc.indexOf(fetchPressureSrc))}`, context);
+  const { entries } = await context.fetchSource({ label: 'SDN' });
+  assert.deepEqual(normalize(entries.map(entry => [entry.name, entry._aliases])), [
+    ['Berkeley Trading LLC', ['بیرکلی للتجارة ذ م م', '59184 Weak Alias']],
+    ['Sharika Company', ['شركة', '2 Weak Alias']],
+    ['Компания', ['3 Weak Alias']],
+  ]);
+});
+
 it('keeps linked-parent attribution separate and uses only current directional parent links', async () => {
   const party = (id, country = false, subType = '3') => `<DistinctParty><Profile ID="${id}" PartySubTypeID="${subType}">
     ${country ? '<Feature FeatureTypeID="1"><FeatureVersion><VersionLocation LocationID="1"/></FeatureVersion></Feature>' : ''}
@@ -138,7 +165,7 @@ it('keeps linked-parent attribution separate and uses only current directional p
     <ProfileRelationships>${link('2', '1')}${link('3', '1', 'owns', 'true')}${link('4', '1')}${link('5', '1')}${link('6', '1', 'associate')}${link('1', '7', 'reverse')}${link('8', 'missing')}${link('9', '10')}${link('10', '9')}${link('11', '1', 'acting')}${link('12', '1', 'property')}${link('13', '1', 'linked')}</ProfileRelationships>
   </Sanctions>`;
   const context = vm.createContext({ console: { log() {}, warn() {} }, sax, TextDecoder,
-    ofacRegistrationToIdentifier, aircraftRegistrationCountry, countryNameToIso2, COUNTRY_NAME_TO_ISO2, normalizeCountryToken, SEMA_SOURCE, CSL_SOURCES, CSL_ROW_ID,
+    ofacRegistrationToIdentifier, aircraftRegistrationCountry, countryNameToIso2, COUNTRY_NAME_TO_ISO2, normalizeCountryToken, SEMA_SOURCE, CSL_SOURCES, CSL_ROW_ID, URP_SOURCES, URP_ROW_ID,
     fetchOfacSourceResponse: async () => new Response(xml) });
   vm.runInContext(`${pureSrc}\n${seedSrc.slice(seedSrc.indexOf('async function fetchSource('), seedSrc.indexOf(fetchPressureSrc))}`, context);
   const { entries } = await context.fetchSource({ label: 'SDN' });
@@ -188,7 +215,7 @@ it('keeps vessel flags out of the country counts that drive risk scores and brie
   </Sanctions>`;
   const context = vm.createContext({
     console: { log() {}, warn() {} }, sax, TextDecoder, ofacRegistrationToIdentifier,
-    aircraftRegistrationCountry, countryNameToIso2, COUNTRY_NAME_TO_ISO2, normalizeCountryToken, SEMA_SOURCE, CSL_SOURCES, CSL_ROW_ID,
+    aircraftRegistrationCountry, countryNameToIso2, COUNTRY_NAME_TO_ISO2, normalizeCountryToken, SEMA_SOURCE, CSL_SOURCES, CSL_ROW_ID, URP_SOURCES, URP_ROW_ID,
     fetchOfacSourceResponse: async () => new Response(xml),
   });
   const fetchSourceSrc = seedSrc.slice(seedSrc.indexOf('async function fetchSource('), seedSrc.indexOf(fetchPressureSrc));
@@ -222,6 +249,10 @@ async function partialPublication({ sources = ['CONSOLIDATED'], cached = [], sna
       deadlines.csl = deadlineAt;
       return { lists: {}, error: 'CSL_FIXTURE_OFF' };
     },
+    URP_SOURCES, URP_ROW_ID, ingestUsRestrictedEntries: async ({ deadlineAt }) => {
+      deadlines.urp = deadlineAt;
+      return { lists: {}, error: 'URP_FIXTURE_OFF' };
+    },
     fetchSource: async ({ label }, { deadlineAt }) => {
       deadlines[label] = deadlineAt;
       if (!sources.includes(label)) throw new Error('source timeout');
@@ -229,7 +260,7 @@ async function partialPublication({ sources = ['CONSOLIDATED'], cached = [], sna
         datasetDate: Date.UTC(2026, 8, 14),
         entries: [{ id: `${label}:1`, name: `${label} entity`, sourceLists: [label],
           countryCodes: ['RU'], countryNames: ['Russia'], programs: [label],
-          _aliases: Array.from({ length: 12 }, (_, i) => `Alias ${i}`), _identifiers: ['imo:1234567'],
+          _aliases: Array.from({ length: 24 }, (_, i) => `Alias ${i}`), _identifiers: ['imo:1234567'],
           entityType: 'SANCTIONS_ENTITY_TYPE_ENTITY', effectiveAt: '0', isNew: false }],
       };
     },
@@ -276,7 +307,7 @@ describe('partial sanctions publication', () => {
 
   it('publishes bounded aliases, IMO identifiers and source lists in the screening index', async () => {
     const data = await partialPublication({ sources: ['SDN'] });
-    assert.equal(data._entityIndex[0].al.length, 10);
+    assert.equal(data._entityIndex[0].al.length, 20);
     assert.deepEqual(data._entityIndex[0].ids, ['imo:1234567']);
     assert.deepEqual(data._entityIndex[0].sl, ['SDN']);
   });
@@ -330,6 +361,8 @@ describe('partial sanctions publication', () => {
     assert.ok(csl - SDN >= SEMA_TIMEOUT_MS + CSL_TIMEOUT_MS,
       `only ${csl - SDN} ms between the OFAC and CSL deadlines; SEMA and CSL need ${SEMA_TIMEOUT_MS + CSL_TIMEOUT_MS} ms`);
     assert.ok(SDN > before, 'OFAC keeps a positive budget');
+    // The US restricted-party files download alongside SEMA and must leave CSL its full budget.
+    assert.ok(deadlines.urp <= csl - CSL_TIMEOUT_MS, 'the US restricted-party download cannot eat into the CSL budget');
   });
 });
 

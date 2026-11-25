@@ -10,6 +10,7 @@ export interface Command {
   id: string;
   keywords: string[];
   label: string;
+  canonicalCountryName?: string;
   icon: string;
   category: 'navigate' | 'layers' | 'panels' | 'view' | 'actions' | 'country';
 }
@@ -300,7 +301,8 @@ export const COMMANDS: Command[] = [
   // View / settings
   { id: 'view:dark', keywords: ['dark', 'dark mode', 'night'], label: 'Switch to dark mode', icon: '\u{1F319}', category: 'view' },
   { id: 'view:light', keywords: ['light', 'light mode', 'day'], label: 'Switch to light mode', icon: '\u2600\uFE0F', category: 'view' },
-  { id: 'view:fullscreen', keywords: ['fullscreen', 'full screen'], label: 'Toggle fullscreen', icon: '\u26F6', category: 'view' },
+  // No glyph renders U+26F6 off macOS; SearchModal's renderCommandIcon draws this one as an SVG (#11065).
+  { id: 'view:fullscreen', keywords: ['fullscreen', 'full screen'], label: 'Toggle fullscreen', icon: '', category: 'view' },
   { id: 'view:settings', keywords: ['settings', 'config', 'api keys'], label: 'Open settings', icon: '\u2699\uFE0F', category: 'view' },
   { id: 'view:refresh', keywords: ['refresh', 'reload', 'refresh all'], label: 'Refresh all data', icon: '\u{1F504}', category: 'view' },
   { id: 'view:resilience', keywords: ['resilience', 'resilience score', 'baseline', 'stress', 'country resilience'], label: 'Toggle resilience score', icon: '\u{1F6E1}\uFE0F', category: 'view' },
@@ -331,6 +333,10 @@ const ISO_CODES = [
   'TR', 'TT', 'TV', 'TW', 'TZ', 'UA', 'UG', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE', 'VN', 'VU', 'WS',
   'YE', 'ZA', 'ZM', 'ZW',
 ];
+
+const COUNTRY_COMMAND_ALIASES: Partial<Record<string, string[]>> = {
+  CI: ['ivory coast', 'côte d’ivoire', "côte d'ivoire", "cote d'ivoire"],
+};
 
 let _cachedLang = '';
 let _cachedCountryCommands: Command[] = [];
@@ -386,14 +392,17 @@ function buildCountryCommands(): Command[] {
   const result = ISO_CODES.flatMap(code => {
     const curated = CURATED_COUNTRIES[code];
     const name = displayNames.of(code) || curated?.name || code;
-    const keywords = curated
-      ? [name.toLowerCase(), curated.name.toLowerCase(), ...curated.searchAliases].filter(Boolean)
-      : [name.toLowerCase()];
+    const keywords = [
+      name.toLowerCase(),
+      ...(curated ? [curated.name.toLowerCase(), ...curated.searchAliases] : []),
+      ...(COUNTRY_COMMAND_ALIASES[code] ?? []),
+    ].filter(Boolean);
     return [
       {
         id: `country-map:${code}`,
         keywords: [...keywords, 'map'],
         label: name,
+        canonicalCountryName: curated?.name ?? name,
         icon: toFlagEmoji(code),
         category: 'navigate' as const,
       },
@@ -401,6 +410,7 @@ function buildCountryCommands(): Command[] {
         id: `country:${code}`,
         keywords: [...keywords, 'brief'],
         label: name,
+        canonicalCountryName: curated?.name ?? name,
         icon: toFlagEmoji(code),
         category: 'country' as const,
       },

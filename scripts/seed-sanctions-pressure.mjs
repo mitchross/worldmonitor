@@ -14,6 +14,7 @@ import { loadEnvFile, runSeed, verifySeedKey, readSeedSnapshot, writeExtraKeyWit
 import { fetchOfacSourceResponse } from './_sanctions-source.mjs';
 import { buildSanctionsChanges } from './_sanctions-changes.mjs';
 import { CSL_ROW_ID, CSL_SOURCES, CSL_TIMEOUT_MS, ingestCslEntries } from './_csl-sanctions.mjs';
+import { URP_ROW_ID, URP_SOURCES, ingestUsRestrictedEntries } from './_us-restricted-sanctions.mjs';
 import { getOptionalUpstashCreds, upstashCommand } from './_upstash-rest.mjs';
 import { SANCTIONS_MAX_CONTENT_AGE_MIN, SANCTIONS_SOURCE_VERSION, SEMA_SOURCE, SEMA_TIMEOUT_MS, ingestSemaEntries, mergeSanctionEntries, semaTargetCountry, ofacRegistrationToIdentifier, sanctionsListContentMeta } from './_sema-sanctions.mjs';
 
@@ -77,13 +78,16 @@ const OFAC_SOURCES = [
 ];
 
 // Pressure, country counts and the pressure source health come from OFAC and
-// SEMA only; CSL export-control lists feed screening and the change feed.
+// SEMA only; CSL export-control lists and the US restricted-party lists (1260H,
+// Section 889, FCC Covered List, UFLPA) feed screening and the change feed.
 const PRESSURE_SOURCES = [...OFAC_SOURCES.map(({ label }) => label), SEMA_SOURCE];
+const SCREENING_SOURCES = [...CSL_SOURCES, ...URP_SOURCES];
 
 function validSourceId(source, id) {
   if (typeof id !== 'string') return false;
   if (source === SEMA_SOURCE) return /^sema-ca:(?!unspecified:|xx:)[^:]+:[^:]+:[1-9]\d*$/.test(id);
   if (CSL_SOURCES.includes(source)) return id.startsWith(`${source}:`) && CSL_ROW_ID.test(id.slice(source.length + 1));
+  if (URP_SOURCES.includes(source)) return id.startsWith(`${source}:`) && URP_ROW_ID.test(id.slice(source.length + 1));
   return new RegExp(`^${source}:\\d+$`).test(id);
 }
 
@@ -153,7 +157,8 @@ function selectSanctionsSourceSnapshot(source, result, previous, now) {
       publishedAt: snapshot?.publishedAt ?? null,
       recordCount: snapshot?.records.length ?? 0,
       errorCode: valid ? null : source === SEMA_SOURCE ? 'SEMA_INGEST_FAILED'
-        : CSL_SOURCES.includes(source) ? 'CSL_INGEST_FAILED' : 'OFAC_INGEST_FAILED',
+        : CSL_SOURCES.includes(source) ? 'CSL_INGEST_FAILED'
+          : URP_SOURCES.includes(source) ? 'URP_INGEST_FAILED' : 'OFAC_INGEST_FAILED',
     },
   };
 }
@@ -403,9 +408,9 @@ async function fetchSource(source, { deadlineAt } = {}) {
     let profileId = '', profileSubTypeId = '', identityId = '';
     let curDoc = null;           // { typeId, identityId, number }
     let aliases = null;          // Alias[]
-    let curAlias = null;         // { primary, typeId, nameParts[] }
-    let inDocumentedName = false;
+    let curAlias = null;         // { primary, typeId, names[] }, Primary Latin name first
     let namePartsBuf = null;     // string[] collecting NamePartValue text
+    let docNamePrimaryLatin = false;
     let profileFeatures = null;  // Feature[]
     let curFeature = null;       // { featureTypeId, locationIds[], detail, details[] }
 
@@ -476,7 +481,7 @@ async function fetchSource(source, { deadlineAt } = {}) {
       const primaryAlias = aliases?.find((a) => a.primary)
         || aliases?.find((a) => a.typeId === '1403')
         || aliases?.[0];
-      const name = primaryAlias?.nameParts.join(' ') || 'Unnamed designation';
+      const name = primaryAlias?.names[0] || 'Unnamed designation';
 
       let entityType = 'SANCTIONS_ENTITY_TYPE_ENTITY';
       if (profileSubTypeId === '1') entityType = 'SANCTIONS_ENTITY_TYPE_VESSEL';
@@ -501,7 +506,11 @@ async function fetchSource(source, { deadlineAt } = {}) {
       const flag = registryCode ? { code: registryCode, name: countryName(registryCode) } : null;
       const sorted = [...seen.entries()].sort(([a], [b]) => a.localeCompare(b));
 
-      const aliasNames = uniqueSorted((aliases ?? []).map((a) => a.nameParts.join(' ')).filter((part) => part && part !== name));
+      // The primary name's other scripts lead so the bounded screening index keeps them.
+      const aliasNames = [...new Set([
+        ...uniqueSorted(primaryAlias?.names.slice(1) ?? []),
+        ...uniqueSorted((aliases ?? []).flatMap((a) => a.names)),
+      ])].filter((part) => part !== name);
       const identifiers = uniqueSorted([
         ...(idRegDocsByIdentity.get(identityId) || []).map((doc) => (
           ofacRegistrationToIdentifier(idRegDocTypes.get(doc.typeId) || '', doc.number)
@@ -631,10 +640,11 @@ async function fetchSource(source, { deadlineAt } = {}) {
           if (inDistinctParties) identityId = attrs.ID || '';
           break;
         case 'Alias':
-          if (inDistinctParties) curAlias = { primary: attrs.Primary === 'true', typeId: attrs.AliasTypeID || '', nameParts: [] };
+          if (inDistinctParties) curAlias = { primary: attrs.Primary === 'true', typeId: attrs.AliasTypeID || '', names: [] };
           break;
         case 'DocumentedName':
-          if (curAlias) { inDocumentedName = true; namePartsBuf = []; }
+          // An alias holds one DocumentedName per script; DocNameStatusID 1 is "Primary Latin".
+          if (curAlias) { namePartsBuf = []; docNamePrimaryLatin = attrs.DocNameStatusID === '1'; }
           break;
         case 'Feature':
           if (inDistinctParties) curFeature = { featureTypeId: attrs.FeatureTypeID || '', locationIds: [], detail: '', details: [] };
@@ -758,7 +768,8 @@ async function fetchSource(source, { deadlineAt } = {}) {
           if (namePartsBuf !== null && t) namePartsBuf.push(t);
           break;
         case 'DocumentedName':
-          if (curAlias && namePartsBuf !== null) { curAlias.nameParts = namePartsBuf; namePartsBuf = null; inDocumentedName = false; }
+          if (curAlias && namePartsBuf?.length) curAlias.names[docNamePrimaryLatin ? 'unshift' : 'push'](namePartsBuf.join(' '));
+          namePartsBuf = null;
           break;
         case 'Alias':
           if (curAlias) { aliases.push(curAlias); curAlias = null; }
@@ -896,7 +907,8 @@ async function fetchSanctionsPressure() {
       outcomes[source.label] = { records: [], publishedAt: 0, error: 'OFAC_INGEST_FAILED' };
     }
   }
-  const sema = await ingestSemaEntries();
+  // The US restricted-party files are small; they download while SEMA does.
+  const [sema, urp] = await Promise.all([ingestSemaEntries(), ingestUsRestrictedEntries({ deadlineAt: deadlineAt - CSL_TIMEOUT_MS })]);
   if (!sema.error && !Array.isArray(sema.quarantined)) throw new Error('SANCTIONS_QUARANTINE_INVALID');
   outcomes[SEMA_SOURCE] = { records: sema.records, publishedAt: sema.publishedAtMs || 0,
     quarantinedCount: sema.error ? null : sema.quarantined.length, error: sema.error };
@@ -909,6 +921,13 @@ async function fetchSanctionsPressure() {
     outcomes[source] = { records: list?.records ?? [], publishedAt: list?.publishedAt ?? 0, quarantinedCount: 0,
       error: csl.error || (list ? list.error : 'CSL_LIST_MISSING') };
     if (!csl.error && list?.error) console.warn(`  CSL ${source} unavailable: ${list.error}`);
+  }
+  if (urp.error) console.warn(`  US restricted-party lists fetch failed: ${urp.error}`);
+  for (const source of URP_SOURCES) {
+    const list = urp.lists[source];
+    outcomes[source] = { records: list?.records ?? [], publishedAt: list?.publishedAt ?? 0, quarantinedCount: 0,
+      error: urp.error || (list ? list.error : 'URP_LIST_MISSING') };
+    if (!urp.error && list?.error) console.warn(`  ${source} unavailable: ${list.error}`);
   }
 
   const now = Date.now();
@@ -945,7 +964,7 @@ async function fetchSanctionsPressure() {
   const ofacEntries = OFAC_SOURCES.flatMap(({ label }) => _sourceSnapshots[label]?.records ?? []);
   const entries = mergeSanctionEntries({ ofac: ofacEntries, sema: semaEntries });
   const datasetDate = Math.max(0, ...PRESSURE_SOURCES.map(source => _sourceSnapshots[source]?.publishedAt ?? 0));
-  const cslEntries = CSL_SOURCES.flatMap(source => _sourceSnapshots[source]?.records ?? []);
+  const screeningEntries = SCREENING_SOURCES.flatMap(source => _sourceSnapshots[source]?.records ?? []);
 
   if (hasPrevious) {
     for (const entry of entries) {
@@ -983,16 +1002,17 @@ async function fetchSanctionsPressure() {
   const semaCount = semaEntries.length;
   const sdnCount = _sourceSnapshots.SDN?.records.length ?? 0;
   const consolidatedCount = _sourceSnapshots.CONSOLIDATED?.records.length ?? 0;
-  console.log(`  Merged: ${totalCount} total (${sdnCount} SDN + ${consolidatedCount} consolidated + ${semaCount} SEMA), ${newEntryCount} new, ${vesselCount} vessels, ${aircraftCount} aircraft; ${cslEntries.length} CSL screening rows`);
+  console.log(`  Merged: ${totalCount} total (${sdnCount} SDN + ${consolidatedCount} consolidated + ${semaCount} SEMA), ${newEntryCount} new, ${vesselCount} vessels, ${aircraftCount} aircraft; ${screeningEntries.length} CSL and US restricted-party screening rows`);
 
   // Keep lookup identities separate from the pressure display projection.
-  const _entityIndex = [...entries, ...cslEntries].map((e) => ({
+  const _entityIndex = [...entries, ...screeningEntries].map((e) => ({
     id: e.id,
     name: e.name,
     et: ET_CODE[e.entityType] ?? 'entity',
     cc: e.countryCodes.slice(0, 3),
     pr: e.programs.slice(0, 3),
-    al: (e._aliases ?? []).slice(0, 10),
+    // An OFAC alias can carry a Latin and a native-script form, so ten aliases can fill twenty slots.
+    al: (e._aliases ?? []).slice(0, 20),
     ids: e._identifiers ?? [],
     sl: e.sourceLists,
   }));
@@ -1151,12 +1171,14 @@ runSeed('sanctions', 'pressure', CANONICAL_KEY, fetchSanctionsPressure, {
     // calls writeExtraKey (no meta), and we need a seed-meta key for health tracking.
     const sourceHealth = data._sourceHealth;
     if (data._entityIndex) {
-      // The index holds every source, so any outage degrades its health. CSL
-      // outages degrade only this key: screening is their only published surface.
+      // The index holds every source, so any outage degrades its health. CSL and
+      // US restricted-party outages degrade only this key: screening is their only
+      // published surface.
       const indexFailed = Object.keys(sourceHealth).filter(source => sourceHealth[source]?.status !== 'ok');
       const indexErrorCode = indexFailed.includes(SEMA_SOURCE) ? 'SEMA_INGEST_FAILED'
-        : indexFailed.some(source => !CSL_SOURCES.includes(source)) ? 'OFAC_INGEST_FAILED'
-          : indexFailed.length ? 'CSL_INGEST_FAILED' : null;
+        : indexFailed.some(source => !SCREENING_SOURCES.includes(source)) ? 'OFAC_INGEST_FAILED'
+          : indexFailed.some(source => CSL_SOURCES.includes(source)) ? 'CSL_INGEST_FAILED'
+            : indexFailed.length ? 'URP_INGEST_FAILED' : null;
       await writeExtraKeyWithMeta(
         ENTITY_INDEX_KEY,
         data._entityIndex,

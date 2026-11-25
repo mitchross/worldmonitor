@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('globe.gl', () => ({ default: vi.fn() }));
 vi.mock('@/services/country-geometry', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/services/country-geometry')>(),
-  getCountryBbox: () => [10, 20, 30, 40],
+  getCountryMapBbox: () => [10, 20, 30, 40],
 }));
 import { GlobeMap } from '@/components/GlobeMap';
 
@@ -142,6 +142,28 @@ describe('Globe viewport runtime', () => {
     await vi.advanceTimersByTimeAsync(1500);
     await expect(next).resolves.toBe(true);
     expect(map.getCenter()).toEqual({ lat: 30, lon: 40 });
+  });
+
+  it('lands on the target when the settle timer finds the camera within tolerance before the last frame', async () => {
+    const { map, pov } = camera();
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(callback => frames.push(callback));
+    const frameAt = async (ms: number) => {
+      await vi.advanceTimersByTimeAsync(ms - performance.now());
+      for (const callback of frames.splice(0)) callback(performance.now());
+    };
+    const start = performance.now();
+    map.setCenter(35, 139);
+    const movement = map.whenViewportSettled();
+    // The last frame of a slow CI run lands at 99.5% of the 1200 ms tween, about
+    // 7e-5 degrees short of the target, and the next frame misses the settle timer.
+    for (let ms = 16; ms < 1194; ms += 16) await frameAt(start + ms);
+    await frameAt(start + 1194);
+    expect(Math.abs(pov().lng - 139)).toBeGreaterThan(5e-5);
+    await vi.advanceTimersByTimeAsync(1250 - (performance.now() - start));
+    await expect(movement).resolves.toBe(true);
+    expect(map.getCenter()).toEqual({ lat: 35, lon: 139 });
+    expect(pov().altitude).toBe(1.2);
   });
 
   it.each([false, true])('defers a chokepoint pan and popup until ready (destroyed=%s)', async destroyed => {
