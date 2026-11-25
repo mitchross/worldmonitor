@@ -103,6 +103,8 @@ const PUBLISHER_FAMILY_DATA = {
   'cnn': { publisher: "CNN", labels: ["CNN World"] },
   'csis': { publisher: "CSIS", labels: ["CSIS", "CSIS Tech"] },
   'die-zeit': { publisher: "Die Zeit", labels: [] },
+  // feed.koreatimes.co.kr serves items on www.koreatimes.co.kr.
+  'korea-times': { publisher: "Korea Times", labels: [] },
   'deutschlandradio': { publisher: "Deutschlandradio", labels: ["Deutschlandfunk"] },
   'dw': { publisher: "Deutsche Welle", labels: ["DW News", "DW Turkish", "DW Brasil"] },
   'eia': { publisher: "US Energy Information Administration", labels: ["EIA Press Room", "EIA Reports"] },
@@ -139,6 +141,7 @@ const PUBLISHER_FAMILY_DATA = {
   'kitco': { publisher: "Kitco", labels: ["Kitco Gold", "Kitco News"] },
   'kyiv-independent': { publisher: "The Kyiv Independent", labels: ["Kyiv Independent"] },
   'marketwatch': { publisher: "MarketWatch", labels: ["MarketWatch", "MarketWatch Tech"] },
+  'mehr-news': { publisher: "Mehr News Agency", labels: ["Mehr News"] },
   'mit-technology-review': {
     publisher: "MIT Technology Review",
     labels: [
@@ -152,6 +155,7 @@ const PUBLISHER_FAMILY_DATA = {
   'washington-post': { publisher: "The Washington Post", labels: ["Washington Post World"] },
   'new-york-times': { publisher: "The New York Times", labels: ["Hard Fork (NYT)", "New York Times World"] },
   'new-voice-of-ukraine': { publisher: "The New Voice of Ukraine", labels: ["NV EN"] },
+  'ukrainska-pravda': { publisher: "Ukrainska Pravda", labels: ["Ukrainska Pravda", "Ukrainska Pravda EN", "Українська правда"] },
   'propublica': { publisher: "ProPublica", labels: ["ProPublica"] },
   'the-atlantic': { publisher: "The Atlantic", labels: ["The Atlantic"] },
   'channel-4-news': { publisher: "Channel 4 News", labels: ["Channel 4 News"] },
@@ -231,6 +235,7 @@ const PUBLISHER_FAMILY_DATA = {
   'y-combinator': { publisher: "Y Combinator", labels: ["YC Launches", "Y Combinator Blog"] },
   'yahoo-finance': { publisher: "Yahoo Finance", labels: ["Yahoo Finance", "Yahoo Finance Commodities"] },
   'zdf': { publisher: "ZDF", labels: ["ZDFheute"] },
+  'kalkine': { publisher: "Kalkine Media", labels: [] },
 };
 
 export const PUBLISHER_FAMILIES = Object.freeze(PUBLISHER_FAMILY_DATA);
@@ -305,8 +310,10 @@ const PUBLISHER_FAMILY_DOMAINS = Object.freeze({
   'cnn': ['cnn.com'],
   'csis': ['csis.org'],
   'die-zeit': ['zeit.de'],
+  'korea-times': ['koreatimes.co.kr'],
   'deutschlandradio': ['deutschlandfunk.de'],
   'zdf': ['zdfheute.de', 'zdf.de'],
+  'kalkine': ['kalkine.ca'],
   'dw': ['dw.com'],
   'eia': ['eia.gov'],
   'el-mundo': ['elmundo.es'],
@@ -331,6 +338,7 @@ const PUBLISHER_FAMILY_DOMAINS = Object.freeze({
   'kitco': ['kitco.com'],
   'kyiv-independent': ['kyivindependent.com'],
   'marketwatch': ['marketwatch.com'],
+  'mehr-news': ['mehrnews.com'],
   'mit-technology-review': ['technologyreview.com'],
   'nbc-news': ['nbcnews.com', 'today.com'],
   'ndtv': ['ndtv.com', 'ndtv.in'],
@@ -338,6 +346,7 @@ const PUBLISHER_FAMILY_DOMAINS = Object.freeze({
   'washington-post': ['washingtonpost.com'],
   'new-york-times': ['nytimes.com'],
   'new-voice-of-ukraine': ['nv.ua'],
+  'ukrainska-pravda': ['pravda.com.ua'],
   'propublica': ['propublica.org'],
   'the-atlantic': ['theatlantic.com'],
   'channel-4-news': ['channel4.com'],

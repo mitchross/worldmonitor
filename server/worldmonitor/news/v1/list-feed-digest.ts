@@ -52,11 +52,12 @@ import {
   orderServerFeedEntries,
   VARIANT_FEEDS,
   INTEL_SOURCES,
+  feedHeadlineLanguage,
   SERVER_EDITIONS,
   digestGateProfile,
   type ServerFeed,
 } from './_feeds';
-import { FUTURE_DATE_TOLERANCE_MS, resolveMaxAgeMs, rssFeedCacheKey } from './_rss-cache';
+import { FUTURE_DATE_TOLERANCE_MS, resolveMaxAgeMs, rssFeedCacheKey, rssFeedCountryCacheKey } from './_rss-cache';
 import { classifyByKeyword, hasHistoricalMarker, type ThreatLevel } from './_classifier';
 import {
   buildDigestCoverage,
@@ -91,6 +92,7 @@ import {
 import { newsPublisherCoverageKey, stripAttributionSuffix } from '../../../../shared/story-identity.js';
 // @ts-expect-error — JS module, no declaration file
 import { STORY_ALIAS_PUBLISH_SCRIPT } from '../../../../shared/story-alias-publish-script.mjs';
+import { RSS_FEED_RENEW_SCRIPT } from '../../../../shared/rss-feed-renew-script.mjs';
 import { classifyOpinion } from '../../../_shared/opinion-classifier.js';
 import { classifyFeelGood } from '../../../_shared/feelgood-classifier.js';
 import { classifyEphemeralLiveCoverage } from '../../../../shared/ephemeral-live-classifier.js';
@@ -200,6 +202,69 @@ const ITEMS_PER_FEED = 5;
 // the whole feed grows the pool from about 4,400 to 8,300 headlines.
 const COUNTRY_ITEMS_PER_FEED = 100;
 const MAX_ITEMS_PER_CATEGORY = 20;
+
+// Broad policy searches also return shopping deals and unrelated agency
+// reports. The AI Policy and Regulation panel keeps headlines about a digital
+// subject or a policy action, and never consumer offers.
+const DIGITAL_SUBJECT_RE = /\b(?:ai|artificial intelligence|tech|digital|data|privacy|cyber\w*|online|internet|platforms?|apps?|software|algorithm\w*|chips?|semiconductors?|google|apple|amazon|meta|microsoft|nvidia|openai|anthropic|tiktok|social media|gdpr|telecom\w*|encryption|deepfakes?|chatbots?|bots?|crypto\w*|e-commerce|adtech|robot\w*|drones?)\b/i;
+const POLICY_ACTION_RE = /\b(?:regulat\w*|laws?|acts?|bills?|rules?|ruling|bans?|antitrust|monopoly|competition|courts?|judge|lawsuit|sues?|sued|fines?|fined|probes?|investigat\w*|polic(?:y|ies)|compliance|guidelines?|legislat\w*|congress\w*|parliament|senate|lawmakers?|governance|enforcement|oversight|executive order|white house|government|national security|consultation|copyright|export controls?|sanctions?|watchdog|regulators?)\b/i;
+const CONSUMER_OFFER_RE = /\b(?:(?:best|top|early|holiday|daily|weekend) deals|deals? of the (?:day|week)|discounts?|coupons?|promo codes?|black friday|cyber monday|prime day|on sale\b|lowest[- ]price[sd]?\b|save up to|deals?:)|\$\d[\d,.]*\s+off\b|\b\d+% off\b/i;
+
+// Google News searches match words anywhere on the page, so a site: search
+// for one desk returns that publisher's unrelated stories (#11266). Headlines
+// from those searches must name the panel's subject. Direct publisher feeds
+// are left alone: what a crypto outlet chooses to publish is editorial.
+const CENTRAL_BANK_TOPIC_RE = /\b(?:central banks?|monetary|interest rates?|rates? (?:hikes?|cuts?|decisions?|holds?|path|outlook|expectations|bets)|(?:hike|hikes|hiking|raise|raises|raising|cut|cuts|cutting|hold|holds|holding) (?:interest )?rates|inflation|disinflation|deflation|tightening|easing|stimulus|liquidity|reserves?|yield curve|bond[- ]buying|quantitative|balance sheet|policymakers?|policy committee|fpc|mpc|fomc|governor|fed|federal reserve|ecb|lagarde|boe|bank of england|bailey|boj|bank of japan|ueda|pboc|people'?s bank of china|yuan fix|reference rate|(?:loan prime|lending|benchmark) rates?|lpr|rbi|reserve bank|bank of canada|boc|bank of korea|bok|snb|swiss national bank|riksbank|norges bank|banxico|bundesbank)\b/i;
+const ENERGY_TOPIC_RE = /\b(?:energ(?:y|ies|i)|oil|oilfields?|crude|brent|wti|opec\+?|barrels?|bpd|petro\w*|ethanol|gas|natural gas|f?lng|lpg|henry hub|ttf|jkm|gasoline|diesel|fuels?|jet fuel|refiner(?:y|ies)|pipelines?|drilling|rigs?|shale|fracking|offshore|upstream|downstream|flaring|tankers?|hormuz|suez|bab el-mandeb|nord stream|druzhba|turkstream|power of siberia|power|electricity|grids?|blackouts?|utilit(?:y|ies)|nuclear|uranium|reactors?|iaea|coal|solar|wind|renewables?|hydrogen|batter(?:y|ies)|emissions|carbon|climate|mining|mines?|miners?|minerals?|metals?|copper|nickel|iron ore|lithium|cobalt|rare[- ]earths?|electric vehicles?|evs?|aramco|exxon\w*|chevron|conocophillips|equinor|gazprom|rosneft|enbridge|suncor|eia|iea)\b/i;
+const COMMODITY_TOPIC_RE = /\b(?:commodit(?:y|ies)|metals?|mining|miners?|mines?|smelt\w*|ore|iron ore|steel|gold|silver|platinum|palladium|bullion|copper|alumin(?:um|ium)|zinc|nickel|tin|lithium|cobalt|spodumene|rare[- ]earths?|critical minerals|minerals|uranium|nuclear|rhodium|lme|comex|futures|oil|crude|brent|wti|opec\+?|barrels?|bpd|exxon\w*|gas|lng|lpg|henry hub|ttf|jkm|coal|\w*fuels?|diesel|ulsd|gasoline|petro\w*|chemicals?|sulfur|cement|refiner(?:y|ies)|pipelines?|energy|platts|wheat|corn|soybeans?|grains?|sugar|coffee|cocoa|cotton|cattle|livestock|fertili[sz]ers?|potash|palm oil|hormuz|shipping|freight|tankers?)\b/i;
+const CRYPTO_TOPIC_RE = /\b(?:crypto\w*|bitcoin|btc|ether(?:eum)?|eth|blockchains?|stablecoins?|tokens?|tokeni[sz]\w*|defi|decentrali[sz]ed finance|dex(?:es)?|(?:re)?staking|mainnet|testnet|layer[- ]?2|rollups?|validators?|nfts?|non-fungible|web3|onchain|on-chain|altcoins?|memecoins?|coins?|binance|coinbase|kraken|okx|bybit|tether|usdt|usdc|circle|solana|xrp|ripple|dogecoin|cardano|uniswap|aave|chainlink|grayscale|saylor|satoshi|wallets?|digital assets?|cbdcs?|hashrate|halving|airdrops?|dao|prediction markets?|polymarket|kalshi)\b/i;
+const PRECIOUS_METALS_TOPIC_RE = /\b(?:gold|silver|platinum|palladium|rhodium|precious metals?|bullion|xau\w*|xag\w*|xpt\w*|xpd\w*|lbma|comex|gld|slv|ounces?|oz|jewel(?:le)?ry)\b/i;
+
+type CategoryGate = { eligible: (headline: string) => boolean; searchFeedsOnly?: true };
+const searchTopicGate = (topic: RegExp): CategoryGate => ({ eligible: (headline) => topic.test(headline), searchFeedsOnly: true });
+
+const CATEGORY_ELIGIBILITY: Readonly<Record<string, CategoryGate>> = {
+  policy: { eligible: (title) => POLICY_ACTION_RE.test(title) || (DIGITAL_SUBJECT_RE.test(title) && !CONSUMER_OFFER_RE.test(title)) },
+  centralbanks: searchTopicGate(CENTRAL_BANK_TOPIC_RE),
+  energy: searchTopicGate(ENERGY_TOPIC_RE),
+  'commodity-news': searchTopicGate(COMMODITY_TOPIC_RE),
+  crypto: searchTopicGate(CRYPTO_TOPIC_RE),
+  'gold-silver': searchTopicGate(PRECIOUS_METALS_TOPIC_RE),
+};
+
+function isCategoryEligible(category: string, title: string, originPublisher = ''): boolean {
+  return CATEGORY_ELIGIBILITY[category]?.eligible(headlineWithoutAttribution(title, originPublisher)) ?? true;
+}
+
+function isGoogleNewsSearch(feedUrl: string): boolean {
+  try {
+    const parsed = new URL(feedUrl);
+    return parsed.hostname === 'news.google.com' && parsed.pathname.startsWith('/rss/search');
+  } catch {
+    return false;
+  }
+}
+
+// Applied while parsing, before the per-feed cap, so a rejected headline
+// neither takes a feed slot nor reaches the cached rows list-source-items reads.
+// Parsing is shared by every category that lists the URL, so a headline stays
+// when any of them accepts it, and a URL that also feeds an ungated category
+// is not gated at all.
+const FEED_ELIGIBILITY_CATEGORIES: ReadonlyMap<string, readonly string[]> = (() => {
+  const byUrl = new Map<string, Set<string> | null>();
+  for (const byCategory of Object.values(VARIANT_FEEDS)) {
+    for (const [category, feeds] of Object.entries(byCategory)) {
+      const gate = CATEGORY_ELIGIBILITY[category];
+      for (const feed of feeds) {
+        const prior = byUrl.get(feed.url);
+        if (!gate || (gate.searchFeedsOnly && !isGoogleNewsSearch(feed.url))) byUrl.set(feed.url, null);
+        else if (prior !== null) byUrl.set(feed.url, (prior ?? new Set()).add(category));
+      }
+    }
+  }
+  return new Map([...byUrl].flatMap(([url, categories]) => (categories ? [[url, [...categories]] as const] : [])));
+})();
+
 const FEED_CAP_LEDGER_TOP = 20;
 
 // #10976: the feeds that lost the most items to ITEMS_PER_FEED, so a missed
@@ -1020,6 +1085,46 @@ export interface ParseResult {
 // upstream bounded while still recovering quickly when upstream heals.
 const CACHE_TTL_HEALTHY_S = 3600;
 const CACHE_TTL_EMPTY_S = 300;
+// A 304 renews the feed entry without reparsing, but only within an hour of
+// the last full parse, so a feed entry outlives its parse by at most two
+// hours. The country pool, written only by a full parse, must last as long.
+const CACHE_TTL_COUNTRY_S = CACHE_TTL_HEALTHY_S * 2;
+
+/**
+ * Stores a parse: digest rows under the feed key, the full variant's
+ * retained country rows under their own key (see rssFeedCountryCacheKey).
+ * Both keys go in one MULTI/EXEC: two separate writes from concurrent parses
+ * could interleave into a feed entry and a pool from different parses, and
+ * readers would then drop the pool. Returns the feed entry as stored, which is
+ * what a cache hit returns.
+ */
+async function writeFeedParse(feed: ServerFeed, variant: string, result: ParseResult, ttlSeconds: number): Promise<ParseResult> {
+  const feedKey = rssFeedCacheKey(variant, feed.url);
+  // The desktop sidecar cache is an in-process map, so the split saves no
+  // bandwidth there. Two keys would also let its LRU evict a pool while the
+  // feed entry stays. Keep the country rows inline (readers accept both forms).
+  if (process.env.LOCAL_API_MODE === 'tauri-sidecar') {
+    await setCachedJson(feedKey, result, ttlSeconds);
+    return result;
+  }
+  const { countryItems, ...entry } = result;
+  if (!countryItems || countryItems.length === 0 || typeof entry.parsedAt !== 'number') {
+    await setCachedJson(feedKey, entry, ttlSeconds);
+    return entry;
+  }
+  const pool = { parsedAt: entry.parsedAt, items: countryItems };
+  const countryKey = rssFeedCountryCacheKey(variant, feed.url);
+  const commands = [
+    ['SET', countryKey, JSON.stringify(pool), 'EX', CACHE_TTL_COUNTRY_S],
+    ['SET', feedKey, JSON.stringify(entry), 'EX', ttlSeconds],
+  ];
+  const results = await runRedisTransaction(commands);
+  if (results.length !== commands.length || results.some(item => item?.error)) {
+    // Nothing is cached, so the next build fetches the feed again.
+    console.warn(`[feed-cache] parse write unconfirmed variant=${variant} feed=${feed.name}`);
+  }
+  return entry;
+}
 
 /**
  * Fetch one feed and parse it: direct, then the relay when direct is blocked,
@@ -1111,8 +1216,12 @@ export async function fetchAndParseRss(
       const empty: ParseResult = { items: [], parsedTotal: 0, droppedUndated: 0, attempt };
       // Our own deadline says nothing about the feed: caching it would make
       // the next builds serve an empty row for 5 minutes instead of fetching.
+      // Absent-only: a probe waits up to 16 s, and another build may have
+      // stored a healthy parse of this feed meanwhile.
       if (attempt.failure !== 'deadline-abort') {
-        await setCachedJson(cacheKey, empty, CACHE_TTL_EMPTY_S);
+        await setCachedJsonIfAbsent(cacheKey, empty, CACHE_TTL_EMPTY_S);
+      } else {
+        scheduleFeedProbe(feed, variant);
       }
       return empty;
     }
@@ -1137,8 +1246,7 @@ export async function fetchAndParseRss(
     // Long cache only for healthy parses; short cache for zero-from-zero so
     // transient upstream issues don't sticky-fail for an hour.
     const ttl = result.parsedTotal > 0 ? CACHE_TTL_HEALTHY_S : CACHE_TTL_EMPTY_S;
-    await setCachedJson(cacheKey, result, ttl);
-    return result;
+    return await writeFeedParse(feed, variant, result, ttl);
   } catch {
     return {
       items: [],
@@ -1160,6 +1268,39 @@ const FEED_REFRESH_LOCK_S = 120;
 const FEED_REFRESH_CONCURRENCY = 20;
 
 export type FeedRefreshOutcome = 'locked' | 'not-modified' | 'updated' | 'failed';
+
+/**
+ * Re-dates the entry a refresh read, only while Redis still holds that parse
+ * (shared/rss-feed-renew-script.mjs). If the entry expired during the request
+ * and a foreground fetch stored a newer parse and country pool, a blind
+ * rewrite would restore the older entry and orphan the newer pool. An entry
+ * from before the split still carries its pool inline and is renewed as it is.
+ */
+async function renewFeedEntry(cacheKey: string, renewed: ParseResult): Promise<void> {
+  const parsedAt = renewed.parsedAt;
+  if (typeof parsedAt !== 'number') {
+    await setCachedJson(cacheKey, renewed, CACHE_TTL_HEALTHY_S);
+    return;
+  }
+  // The conditional request starts inside the hour but its 304 can land
+  // later; never keep the entry past the pool its parse wrote. The expiry is
+  // absolute, so a write that reaches Redis late cannot extend it.
+  const now = Date.now();
+  const expiresAtMs = Math.min(now + CACHE_TTL_HEALTHY_S * 1000, parsedAt + CACHE_TTL_COUNTRY_S * 1000);
+  const ttlSeconds = Math.floor((expiresAtMs - now) / 1000);
+  if (ttlSeconds <= 0) return;
+  if (process.env.LOCAL_API_MODE === 'tauri-sidecar') {
+    // The sidecar cache is synchronous, so this compare and set cannot interleave.
+    const { sidecarCacheGet, sidecarCacheSet } = await import('../../../_shared/sidecar-cache');
+    const current = sidecarCacheGet(cacheKey) as { parsedAt?: unknown } | null;
+    if (current?.parsedAt === parsedAt) sidecarCacheSet(cacheKey, renewed, ttlSeconds);
+    return;
+  }
+  await runRedisPipeline([[
+    'EVAL', RSS_FEED_RENEW_SCRIPT, 1, cacheKey,
+    String(parsedAt), JSON.stringify(renewed), String(expiresAtMs),
+  ]]);
+}
 
 export function isDueForRefresh(cached: ParseResult, now: number): boolean {
   return cached.parsedTotal > 0
@@ -1189,7 +1330,7 @@ export async function refreshFeedCache(
   const conditional = Date.now() - lastFullParse < CACHE_TTL_HEALTHY_S * 1000;
   const direct = await fetchRssText(feed.url, signal, conditional ? cached.validators : undefined);
   if (direct.notModified) {
-    await setCachedJson(cacheKey, { ...cached, fetchedAt: Date.now() }, CACHE_TTL_HEALTHY_S);
+    await renewFeedEntry(cacheKey, { ...cached, fetchedAt: Date.now() });
     return 'not-modified';
   }
   let text = direct.text;
@@ -1212,7 +1353,7 @@ export async function refreshFeedCache(
     parsedAt: now,
   };
   if (source === 'direct' && direct.validators) result.validators = direct.validators;
-  await setCachedJson(cacheKey, result, CACHE_TTL_HEALTHY_S);
+  await writeFeedParse(feed, variant, result, CACHE_TTL_HEALTHY_S);
   return 'updated';
 }
 
@@ -1230,6 +1371,28 @@ async function withRefreshSlot<T>(task: () => Promise<T>): Promise<T> {
     refreshesRunning -= 1;
     refreshQueue.shift()?.();
   }
+}
+
+// One probe per feed across concurrent builds; a probe takes at most 16 s.
+const FEED_PROBE_LOCK_S = 30;
+const feedProbes = new Set<Promise<void>>();
+
+/**
+ * A feed the digest deadline cut was never judged on its own timeouts, and a
+ * feed that started late in the build is cut before them every time. Fetch it
+ * again after the response with no deadline, so its own 8 s direct and relay
+ * timers decide: a feed that hangs is cached as failed, a healthy one is
+ * cached healthy, and later builds stop waiting on it (#11134).
+ */
+function scheduleFeedProbe(feed: ServerFeed, variant: string): void {
+  const probe = withRefreshSlot(async () => {
+    const locked = await setCachedJsonIfAbsent(`rss:feed-probe-lock:v1:${variant}:${feed.url}`, 1, FEED_PROBE_LOCK_S);
+    if (locked) await fetchAndParseRss(feed, variant, new AbortController().signal);
+  }).catch(() => undefined);
+  feedProbes.add(probe);
+  void probe.finally(() => feedProbes.delete(probe));
+  const ctx = getUsageScope()?.ctx;
+  if (ctx) ctx.waitUntil(probe);
 }
 
 function scheduleFeedRefresh(feed: ServerFeed, variant: string, cached: ParseResult): void {
@@ -1335,10 +1498,17 @@ function parseRssXml(xml: string, feed: ServerFeed, variant: string): ParseResul
     // a fresh item cannot sit below the cap in a relevance-ordered Google News
     // search, an editorial-order feed (NYT World) or a sitemap ordered by last
     // modification (#10978). Undated items keep feed order after dated ones.
-    // Excluded paths drop out first so they never take a slot.
+    // Excluded paths, suffix-only titles, quote and section pages and
+    // headlines the feed's category rejects drop out first so they never take a slot.
+    const eligibilityCategories = FEED_ELIGIBILITY_CATEGORIES.get(feed.url);
     const ranked = matches.flatMap((block, index) => {
       const lower = asciiLower(block);
-      if (sitemap && (!extractTag(block, 'news:title', lower) || !extractTag(block, 'loc', lower))) return [];
+      if (sitemap && !extractTag(block, 'loc', lower)) return [];
+      const title = extractTitleTag(block, sitemap ? 'news:title' : 'title', lower);
+      const originPublisher = feedItemOriginPublisher(block, lower, sitemap, isAtom);
+      if (!hasHeadlineText(title, originPublisher)) return [];
+      if (isReferencePageTitle(title, originPublisher)) return [];
+      if (eligibilityCategories && !eligibilityCategories.some(category => isCategoryEligible(category, title, originPublisher))) return [];
       if (excluded && hasExcludedPathSegment(feedItemLink(block, lower, sitemap, isAtom), excluded)) return [];
       const raw = sitemap ? extractTag(block, 'news:publication_date', lower) : extractFirstDateTag(block, isAtom, lower);
       return [{ block, index, publishedAt: usableFeedDateMs(raw) ?? -Infinity }];
@@ -1360,7 +1530,7 @@ function parseRssXml(xml: string, feed: ServerFeed, variant: string): ParseResul
     const blockLower = asciiLower(block);
     const forDigest = index < ITEMS_PER_FEED;
 
-    const title = extractTag(block, sitemap ? 'news:title' : 'title', blockLower);
+    const title = extractTitleTag(block, sitemap ? 'news:title' : 'title', blockLower);
     if (!title) continue;
 
     if (forDigest) parsedTotal++;
@@ -1403,13 +1573,7 @@ function parseRssXml(xml: string, feed: ServerFeed, variant: string): ParseResul
       continue;
     }
 
-    // RSS 2.0 <source url="...">Name</source> — the originating publisher,
-    // emitted per item by Google News. Atom's <source> is a metadata
-    // CONTAINER (nested elements, no text of its own), so only the RSS
-    // dialect is read; extractTag's [^<]* body would not match a container
-    // anyway, but skipping Atom keeps that an invariant rather than a
-    // regex accident.
-    const extractedOriginPublisher = isAtom || sitemap ? '' : extractTag(block, 'source', blockLower);
+    const extractedOriginPublisher = feedItemOriginPublisher(block, blockLower, sitemap, isAtom);
     // Ordinary feeds cannot vouch for RSS <source>. The country reader already
     // ignores untrusted origin metadata, so keep those late headlines and store
     // an empty publisher. Trusted aggregators still have the 200-character
@@ -1605,6 +1769,73 @@ function extractDescription(
   if (normalizeForDescriptionEquality(best) === normalizeForDescriptionEquality(title)) return '';
 
   return best.slice(0, MAX_DESCRIPTION_LEN);
+}
+
+// RSS 2.0 <source url="...">Name</source> — the originating publisher,
+// emitted per item by Google News. Atom's <source> is a metadata
+// CONTAINER (nested elements, no text of its own), so only the RSS
+// dialect is read; extractTag's [^<]* body would not match a container
+// anyway, but skipping Atom keeps that an invariant rather than a
+// regex accident.
+function feedItemOriginPublisher(block: string, lower: string, sitemap: boolean, isAtom: boolean): string {
+  return isAtom || sitemap ? '' : extractTag(block, 'source', lower);
+}
+
+function headlineWithoutAttribution(title: string, originPublisher: string): string {
+  const text = stripAttributionSuffix(title);
+  if (!originPublisher || !text.endsWith(originPublisher)) return text;
+  const head = text.slice(0, -originPublisher.length).trimEnd();
+  return /[-\u2013\u2014|]$/.test(head) ? head.slice(0, -1) : text;
+}
+
+/** False for a title that is only an attribution suffix, such as Google News' " - Department of Justice (.gov)". */
+function hasHeadlineText(title: string, originPublisher: string): boolean {
+  return /[\p{L}\p{N}]/u.test(headlineWithoutAttribution(title, originPublisher));
+}
+
+// Search feeds (Google News site: queries) also return a publisher's quote,
+// chart, tag and section pages under a fresh date. Their titles follow fixed
+// templates, so match those templates and leave articles that merely mention
+// a price or an index alone.
+const REFERENCE_PAGE_TITLE_PATTERNS: readonly RegExp[] = [
+  /\bStock Quote \(/, // AMD Stock Price | Advanced Micro Devices Inc. Stock Quote (U.S.: Nasdaq)
+  /^\S+ \| [^|]+ Overview$/, // DJIA | Dow Jones Industrial Average Overview
+  /^Check out .+ stock price \([^()]+\) in real time$/i,
+  /\([^()]+\) (?:Seasonal returns chart|performance history|options chain|risk|Historical Data|Stock Price, News, Quote & History)(?: -|$)/i,
+  /^TAG: /,
+  /: (?:Fund )?Performance$/, // PitchBook fund profiles
+  /^[A-Z-]+ News$/, // Kitco sections: COMMODITIES News
+  /^CNBC (?:\w+ )?Video News Clips on /, // CNBC Asia Video News Clips on the Stock Market
+  /\bNews, Opinion & Analysis$/i,
+  /^Price of \w+ per (?:Pound|Ounce)$/i,
+  /^(?:Live \w+ Prices|\w+ Spot Prices|\w+ Price Today) \| [^|]+ \| [^|]+$/, // Kitco: Live Gold Prices | Gold News And Analysis | Mining News
+];
+
+const REFERENCE_PAGE_TITLES = new Set([
+  'about dow jones newswires',
+  'my fan picks',
+  'research center',
+  's&p dow jones indices',
+  'videos',
+  'video news',
+]);
+
+/** True for a quote, chart, tag or section page that a search feed lists as an item. */
+function isReferencePageTitle(title: string, originPublisher: string): boolean {
+  // Google News can repeat the source suffix: "Research Center - PitchBook - PitchBook".
+  const headline = headlineWithoutAttribution(headlineWithoutAttribution(title, originPublisher).trimEnd(), originPublisher).trim();
+  if (REFERENCE_PAGE_TITLES.has(headline.toLowerCase())) return true;
+  return REFERENCE_PAGE_TITLE_PATTERNS.some(pattern => pattern.test(headline));
+}
+
+// Headlines are displayed as text, and some publishers (The Korea Herald) put
+// HTML-escaped text inside CDATA: "Sudan&apos;s capital". Left encoded, it took
+// a different story key from the plain wording, and an alert already sent went
+// out again on 2026-11-23. A bare `&` is not an entity and stays as it is.
+function extractTitleTag(xml: string, tag: string, lower = asciiLower(xml)): string {
+  const cdata = matchCdataTag(xml, lower, tag);
+  if (cdata !== null) return decodeXmlEntities(cdata.trim());
+  return extractTag(xml, tag, lower);
 }
 
 function extractTag(xml: string, tag: string, lower = asciiLower(xml)): string {
@@ -2792,18 +3023,36 @@ async function recordPublisherCoverage(
 }
 
 export const ALERT_POOL_MAX_ITEMS = 300;
+
+let headlineLanguages: Map<string, Set<string>> | undefined;
+/** Feed name to the languages its headlines come in (a name can have a feed per edition). */
+function headlineLanguagesBySource(): Map<string, Set<string>> {
+  if (!headlineLanguages) {
+    headlineLanguages = new Map();
+    const feeds = [...Object.values(VARIANT_FEEDS).flatMap(byCategory => Object.values(byCategory).flat()), ...INTEL_SOURCES];
+    for (const feed of feeds) {
+      const languages = headlineLanguages.get(feed.name) ?? new Set<string>();
+      headlineLanguages.set(feed.name, languages.add(feedHeadlineLanguage(feed)));
+    }
+  }
+  return headlineLanguages;
+}
 const ALERT_POOL_WINDOW_MS = 6 * 60 * 60 * 1000;
 
 /**
  * #10978: the relay classifies only the served digest, so the category cap
  * decided what could alert. Write the newest fresh items the cap kept off the
  * dashboard (6 h, the relay's recency gate) for the relay to classify too.
- * The classify cache keeps each title to one model call a day.
+ * The classify cache keeps each title to one model call a day. Only headlines
+ * in the digest language: the build also fetches local-language outlets, and
+ * the pool once filled with those and alerted each story in every language.
  */
-export function alertPoolItems(servable: readonly ParsedItem[], served: readonly ParsedItem[], now: number) {
-  const taken = new Set(served.map(item => item.title));
+export function alertPoolItems(servable: readonly ParsedItem[], served: readonly ParsedItem[], now: number, lang: string) {
+  const inLanguage = (item: ParsedItem) => headlineLanguagesBySource().get(item.source)?.has(lang) ?? item.lang === lang;
+  // A served copy the relay will not alert leaves its title free for a copy it will.
+  const taken = new Set(served.filter(inLanguage).map(item => item.title));
   return [...servable]
-    .filter(item => item.publishedAt >= now - ALERT_POOL_WINDOW_MS)
+    .filter(item => inLanguage(item) && item.publishedAt >= now - ALERT_POOL_WINDOW_MS)
     .sort((a, b) => b.publishedAt - a.publishedAt)
     .filter(item => !taken.has(item.title) && taken.add(item.title))
     .slice(0, ALERT_POOL_MAX_ITEMS)
@@ -2823,13 +3072,17 @@ async function recordAlertPool(
   servable: readonly ParsedItem[],
   served: readonly ParsedItem[],
   variant: string,
+  lang: string,
   now: number,
   deadlineAt: number,
 ): Promise<void> {
   const timeout = redisTimeoutForDeadline(deadlineAt);
   if (!timeout) return;
-  const items = alertPoolItems(servable, served, now);
-  await runRedisTransaction([['SET', `news:alert-pool:v1:${variant}`, JSON.stringify({ generatedAt: now, items }), 'EX', 1800]], false, timeout);
+  const items = alertPoolItems(servable, served, now, lang);
+  // v2: language-filtered. A relay still reading v1 loses the pool within its
+  // 30 minute TTL, and the first v2 read is recorded as backlog, so the
+  // refilled pool cannot alert hours-old headlines whichever side deploys first.
+  await runRedisTransaction([['SET', `news:alert-pool:v2:${variant}`, JSON.stringify({ generatedAt: now, items }), 'EX', 1800]], false, timeout);
 }
 
 function redisPipelineConfirmed(
@@ -3984,7 +4237,7 @@ async function buildDigest(
     // category cap. Runs alongside story tracking within the same deadline.
     const publisherCoverageWrite = recordPublisherCoverage(servableItems, allSliced, buildStart, storyTrackingDeadlineAt)
       .catch((err: unknown) => console.warn('[digest] publisher coverage unavailable:', err));
-    const alertPoolWrite = (lang === 'en' ? recordAlertPool(servableItems, allSliced, variant, now, storyTrackingDeadlineAt) : Promise.resolve())
+    const alertPoolWrite = (lang === 'en' ? recordAlertPool(servableItems, allSliced, variant, lang, now, storyTrackingDeadlineAt) : Promise.resolve())
       .catch((err: unknown) => console.warn('[digest] alert pool unavailable:', err));
 
     // Read existing story tracking BEFORE writing so we know the previous cycle's
@@ -4171,6 +4424,9 @@ async function publishAcceptedLabelCounts(response: ListFeedDigestResponse, dead
 
 /** Internal exports for unit tests only — do not import in production code. */
 export const __testing__ = {
+  settleFeedProbes: async (): Promise<void> => {
+    while (feedProbes.size > 0) await Promise.all(feedProbes);
+  },
   topFeedCapDrops,
   recordPublisherCoverage,
   writeCoverageLedger,
@@ -4215,6 +4471,7 @@ export const __testing__ = {
   expectedPublisherHostsForItem,
   isAnchorEligible,
   isIdentityAnchorEligible,
+  isCategoryEligible,
   computeImportanceScore,
   computeCredibilityScore,
   computeItemCredibilityScore,
