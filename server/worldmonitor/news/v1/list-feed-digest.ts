@@ -100,7 +100,7 @@ import { deriveCoreStoryPhase } from '../../../../shared/story-phase.js';
 import { buildTickerDictionary, extractTickers } from '../../../../shared/ticker-extract.js';
 import stocksData from '../../../../shared/stocks.json';
 import { buildClassifyCacheKey, isValidClassifyHit } from '../../intelligence/v1/_shared';
-import { SOURCE_TIERS, declaredSourceTier, getSourceTier } from '../../../_shared/source-tiers';
+import { declaredSourceTier, declaredSourceTierKey, getSourceTier } from '../../../_shared/source-tiers';
 import {
   getSourcePropagandaRisk,
   hasReviewedPropagandaRisk,
@@ -220,8 +220,21 @@ const COMMODITY_TOPIC_RE = /\b(?:commodit(?:y|ies)|metals?|mining|miners?|mines?
 const CRYPTO_TOPIC_RE = /\b(?:crypto\w*|bitcoin|btc|ether(?:eum)?|eth|blockchains?|stablecoins?|tokens?|tokeni[sz]\w*|defi|decentrali[sz]ed finance|dex(?:es)?|(?:re)?staking|mainnet|testnet|layer[- ]?2|rollups?|validators?|nfts?|non-fungible|web3|onchain|on-chain|altcoins?|memecoins?|coins?|binance|coinbase|kraken|okx|bybit|tether|usdt|usdc|circle|solana|xrp|ripple|dogecoin|cardano|uniswap|aave|chainlink|grayscale|saylor|satoshi|wallets?|digital assets?|cbdcs?|hashrate|halving|airdrops?|dao|prediction markets?|polymarket|kalshi)\b/i;
 const PRECIOUS_METALS_TOPIC_RE = /\b(?:gold|silver|platinum|palladium|rhodium|precious metals?|bullion|xau\w*|xag\w*|xpt\w*|xpd\w*|lbma|comex|gld|slv|ounces?|oz|jewel(?:le)?ry)\b/i;
 
-type CategoryGate = { eligible: (headline: string) => boolean; searchFeedsOnly?: true };
-const searchTopicGate = (topic: RegExp): CategoryGate => ({ eligible: (headline) => topic.test(headline), searchFeedsOnly: true });
+// A funding headline names a financing instrument and an event or amount.
+// "Raised" alone also matches dividends, guidance, charity drives and
+// people raised somewhere; "venture capital" alone matches guides.
+const FUNDING_SUBJECT_RE = /\b(?:fund(?:ing|raise)|financing|round|series [a-h]\b|(?:pre-)?seed|angel|venture|vc|backers?|backed|valuation|ipos?|s-1|safes?|\d[\d,.]*\s*(?:m|mn|mln|million|b|bn|billion)\s+raise)\b/i;
+const FUNDING_EVENT_RE = /\b(?:rais(?:es|ed|ing)|secures?|secured|lands?|landed|closes?|closed|bags?|nabs?|snags?|expands?|extends?|leads?|led|co-leads?|joins?|backs?|adds?|seeks?|eyes|launch(?:es)?|launched|announces?|ipos?|s-1|filings?)\b|(?:[$€£¥₹]|\b(?:us\$|usd|eur|gbp|rs\.?|inr)\s?)\d|\b\d[\d,.]*\s*(?:k|m|mn|mln|million|b|bn|billion|cr|crore)\b/i;
+const FUNDING_RAISE_AMOUNT_RE = /\b(?:rais(?:e|es|ed|ing)|secures?|secured|closes?|closed|lands?|landed|bags?|nabs?)\s+(?:(?:a|an|over|nearly|about|almost|more than|up to)\s+)?(?:[$€£¥₹]|(?:us\$|usd|eur|gbp|rs\.?|inr)\s?)?\d[\d,.]*\s*(?:m|mn|mln|million|b|bn|billion|cr|crore)\b/i;
+const FUNDING_CHARITY_RE = /\b(?:donors?|donations?|donat(?:e|es|ed|ing)|charit(?:y|ies|able)|shelter|fundraiser|scholarships?|bail|gofundme)\b/i;
+const FUNDING_STAGE_RE = /\b(?:series [a-h]|pre-seed|ipos?|s-1|valuation)\b/i;
+const FUNDING_GUIDE_RE = /\b(?:guides?|explained|explainer|lessons|how to|need to know|tips|to watch|in review|preferreds?)\b/i;
+// Tom's Hardware also publishes crime, policy and software stories, and its
+// whole feed lands in the hardware panel.
+const HARDWARE_TOPIC_RE = /\b(?:hardware|cpus?|gpus?|graphics(?: cards?)?|video cards?|processors?|chips?|chipsets?|chipmakers?|semiconductors?|silicon|wafers?|fabs?|foundry|tsmc|intel|amd|nvidia|qualcomm|micron|sk hynix|samsung|apple silicon|m\d|radeon|geforce|rtx|ryzen|core ultra|xeon|epyc|threadripper|memory|ram|dram|ddr\d|hbm|ssds?|hdds?|nvme|storage|hard drives?|motherboards?|pcs?|desktops?|laptops?|macbooks?|imacs?|mac mini|chromebooks?|tablets?|ipads?|monitors?|displays?|oled|keyboards?|mice|mouse|peripherals?|routers?|wi-fi|ethernet|raspberry pi|arduino|3d print(?:ers?|ing)|tool changers?|coolers?|cooling|psus?|power supply|consoles?|ps5|xbox|switch 2|handhelds?|steam deck|benchmarks?|overclock\w*|servers?|datacenters?|data centers?|supercomputers?|quantum computers?)\b/i;
+
+type CategoryGate = { eligible: (headline: string) => boolean; appliesTo?: (feedUrl: string) => boolean };
+const searchTopicGate = (topic: RegExp): CategoryGate => ({ eligible: (headline) => topic.test(headline), appliesTo: isGoogleNewsSearch });
 
 const CATEGORY_ELIGIBILITY: Readonly<Record<string, CategoryGate>> = {
   policy: { eligible: (title) => POLICY_ACTION_RE.test(title) || (DIGITAL_SUBJECT_RE.test(title) && !CONSUMER_OFFER_RE.test(title)) },
@@ -230,6 +243,17 @@ const CATEGORY_ELIGIBILITY: Readonly<Record<string, CategoryGate>> = {
   'commodity-news': searchTopicGate(COMMODITY_TOPIC_RE),
   crypto: searchTopicGate(CRYPTO_TOPIC_RE),
   'gold-silver': searchTopicGate(PRECIOUS_METALS_TOPIC_RE),
+  funding: {
+    eligible: (headline) => !FUNDING_GUIDE_RE.test(headline)
+      && (!FUNDING_CHARITY_RE.test(headline) || FUNDING_STAGE_RE.test(headline))
+      && ((FUNDING_SUBJECT_RE.test(headline) && FUNDING_EVENT_RE.test(headline))
+        || FUNDING_RAISE_AMOUNT_RE.test(headline)),
+    appliesTo: isGoogleNewsSearch,
+  },
+  hardware: {
+    eligible: (headline) => HARDWARE_TOPIC_RE.test(headline),
+    appliesTo: (feedUrl) => feedPublisherHost(feedUrl) === 'tomshardware.com',
+  },
 };
 
 function isCategoryEligible(category: string, title: string, originPublisher = ''): boolean {
@@ -257,7 +281,7 @@ const FEED_ELIGIBILITY_CATEGORIES: ReadonlyMap<string, readonly string[]> = (() 
       const gate = CATEGORY_ELIGIBILITY[category];
       for (const feed of feeds) {
         const prior = byUrl.get(feed.url);
-        if (!gate || (gate.searchFeedsOnly && !isGoogleNewsSearch(feed.url))) byUrl.set(feed.url, null);
+        if (!gate || (gate.appliesTo && !gate.appliesTo(feed.url))) byUrl.set(feed.url, null);
         else if (prior !== null) byUrl.set(feed.url, (prior ?? new Set()).add(category));
       }
     }
@@ -692,12 +716,15 @@ function resolveCredibilitySourceName(item: CredibilitySourceItem): string {
   const rawName = originPublisher || source;
   const family = publisherFamilyFor(rawName);
   const familyEntry = PUBLISHER_FAMILIES[family];
+  // A name with a tier is read in the tier table's spelling, so tier and risk
+  // lookups by exact key see "Times of India" for "The Times of India".
   const candidates = [
     rawName,
     familyEntry?.publisher,
     ...(familyEntry?.labels ?? []),
   ].filter((candidate): candidate is string =>
-    typeof candidate === 'string' && candidate.length > 0);
+    typeof candidate === 'string' && candidate.length > 0)
+    .map(candidate => declaredSourceTierKey(candidate) ?? candidate);
 
   // Prefer one identity reviewed by both registries so tier and risk describe
   // the same publisher; then degrade toward whichever curated signal exists.
@@ -1642,7 +1669,7 @@ function parseRssXml(xml: string, feed: ServerFeed, variant: string): ParseResul
       title,
       link,
       // Any link still set here passed the gate above.
-      linkVerified: link !== '',
+      linkVerified: link !== '' && !isLinkAggregatorFeed(feed),
       ...(blankedLinkHost ? { blankedLinkHost } : {}),
       publishedAt,
       isAlert,
@@ -2596,15 +2623,18 @@ async function readAdoptionState(
 }
 
 export function toProtoItem(item: ParsedItem, storyMeta?: ProtoStoryMeta): ProtoNewsItem {
-  const resolved = item.originPublisherTrusted === true && typeof item.originPublisher === 'string' && item.originPublisher.trim()
-    ? resolveCredibilitySourceName(item).toLowerCase()
+  const publisherName = item.originPublisherTrusted === true && typeof item.originPublisher === 'string'
+    ? item.originPublisher.trim()
     : '';
+  const credibilitySource = resolveCredibilitySourceName(item);
   // The tier table's spelling: the relay's tier lookup is exact-key.
-  const origin = resolved ? Object.keys(SOURCE_TIERS).find((name) => name.toLowerCase() === resolved) ?? '' : '';
+  const origin = publisherName ? declaredSourceTierKey(credibilitySource) ?? '' : '';
   return {
     source: item.source,
     // Only a publisher with a curated tier: the aggregator's text alone is not an identity.
     originPublisher: origin,
+    publisherName,
+    credibilityUnassessed: !hasReviewedPropagandaRisk(credibilitySource) && declaredSourceTier(credibilitySource) === null,
     title: item.title,
     link: item.link,
     publishedAt: item.publishedAt,
@@ -3056,16 +3086,20 @@ export function alertPoolItems(servable: readonly ParsedItem[], served: readonly
     .sort((a, b) => b.publishedAt - a.publishedAt)
     .filter(item => !taken.has(item.title) && taken.add(item.title))
     .slice(0, ALERT_POOL_MAX_ITEMS)
-    .map(item => ({
-      title: item.title,
-      source: item.source,
-      // The relay scores a topic feed's item on this publisher, as for served items (#10977).
-      ...(toProtoItem(item).originPublisher ? { originPublisher: toProtoItem(item).originPublisher } : {}),
-      link: item.link,
-      ...(item.linkVerified === true ? { linkVerified: true } : {}),
-      publishedAt: item.publishedAt,
-      corroborationCount: item.corroborationCount,
-    }));
+    .map(item => {
+      const { originPublisher, publisherName } = toProtoItem(item);
+      return {
+        title: item.title,
+        source: item.source,
+        // The relay scores a topic feed's item on this publisher, as for served items (#10977),
+        // and labels the alert with the name the aggregator gave it.
+        ...(originPublisher ? { originPublisher, publisherName } : {}),
+        link: item.link,
+        ...(item.linkVerified === true ? { linkVerified: true } : {}),
+        publishedAt: item.publishedAt,
+        corroborationCount: item.corroborationCount,
+      };
+    });
 }
 
 async function recordAlertPool(
@@ -3182,6 +3216,16 @@ function expectedPublisherHostsForItem(
   return [...hosts];
 }
 
+// Curated link aggregators: each item links to the submitted article on any
+// site, so only the URL shape is checked, never the publisher.
+// Their links are not publisher-verified, so they never get `linkVerified`
+// and the alert relay re-gates them.
+const LINK_AGGREGATOR_FEED_HOSTS = new Set(['news.ycombinator.com', 'hnrss.org', 'lobste.rs']);
+
+function isLinkAggregatorFeed(feed: Pick<ServerFeed, 'url'>): boolean {
+  return LINK_AGGREGATOR_FEED_HOSTS.has(feedPublisherHost(feed?.url));
+}
+
 // Persistence no longer has the feed object. Recover its host from the
 // server-owned registry, never from upstream item metadata. Build once so
 // each story lookup stays independent of the number of configured feeds.
@@ -3243,6 +3287,7 @@ function isItemLinkAllowed(
   item: Pick<ParsedItem, 'source' | 'originPublisher' | 'originPublisherTrusted'>,
   feed: Pick<ServerFeed, 'url' | 'linkHosts'>,
 ): boolean {
+  if (isLinkAggregatorFeed(feed)) return linkHostname(link) !== '';
   return isPublisherLink(link, expectedPublisherHostsForItem(item, feed));
 }
 
