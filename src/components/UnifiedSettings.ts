@@ -100,6 +100,11 @@ import { isImeEnter, setTrustedHtml, trustedHtml } from '@/utils/dom-utils';
 import { checkoutConsentHtml, legalLinksHtml, LEGAL_LINK_ATTR } from '@/utils/legal-links';
 import { dashboardSiteLinksHtml } from '@/utils/dashboard-site-links';
 import { resolveDashboardSiteOrigin } from '@/config/dashboard-reference-links';
+import {
+  API_STARTER_SWITCH_SOURCE_PLANS,
+  API_SWITCH_ENTRY_LABEL,
+  API_SWITCH_UNAVAILABLE_BODY,
+} from '@/services/api-starter-switch-copy';
 import { createFocusTrap, type FocusTrap } from '@/utils/focus-trap';
 import {
   overlayHistory,
@@ -115,6 +120,15 @@ import {
   parseFontScale,
 } from '@/services/font-scale-settings';
 import { showToast } from '@/utils/toast';
+import {
+  IN_PLACE_UPGRADE_SOURCE_PLANS,
+  PRO_ANNUAL_SWITCH_SOURCE_PLAN,
+  UPGRADE_ENTRY_LABEL,
+  UPGRADE_UNAVAILABLE_BODY,
+  buildSwitchPromoLine,
+  switchCopy,
+} from '@/services/pro-business-upgrade-copy';
+import { activePromo, promoDisplayPrices, type PromoCampaign, type PromoDisplayPrices } from '../../shared/promo-campaign';
 import { declareOverlay } from '@/utils/open-modal';
 
 export interface UnifiedSettingsConfig {
@@ -149,6 +163,8 @@ export interface UnifiedSettingsConfig {
 /** What the self-host Desktop key section shows (plan 2026-11-04-001, U6). */
 /** What the user types to confirm account deletion. Not translated: it is a token, not prose. */
 const DELETION_PHRASE = 'DELETE';
+/** setTimeout's largest delay; a longer one fires at once. */
+const MAX_TIMER_MS = 2_147_483_647;
 
 const SELF_HOST_KEY_TONE: Record<SelfHostKeyStatus, 'ok' | 'warn' | 'bad' | 'neutral'> = {
   none: 'neutral',
@@ -332,6 +348,28 @@ export class UnifiedSettings {
         return;
       }
 
+      if (target.closest('.upgrade-to-pro-business-btn')) {
+        const planKey = getSubscription()?.planKey;
+        import('@/services/checkout')
+          .then((m) => m.startProBusinessUpgrade(
+            planKey,
+            () => showToast(UPGRADE_UNAVAILABLE_BODY),
+            () => this.focusUpgradeToProBusinessButton(),
+          ))
+          .catch(() => showToast(UPGRADE_UNAVAILABLE_BODY));
+        return;
+      }
+
+      if (target.closest('.switch-to-api-starter-btn')) {
+        import('@/services/checkout')
+          .then((m) => m.startApiStarterSwitch(() => this.focusSwitchToApiStarterButton()))
+          .then((outcome) => {
+            if (outcome === 'not-switchable') showToast(API_SWITCH_UNAVAILABLE_BODY);
+          })
+          .catch(() => showToast(API_SWITCH_UNAVAILABLE_BODY));
+        return;
+      }
+
       if (target.closest('.upgrade-to-business-btn')) {
         // Self-serve Starter→Business upgrade (#4634): open the Dodo customer
         // portal, which surfaces the prorated plan change via the product
@@ -351,6 +389,18 @@ export class UnifiedSettings {
             showToast(t('settings.account.portal.unavailable'));
           }
         });
+        return;
+      }
+
+      if (target.closest('.switch-to-yearly-btn')) {
+        const planKey = getSubscription()?.planKey;
+        import('@/services/checkout')
+          .then((m) => m.startProAnnualSwitch(
+            planKey,
+            () => showToast(switchCopy(t).unavailableBody),
+            () => this.focusSwitchToYearlyButton(),
+          ))
+          .catch(() => showToast(switchCopy(t).unavailableBody));
         return;
       }
 
@@ -944,6 +994,7 @@ export class UnifiedSettings {
     this.unsubscribeEntitlementVerification = null;
     this.unsubscribeSubscription?.();
     this.unsubscribeSubscription = null;
+    this.clearSwitchPromoExpiry();
     this.stopMcpQuotaPolling();
     this.closeDeletionDialog();
     this.resetPanelDraft();
@@ -1023,6 +1074,7 @@ export class UnifiedSettings {
     if (this.historyRegistered) overlayHistory.close('settings');
     this.historyRegistered = false;
     if (this.savedTimeout) clearTimeout(this.savedTimeout);
+    this.clearSwitchPromoExpiry();
     this.endSession();
     this.unsubscribeEntitlement?.();
     this.unsubscribeEntitlement = null;
@@ -1290,6 +1342,8 @@ export class UnifiedSettings {
     replaceRawI18nKeyPlaceholders(this.overlay, t);
     const statusLine = this.overlay.querySelector('.upgrade-pro-status-line');
     if (statusLine) statusLine.textContent = this.planStatusLine(getSubscription());
+    // The healer only knows the offer line's template; rebuild it with its prices.
+    if (this.overlay.querySelector('.upgrade-pro-offer-line')) this.replaceUpgradeSection();
     // The deletion dialog sits on document.body, outside the overlay.
     if (this.deletionDialog) {
       replaceRawI18nKeyPlaceholders(this.deletionDialog, t);
@@ -1627,6 +1681,126 @@ export class UnifiedSettings {
       `;
   }
 
+  /**
+   * The in-place Pro Monthly → Pro Yearly switch. Shown to every active Pro
+   * Monthly owner (a cancel-scheduled one gets the server's "resume first"
+   * answer); the offer line only while the promotion runs and its figures
+   * have loaded.
+   */
+  private renderProAnnualSwitch(sub: SubscriptionInfo | null, now: number): string {
+    if (sub?.planKey !== PRO_ANNUAL_SWITCH_SOURCE_PLAN || sub.status !== 'active') return '';
+    const promo = activePromo(now);
+    let offerLine = '';
+    if (promo) {
+      this.scheduleSwitchPromoExpiry(promo);
+      if (this.switchPromoPrices === undefined) this.loadSwitchPromoPrices(promo);
+      const prices = this.switchPromoPrices;
+      // Both go null together when the monthly comparison is unknown or weaker
+      // than the direct discount; the line is then left out.
+      if (prices && prices.savingsVsMonthlyPct !== null && prices.monthlyTotalCents !== null) {
+        const line = buildSwitchPromoLine({
+          listCents: prices.listCents,
+          perMonthCents: prices.perMonthCents,
+          monthlyTotalCents: prices.monthlyTotalCents,
+          savingsVsMonthlyPct: prices.savingsVsMonthlyPct,
+        }, t);
+        offerLine = `<div class="upgrade-pro-offer-line">${escapeHtml(line)}</div>`;
+      }
+    }
+    return `${offerLine}<button type="button" class="switch-to-yearly-btn">${escapeHtml(switchCopy(t).entryLabel)}</button>`;
+  }
+
+  // The switch dialog takes focus. When it is dismissed, focus goes back to
+  // the button that opened it; a re-render may have replaced that button.
+  private focusSwitchToYearlyButton(): void {
+    if (!this.overlay.classList.contains('active')) return;
+    const button = this.overlay.querySelector<HTMLButtonElement>('.switch-to-yearly-btn');
+    if (button?.isConnected) button.focus();
+  }
+
+  // The switch stops applying the code at the end instant, so an open Settings
+  // re-renders then and drops the offer line. Same timer as ProBanner's:
+  // setTimeout clamps at 2^31-1 ms, so an early wake re-schedules.
+  private switchPromoExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private scheduleSwitchPromoExpiry(promo: PromoCampaign): void {
+    this.clearSwitchPromoExpiry();
+    const delay = Math.min(Math.max(0, promo.endsAtMs - Date.now()), MAX_TIMER_MS);
+    this.switchPromoExpiryTimer = setTimeout(() => {
+      this.switchPromoExpiryTimer = null;
+      if (!this.overlay.classList.contains('active')) return;
+      if (Date.now() < promo.endsAtMs) {
+        this.scheduleSwitchPromoExpiry(promo);
+        return;
+      }
+      this.replaceUpgradeSection();
+    }, delay);
+  }
+
+  private clearSwitchPromoExpiry(): void {
+    if (this.switchPromoExpiryTimer !== null) clearTimeout(this.switchPromoExpiryTimer);
+    this.switchPromoExpiryTimer = null;
+  }
+
+  // Catalog figures for the offer line, loaded on demand like ProBanner's so
+  // the product facts stay out of this chunk; undefined until settled.
+  private switchPromoPrices: PromoDisplayPrices | null | undefined;
+  private switchPromoPricesLoad: Promise<void> | null = null;
+
+  private loadSwitchPromoPrices(promo: PromoCampaign): void {
+    this.switchPromoPricesLoad ??= import('../../shared/product-facts.generated.json')
+      .then((module) => {
+        const plans = (module.default ?? module).plans as Array<{ planKey: string; price: number | null }>;
+        const priceOf = (planKey: string) => plans.find((plan) => plan.planKey === planKey)?.price ?? null;
+        this.switchPromoPrices = promoDisplayPrices(promo, priceOf(promo.planKey), priceOf(promo.monthlyPlanKey));
+      })
+      .catch(() => {
+        this.switchPromoPrices = null;
+      })
+      .then(() => this.replaceUpgradeSection());
+  }
+
+  /**
+   * The in-place Pro → Pro Business upgrade, for every active owner of a plan
+   * the server upgrades (a cancel-scheduled one gets the server's "resume
+   * first" answer). Before this entry, the only way in was starting a Pro
+   * Business checkout while already on Pro. English only, like its dialog.
+   */
+  private renderProBusinessUpgrade(sub: SubscriptionInfo | null): string {
+    if (sub === null || !IN_PLACE_UPGRADE_SOURCE_PLANS.has(sub.planKey) || sub.status !== 'active') return '';
+    return `<button type="button" class="upgrade-to-pro-business-btn">${escapeHtml(UPGRADE_ENTRY_LABEL)}</button>`;
+  }
+
+  // The upgrade dialog takes focus; on dismissal it goes back to the button,
+  // which a re-render may have replaced.
+  private focusUpgradeToProBusinessButton(): void {
+    if (!this.overlay.classList.contains('active')) return;
+    const button = this.overlay.querySelector<HTMLButtonElement>('.upgrade-to-pro-business-btn');
+    if (button?.isConnected) button.focus();
+  }
+
+  /**
+   * The in-place individual Pro → API Starter switch, for every active owner
+   * of a plan the server switches (a cancel-scheduled one gets the server's
+   * "resume first" answer). English only, like the switch dialog it opens.
+   */
+  private renderApiStarterSwitch(sub: SubscriptionInfo | null): string {
+    if (!this.ownsApiStarterSwitchSource(sub)) return '';
+    return `<button type="button" class="switch-to-api-starter-btn">${escapeHtml(API_SWITCH_ENTRY_LABEL)}</button>`;
+  }
+
+  private ownsApiStarterSwitchSource(sub: SubscriptionInfo | null = getSubscription()): boolean {
+    return sub !== null && API_STARTER_SWITCH_SOURCE_PLANS.has(sub.planKey) && sub.status === 'active';
+  }
+
+  // The switch dialog takes focus; on dismissal it goes back to the button,
+  // which a re-render may have replaced.
+  private focusSwitchToApiStarterButton(): void {
+    if (!this.overlay.classList.contains('active')) return;
+    const button = this.overlay.querySelector<HTMLButtonElement>('.switch-to-api-starter-btn');
+    if (button?.isConnected) button.focus();
+  }
+
   private renderUpgradeSection(): string {
     // Non-Dodo premium (API key / tester key / Clerk pro role without a
     // Convex subscription): neither "Upgrade" nor "Manage Billing" is
@@ -1714,6 +1888,9 @@ export class UnifiedSettings {
           </div>
           ${statusLine ? `<div class="upgrade-pro-status-line">${escapeHtml(statusLine)}</div>` : ''}
           ${sub?.planKey === 'api_starter' ? `<button class="upgrade-to-business-btn" style="margin-right:8px;">${escapeHtml(t('settings.account.upgradeToBusiness'))}</button>` : ''}
+          ${this.renderProAnnualSwitch(sub, now)}
+          ${this.renderProBusinessUpgrade(sub)}
+          ${this.renderApiStarterSwitch(sub)}
           ${hasOwnSubscription ? `<button class="manage-billing-btn">${escapeHtml(t('components.billingState.manageBilling'))}</button>` : ''}
         </div>
         ${hasOwnSubscription ? `<div id="usBusinessSeats">${this.businessSeatsSection.renderContent()}</div>` : ''}
@@ -2425,6 +2602,16 @@ export class UnifiedSettings {
       // precedent as handleUpgradeClick); its no-customer outcome surfaces the
       // support path for a subscription managed outside Dodo.
       if (isEntitled()) {
+        // An individual Pro owner moves to API Starter in place instead.
+        if (notice.upgradeTargetPlanKey === 'api_starter' && this.ownsApiStarterSwitchSource()) {
+          import('@/services/checkout')
+            .then((m) => m.startApiStarterSwitch())
+            .then((outcome) => {
+              if (outcome === 'not-switchable') showToast(API_SWITCH_UNAVAILABLE_BODY);
+            })
+            .catch(() => showToast(API_SWITCH_UNAVAILABLE_BODY));
+          return;
+        }
         const reservedWin = prereserveBillingPortalTab();
         void openBillingPortal(reservedWin).then((result) => {
           // The portal session exists but no window opened (native handoff

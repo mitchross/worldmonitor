@@ -33,7 +33,12 @@ import {
 } from './checkout-transport';
 import { createTimeoutSignal } from './timeout-signal';
 import { watchAuthModalDismissal } from './auth-modal-watch';
-import { IN_PLACE_UPGRADE_SOURCE_PLANS, runProBusinessUpgradeFlow } from './pro-business-upgrade';
+import {
+  IN_PLACE_UPGRADE_SOURCE_PLANS,
+  runApiStarterSwitchFlow,
+  runProAnnualSwitchFlow,
+  runProBusinessUpgradeFlow,
+} from './pro-business-upgrade';
 import {
   checkoutRetryAtMs,
   checkoutRetryRemainingSeconds,
@@ -445,6 +450,9 @@ async function confirmDesktopAccount(
 async function checkoutAs(c: LoadedClerk, productId: string, options: ProCheckoutOptions): Promise<boolean> {
   const confirmed = await confirmDesktopAccount(c, productId, options);
   if (!confirmed) return false;
+  // An individual Pro holder moves to API Starter in place instead of buying a
+  // second subscription. Every other account continues to checkout.
+  if (API_STARTER_PRODUCT_IDS.has(productId) && await offerApiStarterSwitch() === 'shown') return false;
   const { bypassPendingGuard: _dropped, ...fresh } = options;
   return doCheckout(productId, confirmed.options, confirmed.userId
     ? { userId: confirmed.userId, restart: () => checkoutAs(c, productId, fresh) }
@@ -647,9 +655,26 @@ async function doCheckout(
           },
           onDismiss: () => { /* stay on /pro */ },
         });
+        const openPortalFromDialog = (): void => {
+          const reservedWin = prereserveBillingPortalTab();
+          void getAuthToken().then((freshToken) => {
+            if (freshToken) void openBillingPortal(freshToken, reservedWin);
+            else if (reservedWin && !reservedWin.closed) reservedWin.close();
+          });
+        };
+        // An active Pro Monthly moves to Pro Yearly in place, with the offer
+        // while it runs; the guided dialog stays the fallback.
+        if (!paused && planKey === 'pro_monthly' && productId === PRO_YEARLY_PRODUCT_ID) {
+          void runProAnnualSwitchFlow({
+            apiBase: API_BASE,
+            getToken: getAuthToken,
+            getUserId: async () => (await ensureClerk().catch(() => null))?.user?.id ?? null,
+            openPortal: openPortalFromDialog,
+            fallback: showGuidedDuplicateDialog,
+          });
         // An active Pro moves to Pro Business in place (prorated Dodo plan
         // change); the guided dialog stays the fallback when no preview comes back.
-        if (
+        } else if (
           !paused &&
           PRO_BUSINESS_PRODUCT_IDS.has(productId) &&
           typeof planKey === 'string' &&
@@ -660,13 +685,7 @@ async function doCheckout(
             planDisplayName: resolveProPlanDisplayName(planKey),
             getToken: getAuthToken,
             getUserId: async () => (await ensureClerk().catch(() => null))?.user?.id ?? null,
-            openPortal: () => {
-              const reservedWin = prereserveBillingPortalTab();
-              void getAuthToken().then((freshToken) => {
-                if (freshToken) void openBillingPortal(freshToken, reservedWin);
-                else if (reservedWin && !reservedWin.closed) reservedWin.close();
-              });
-            },
+            openPortal: openPortalFromDialog,
             fallback: showGuidedDuplicateDialog,
           });
         } else {
@@ -1076,6 +1095,44 @@ const PRO_BUSINESS_PRODUCT_IDS: ReadonlySet<string> = new Set(
     .flatMap((tier) => [tier.monthlyProductId, tier.annualProductId])
     .filter((id): id is string => typeof id === 'string' && id.length > 0),
 );
+
+/** API Starter's product ids, from the same tier data; the in-place switch target for an individual Pro. */
+const API_STARTER_PRODUCT_IDS: ReadonlySet<string> = new Set(
+  (fallbackTiers as Array<{ name?: string; monthlyProductId?: string; annualProductId?: string }>)
+    .filter((tier) => tier.name === 'API Starter')
+    .flatMap((tier) => [tier.monthlyProductId, tier.annualProductId])
+    .filter((id): id is string => typeof id === 'string' && id.length > 0),
+);
+
+/**
+ * Quotes the in-place API Starter switch. 'not-switchable' (no Pro to switch,
+ * an older deploy, any failure) lets the checkout run as before. The server
+ * keeps the cadence, so a Pro Yearly holder is quoted API Starter Annual
+ * whichever API Starter product was picked.
+ */
+async function offerApiStarterSwitch(): Promise<'shown' | 'not-switchable'> {
+  try {
+    return await runApiStarterSwitchFlow({
+      apiBase: API_BASE,
+      getToken: getAuthToken,
+      getUserId: async () => (await ensureClerk().catch(() => null))?.user?.id ?? null,
+      openPortal: () => {
+        const reservedWin = prereserveBillingPortalTab();
+        void getAuthToken().then((freshToken) => {
+          if (freshToken) void openBillingPortal(freshToken, reservedWin);
+          else if (reservedWin && !reservedWin.closed) reservedWin.close();
+        });
+      },
+    });
+  } catch {
+    return 'not-switchable';
+  }
+}
+
+/** Pro Yearly's product id, from the same tier data; the Pro Monthly → Pro Yearly switch target. */
+const PRO_YEARLY_PRODUCT_ID: string | undefined =
+  (fallbackTiers as Array<{ name?: string; annualProductId?: string }>)
+    .find((tier) => tier.name === 'Pro')?.annualProductId;
 
 interface ProDuplicateDialogOptions {
   planDisplayName: string;
