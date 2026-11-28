@@ -12,6 +12,8 @@ import { isDesktopRuntime, getRemoteApiBaseUrl } from '@/services/runtime';
 import { getClerkToken } from '@/services/clerk';
 import { SITE_VARIANT } from '@/config/variant';
 import { effectivePubDateMs } from '@/services/feed-date';
+import { isRunningTally } from '../../shared/running-tally.js';
+import { isLiveBlogTopicHeader } from '../../shared/live-blog-topic.js';
 import {
   assessCorroboration,
   evidenceFromItem,
@@ -293,7 +295,8 @@ export function checkBatchForBreakingAlerts(items: NewsItem[]): void {
     if (!item.threat) continue;
     if (!isRecent(item)) continue;
 
-    const level = item.threat.level;
+    const notNewEvent = isRunningTally(item.title) || isLiveBlogTopicHeader(item.title, item.source);
+    const level = item.threat.level === 'critical' && notNewEvent ? 'high' : item.threat.level;
     if (level !== 'critical' && level !== 'high') continue;
     if (settings.sensitivity === 'critical-only' && level !== 'critical') continue;
 
